@@ -1,10 +1,11 @@
 import { requireHostedWrites } from "./support/browser.mjs";
 import { config } from "dotenv";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { guideExamples } from "../public/guide-examples.js";
 config({ path: ".env.local" });
 requireHostedWrites();
+await mkdir(".local", { recursive: true });
 const origin = process.env.TEST_ORIGIN;
 if (!origin) throw Error("Set TEST_ORIGIN to the staged deployment.");
 const created = [];

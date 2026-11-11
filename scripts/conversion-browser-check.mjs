@@ -102,7 +102,7 @@ try {
   const stock = Number(await page.locator("#food").textContent());
   assert.match(
     await page.locator("#garden").getAttribute("aria-label"),
-    /2 of 2 converter slots/,
+    /2 of 2 energy in the converter/,
   );
   assert.match(await page.locator(".slot.active .slot-budget").textContent(), /4\/6/);
   assert.equal(Number(await page.locator("#energy").textContent()), 2);
@@ -116,7 +116,7 @@ try {
   assert.equal(Number(await page.locator("#food").textContent()), stock + 1);
   assert.match(
     await page.locator("#garden").getAttribute("aria-label"),
-    /0 of 2 converter slots/,
+    /0 of 2 energy in the converter/,
   );
   const paused = await page.locator("#food").textContent();
   await page.waitForTimeout(400);

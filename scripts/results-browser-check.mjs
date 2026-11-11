@@ -108,6 +108,7 @@ try {
       false,
     );
     await p.screenshot({
+      animations: "disabled",
       path: output + "/mixed-" + width + ".png",
       fullPage: true,
     });

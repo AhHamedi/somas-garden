@@ -224,8 +224,8 @@ try {
   await page.keyboard.press("Escape");
   await button("Garden setup").click();
   await page.locator("[data-library]").click();
-  await page.locator("[data-upload]").click();
-  await page.keyboard.press("Escape");
+  assert.equal(await page.locator("[data-upload]").isDisabled(), true);
+  assert.equal(await page.locator("#gs-upload-note").isVisible(), true);
   await button("View Go").click();
   await page.locator("#source-dialog[open]").waitFor();
   await page.keyboard.press("Escape");

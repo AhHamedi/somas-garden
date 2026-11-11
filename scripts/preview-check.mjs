@@ -1,9 +1,10 @@
 import { requireHostedWrites } from "./support/browser.mjs";
 import { config } from "dotenv";
 import assert from "node:assert/strict";
-import { writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 config({ path: ".env.local" });
 requireHostedWrites();
+await mkdir(".local", { recursive: true });
 const origin = process.env.TEST_ORIGIN;
 if (!origin) throw Error("Set TEST_ORIGIN");
 const evidence = [];

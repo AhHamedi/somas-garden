@@ -23,15 +23,15 @@ Uploaded Go runs in an isolated cloud runner. For that setup or deployment, see 
 
 ## Find the code
 
-| Change                             | Start here                                                             |
-| ---------------------------------- | ---------------------------------------------------------------------- |
-| Simulation rules and daily turns   | `pkg/garden/garden.go`, `settings.go`                                  |
-| Builder decisions and generated Go | `pkg/garden/builder.go`                                                |
-| Default setup and strategy choices | `public/setup-model.js`                                                |
-| Setup forms and the agent builder  | `public/setup.js`, `garden-rules.js`, `agent-builder.js`               |
-| Animation, characters, and sound   | `public/scene.js`, `characters.js`, `sound.js`                         |
-| Results and agent comparisons      | `public/results-data.js`, `run-investigation.js`, `agent-inspector.js` |
-| HTTP routes and saved data         | `api/controller.mjs`, `lib/storage-*.mjs`                              |
+| Change                             | Start here                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Simulation rules and daily turns   | `pkg/garden/garden.go`, `settings.go`                                                |
+| Builder decisions and generated Go | `pkg/garden/builder.go`                                                              |
+| Default setup and strategy choices | `public/setup-model.js`                                                              |
+| Setup forms and the agent builder  | `public/setup.js`, `garden-rules.js`, `agent-builder.js`                             |
+| Animation, characters, and sound   | `public/scene.js`, `characters.js`, `sound.js`                                       |
+| Results and agent comparisons      | `public/results.js`, `results-data.js`, `run-investigation.js`, `agent-inspector.js` |
+| HTTP routes and saved data         | `api/controller.mjs`, `lib/storage-*.mjs`                                            |
 
 To change a default rule, update the Go default in `settings.go` and the browser default in `setup-model.js`. To add a built-in strategy, add its policy in `garden.go`, its accepted identifier in `lib/roster.mjs`, and its menu entry in `setup-model.js`. Builder strategies can also be created directly in the app.
 

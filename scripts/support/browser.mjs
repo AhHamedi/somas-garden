@@ -38,4 +38,6 @@ export function requireHostedWrites() {
   }
   if (!process.env.TEST_ORIGIN)
     throw new Error("Set TEST_ORIGIN to the deployment being checked.");
+  if (!process.env.SELFORG_ADMIN_PASSWORD)
+    throw new Error("Set SELFORG_ADMIN_PASSWORD so temporary test agents can be hidden.");
 }

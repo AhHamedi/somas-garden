@@ -69,8 +69,10 @@ try {
   await page.screenshot({ path: ".local/death-ghost.png", fullPage: true });
   await page.getByRole("button", { name: "Resume", exact: true }).click();
   await page.selectOption("#speed", "4");
-  await page.waitForFunction(
-    () => document.querySelector("#game-state").textContent === "Game complete",
+  await page.locator("#results-title").waitFor();
+  assert.equal(
+    await page.locator("#results-title").innerText(),
+    "All the amoeboids have died.",
   );
   await page.waitForTimeout(600);
   assert.equal(await page.locator(".slot.dead").count(), 6);

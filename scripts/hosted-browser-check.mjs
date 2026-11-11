@@ -4,10 +4,6 @@ import assert from "node:assert/strict";
 import { config } from "dotenv";
 config({ path: ".env.local" });
 requireHostedWrites();
-if (!process.env.SELFORG_ADMIN_PASSWORD)
-  throw new Error(
-    "Set SELFORG_ADMIN_PASSWORD so the uploaded test agent can be hidden after the check.",
-  );
 const origin = await testOrigin();
 const browser = await launchBrowser({
   headless: true,

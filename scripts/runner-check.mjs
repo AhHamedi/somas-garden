@@ -2,12 +2,13 @@ import { engineUrl, engineHeaders } from "./support/browser.mjs";
 import { config } from "dotenv";
 import assert from "node:assert/strict";
 import { startAgent } from "../lib/runner.mjs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 config({ path: ".env.local" });
 config({ path: ".local/runner.env" });
 if (!process.argv.includes("--hosted-writes"))
   throw new Error("Run npm run test:hosted:runner to create isolated test runners.");
 const report = [];
+await mkdir(".local", { recursive: true });
 async function check(name, fn) {
   const start = Date.now();
   await fn();
