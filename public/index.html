@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f4ea" />
+    <title>SOMAS · Amoeboids</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/guide.css" />
+    <link rel="stylesheet" href="/setup.css" />
+    <link rel="stylesheet" href="/results.css" />
+    <link rel="stylesheet" href="/agent-inspector.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand" aria-label="SOMAS home">
+        <svg class="brand-seal" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="38" height="38" rx="13" fill="#254233" />
+          <path d="M10 25c-3-6-2-11-2-11 8 1 12 5 12 13-4 0-7 0-10-2Z" fill="#c7d49b" />
+          <path d="M19 23c0-8 5-13 13-15 1 9-3 16-11 18Z" fill="#f0d98e" />
+          <path
+            d="M18 31c1-6 4-11 8-15m-7 13c-2-4-4-7-7-9"
+            stroke="#f7f6e8"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          /></svg
+        ><span>SOMAS</span>
+      </a>
+      <div class="header-actions">
+        <button
+          id="sound"
+          class="sound-button"
+          type="button"
+          aria-pressed="true"
+          aria-label="Mute sound"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"
+          >
+            <path d="M11 5 6 9H3v6h3l5 4Z" />
+            <path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" />
+            <path class="sound-muted" d="m16 9 5 6m0-6-5 6" />
+          </svg>
+          <span id="sound-label">Sound on</span>
+        </button>
+        <button id="open-help" class="text-button">
+          <svg
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            aria-hidden="true"
+          >
+            <path
+              d="M10 5c-2-2-5-2-8-1v11c3-1 6-1 8 1 2-2 5-2 8-1V4c-3-1-6-1-8 1Zm0 0v11"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /></svg
+          >Go guide
+        </button>
+      </div>
+    </header>
+    <main>
+      <p id="notice" role="status" class="notice" hidden></p>
+      <p id="results-link-status" role="status" class="visually-hidden"></p>
+      <p
+        id="outcome-announcement"
+        class="visually-hidden"
+        role="status"
+        aria-atomic="true"
+      ></p>
+      <div class="game-layout" id="live-garden">
+        <section class="garden-panel" aria-label="Garden simulation">
+          <h1 class="visually-hidden">Garden simulation</h1>
+          <span id="game-state" class="visually-hidden">Ready</span>
+          <div class="garden-clock">
+            <span class="round"
+              >Day <b id="round">00</b
+              ><span> / <span id="round-limit">30</span></span></span
+            >
+            <ol
+              id="day-stage"
+              class="day-stage"
+              aria-label="Stages of the garden day"
+              data-stage="ready"
+              role="list"
+            >
+              <li data-period="dawn">
+                <span class="day-glyph" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 19"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M2 13.5h20M5.5 16h13M7.8 13.5a4.2 4.2 0 1 1 8.4 0M12 6.6V4m-6.1 4.2L4.2 6.7m13.9 1.5 1.7-1.5"
+                    /></svg></span
+                ><span>Dawn</span>
+              </li>
+              <li data-period="morning">
+                <span class="day-glyph" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 19"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M2 15.6c3.7-1.7 7.5-1.8 11.1-.2s5.5 1.5 8.9 0M4 11.6l-1.5.7M6.9 4.2 5.7 2.5m6 1.1.7-2.1m3.4 5.5 2-.6"
+                    />
+                    <circle cx="10.2" cy="9.1" r="3.8" /></svg></span
+                ><span>Morning</span>
+              </li>
+              <li data-period="afternoon">
+                <span class="day-glyph" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 19"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="9.5" r="3.9" />
+                    <path
+                      d="M12 1v2m0 13v2m8.5-8.5h-2m-13 0h-2m14.5-6-1.4 1.4m-9.2 9.2L6 15.5m12 0-1.4-1.4M7.4 4.9 6 3.5"
+                    /></svg></span
+                ><span>Afternoon</span>
+              </li>
+              <li data-period="evening">
+                <span class="day-glyph" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 19"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M14.8 2.1a6.3 6.3 0 1 0 5.9 9.3 5.4 5.4 0 0 1-5.9-9.3ZM2.5 16h10m-7.2-3H9"
+                    />
+                    <path
+                      d="m20 2 .45 1.25L21.8 4l-1.35.45L20 5.8l-.45-1.35L18.2 4l1.35-.75Z"
+                      fill="currentColor"
+                      stroke="none"
+                    /></svg></span
+                ><span>Evening</span>
+              </li>
+            </ol>
+          </div>
+          <div class="garden-stage">
+            <aside class="turn-queue" id="turn-queue" aria-label="Turn order">
+              <div class="queue-heading">
+                <span>TURN ORDER</span><strong class="queue-phase">Next day</strong>
+              </div>
+              <ol class="queue-list" aria-label="Amoeboid queue"></ol>
+            </aside>
+            <canvas
+              id="garden"
+              width="1000"
+              height="680"
+              aria-label="A garden with six amoeboids and sixty carrots"
+            ></canvas>
+          </div>
+          <div class="garden-readout">
+            <div class="turn-box" id="turn-box" role="group" aria-label="Current action">
+              <span class="turn-avatar creature-dot" id="turn-avatar" aria-hidden="true"
+                >••</span
+              >
+              <div class="turn-info">
+                <span id="turn-label" class="turn-label">READY</span
+                ><strong id="turn-name">Garden</strong>
+                <p id="scene-caption">Select agents and press Run.</p>
+              </div>
+              <span class="turn-amount" id="turn-amount">6 slots</span>
+            </div>
+            <div class="resources">
+              <div>
+                <span class="resource-icon carrot" aria-hidden="true"></span>
+                <div>
+                  <span class="resource-label">CARROTS</span
+                  ><strong
+                    ><span id="food">60</span
+                    ><small id="food-capacity"> / 60</small></strong
+                  >
+                </div>
+                <div class="meter"><i id="food-meter"></i></div>
+              </div>
+              <div>
+                <span class="resource-icon sun" aria-hidden="true"></span>
+                <div>
+                  <span class="resource-label">ENERGY GIVEN</span
+                  ><strong
+                    ><span id="energy">0</span
+                    ><small id="energy-price"> · 2 per carrot</small></strong
+                  >
+                </div>
+                <div class="meter energy"><i id="energy-meter"></i></div>
+              </div>
+            </div>
+          </div>
+          <div class="playback">
+            <button id="mobile-setup" type="button" class="secondary">Setup</button>
+            <button id="run" class="primary">
+              <span aria-hidden="true">▶</span> Run garden</button
+            ><button id="pause" class="secondary" disabled>Pause</button
+            ><button
+              id="replay"
+              class="icon-button"
+              disabled
+              title="Replay this game"
+              aria-label="Replay this game"
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4.5 7.5A6 6 0 1 1 4.3 12M4.5 3v4.5H9"
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+              </svg></button
+            ><label class="speed"
+              >Speed
+              <select id="speed" aria-label="Playback speed">
+                <option value="1">1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+              </select></label
+            ><button id="view-results" type="button" class="text-button" hidden>
+              View results
+            </button>
+            <button id="share" class="text-button" hidden>Copy replay link ↗</button>
+          </div>
+        </section>
+        <aside class="neighbours" aria-label="Garden amoeboids and setup">
+          <div class="section-heading">
+            <h2>Amoeboids</h2>
+            <span class="count" id="seat-count">6 amoeboids</span>
+          </div>
+          <div id="slots" class="slots"></div>
+          <div class="setup-entry">
+            <button id="garden-setup" type="button" class="upload-button">
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M3 7h7m4 0h7M3 17h11m4 0h3" />
+                <circle cx="12" cy="7" r="2" />
+                <circle cx="16" cy="17" r="2" />
+              </svg>
+              Garden setup
+            </button>
+            <button id="create-agent" class="text-button" type="button">
+              Create an agent <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </aside>
+      </div>
+      <section id="run-results" hidden aria-labelledby="results-title"></section>
+    </main>
+    <dialog id="upload-dialog" aria-labelledby="upload-title">
+      <form id="upload-form">
+        <button type="button" class="close" aria-label="Close">×</button>
+        <h2 id="upload-title">Upload Go agent</h2>
+        <label
+          >Agent name<input
+            name="name"
+            maxlength="40"
+            required
+            placeholder="e.g. Team 1"
+            autocomplete="off" /></label
+        ><label
+          >Your Go file<input name="file" type="file" accept=".go" required
+        /></label>
+        <pre>
+func Decide(v View) Action {
+    return Action{Food: 2, Energy: 4}
+}</pre>
+        <p class="muted">
+          One .go file, up to 20 KB. Standard library only.<br />Your agent keeps its own
+          memory during a game.
+        </p>
+        <button id="upload-go-guide" type="button" class="text-button">
+          Read the Go guide ↗
+        </button>
+        <p id="upload-error" class="error" role="alert"></p>
+        <button class="primary" id="submit-upload">Upload & check Go</button
+        ><a class="download" href="/example.go" download="agent.go"
+          >↓ Get the full example</a
+        >
+      </form>
+    </dialog>
+    <dialog id="help-dialog" class="guide-dialog" aria-labelledby="guide-title">
+      <div class="guide-toolbar">
+        <span class="guide-brand">SOMAS <span>/ GO GUIDE</span></span>
+        <a class="guide-starter" href="/example.go" download="agent.go">↓ Starter .go</a>
+        <button class="close" aria-label="Close Go guide">×</button>
+      </div>
+      <div class="guide-scroll">
+        <div class="guide-layout">
+          <nav class="guide-nav" aria-label="Guide sections">
+            <a href="#guide-start" aria-current="location">Example</a>
+            <a href="#guide-inputs">Inputs</a>
+            <a href="#guide-actions">Rules</a>
+            <a href="#guide-upload">Uploading</a>
+          </nav>
+          <article class="guide-article">
+            <section id="guide-start" class="guide-section">
+              <div class="guide-intro">
+                <h1 id="guide-title">Go script guide</h1>
+                <span class="guide-mascot" aria-hidden="true"></span>
+              </div>
+              <p class="guide-lead">
+                Upload one <code>.go</code> file implementing <code>Decide</code>. It
+                returns your food request and energy contribution for each day.
+              </p>
+              <div class="guide-example">
+                <div class="guide-tabs" role="tablist" aria-label="Go examples">
+                  <button
+                    id="guide-tab-simple"
+                    role="tab"
+                    data-example="simple"
+                    aria-selected="true"
+                    aria-controls="guide-example-panel"
+                  >
+                    Simple
+                  </button>
+                  <button
+                    id="guide-tab-adaptive"
+                    role="tab"
+                    data-example="adaptive"
+                    aria-selected="false"
+                    aria-controls="guide-example-panel"
+                    tabindex="-1"
+                  >
+                    Adaptive
+                  </button>
+                  <button
+                    id="guide-tab-memory"
+                    role="tab"
+                    data-example="memory"
+                    aria-selected="false"
+                    aria-controls="guide-example-panel"
+                    tabindex="-1"
+                  >
+                    With memory
+                  </button>
+                </div>
+                <div
+                  id="guide-example-panel"
+                  role="tabpanel"
+                  aria-labelledby="guide-tab-simple"
+                  tabindex="0"
+                >
+                  <div class="guide-code-heading">
+                    <span id="guide-example-filename">agent.go</span
+                    ><button id="guide-copy" type="button" aria-live="polite">
+                      Copy code
+                    </button>
+                  </div>
+                  <pre><code id="guide-example-code"></code></pre>
+                  <div class="guide-example-foot">
+                    <p id="guide-example-note"></p>
+                    <button id="guide-download-example" type="button">
+                      ↓ Download this example
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p class="guide-note">
+                <code>View</code>, <code>Action</code> and the runner are supplied by
+                SOMAS. Do not declare them or add <code>main()</code>.
+              </p>
+            </section>
+            <section id="guide-inputs" class="guide-section">
+              <h2>Inputs: <code>View</code></h2>
+              <p>
+                <code>Decide</code> runs once per living agent per day, before anyone
+                acts. Return both choices from this opening snapshot.
+              </p>
+              <div class="guide-table-wrap">
+                <table class="guide-table">
+                  <caption class="visually-hidden">
+                    Fields supplied in View
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Type</th>
+                      <th>Meaning</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th><code>Round</code></th>
+                      <td><code>int</code></td>
+                      <td>Current day, from 1 to the run’s day limit (up to 50).</td>
+                    </tr>
+                    <tr>
+                      <th><code>PatchFood</code></th>
+                      <td><code>int</code></td>
+                      <td>Carrots in the field before anyone harvests.</td>
+                    </tr>
+                    <tr>
+                      <th><code>Energy</code></th>
+                      <td><code>int</code></td>
+                      <td>
+                        Your energy after today’s sunlight, up to the chosen capacity.
+                      </td>
+                    </tr>
+                    <tr>
+                      <th><code>AgentCount</code></th>
+                      <td><code>int</code></td>
+                      <td>Living agents, including you.</td>
+                    </tr>
+                    <tr>
+                      <th><code>LastFood</code></th>
+                      <td><code>int</code></td>
+                      <td>Your actual previous harvest; initially 0.</td>
+                    </tr>
+                    <tr>
+                      <th><code>LastEnergy</code></th>
+                      <td><code>int</code></td>
+                      <td>Your actual previous contribution; initially 0.</td>
+                    </tr>
+                    <tr>
+                      <th><code>Seed</code></th>
+                      <td><code>int64</code></td>
+                      <td>Your repeatable random seed for this day.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <details class="guide-faq">
+                <summary>Inputs for configurable gardens</summary>
+                <p>
+                  Put <code>// somas:api=2</code> above <code>package main</code> to use
+                  these additional integer fields.
+                </p>
+                <p>
+                  <code>Pantry</code> is your stored food. <code>DailyFood</code> is your
+                  supper requirement. <code>Sunlight</code> is the energy you gained
+                  today. <code>FieldCapacity</code> and <code>EnergyCapacity</code> give
+                  the field and wallet limits.
+                </p>
+                <p>
+                  <code>Price</code> quotes a new carrot at dawn.
+                  <code>LockedPrice</code> and <code>Pending</code> give the price and
+                  energy already deposited for a partly planted carrot. A zero lock means
+                  the converter is empty.
+                </p>
+                <p>
+                  <code>LastEaten</code> counts yesterday’s bites. <code>TotalFood</code>,
+                  <code>TotalEnergy</code> and <code>TotalEaten</code> are your lifetime
+                  harvest, contributions and meals measured in carrots eaten.
+                </p>
+              </details>
+            </section>
+            <section id="guide-actions" class="guide-section">
+              <h2>Actions and rules</h2>
+              <div class="guide-action-grid">
+                <div class="guide-action">
+                  <span data-guide-icon="carrot" aria-hidden="true"></span>
+                  <div>
+                    <h3><code>Food</code> <small>0–10</small></h3>
+                    <p>Carrots requested.</p>
+                  </div>
+                </div>
+                <div class="guide-action">
+                  <span data-guide-icon="energy" aria-hidden="true"></span>
+                  <div>
+                    <h3><code>Energy</code> <small>0–24</small></h3>
+                    <p>Energy offered to farming.</p>
+                  </div>
+                </div>
+              </div>
+              <p>
+                Both choices are integers. Harvests are limited to ten carrots and the
+                available field stock. Agents can give up to the energy in their wallets.
+              </p>
+              <ul class="guide-requirements">
+                <li>
+                  <strong>Dawn.</strong> Sunlight tops up each living amoeboid’s wallet to
+                  its capacity. Unspent energy stays there.
+                </li>
+                <li>
+                  <strong>Morning.</strong> Amoeboids harvest in shuffled order. Carrots
+                  go into their own pantries.
+                </li>
+                <li>
+                  <strong>Afternoon.</strong> Amoeboids plant in a separately shuffled
+                  order. The first energy token locks a carrot’s price until it grows. A
+                  full field or too few carrots to plant stops deposits.
+                </li>
+                <li>
+                  <strong>Evening.</strong> Each living amoeboid eats its daily
+                  requirement, or everything it has if it falls short. A short meal means
+                  starvation. Garden setup controls whether leftovers carry over.
+                </li>
+                <li>
+                  Choose <strong>1–50 days</strong> in Garden rules. The default is 30.
+                  The garden ends after the last supper or when every amoeboid has died.
+                </li>
+              </ul>
+              <div class="guide-worked">
+                <span>DEFAULT GARDEN · 6 AGENTS · FOOD 2 · ENERGY 4</span>
+                <div>
+                  <strong>60</strong><small>starting carrots</small
+                  ><b aria-hidden="true">→</b><strong>48</strong
+                  ><small>after harvesting</small><b aria-hidden="true">→</b
+                  ><strong>60</strong><small>after farming</small>
+                </div>
+              </div>
+            </section>
+            <section id="guide-upload" class="guide-section">
+              <h2>Uploading</h2>
+              <ul class="guide-requirements">
+                <li>
+                  One <code>.go</code> file, up to <strong>20 KB</strong>, using
+                  <code>package main</code> and <code>func Decide(v View) Action</code>.
+                </li>
+                <li>
+                  Helper functions, package variables and standard-library imports are
+                  allowed. Third-party packages and network access are unavailable.
+                </li>
+                <li>
+                  Return comfortably under a second; game decisions have a
+                  <strong>1.2-second response deadline</strong>.
+                </li>
+              </ul>
+              <p>
+                Name your file’s strategy and upload it to the public library. In Garden
+                setup, choose it for any amoeboid. Each copy keeps its own memory.
+              </p>
+              <details class="guide-faq">
+                <summary>Memory and randomness</summary>
+                <p>
+                  Package variables persist between days, privately for each selected
+                  slot. They reset for each new game. Use
+                  <code>LastFood</code> and <code>LastEnergy</code> to track actual
+                  outcomes.
+                </p>
+                <p>
+                  With <code>import "math/rand"</code>, use
+                  <code>rand.New(rand.NewSource(v.Seed))</code> for repeatable choices.
+                </p>
+              </details>
+              <details class="guide-faq">
+                <summary>Checks, errors and playback</summary>
+                <p>
+                  Uploading compiles the file and tests a first decision. A later crash or
+                  timeout stops that agent and displays an error; failed decisions use
+                  zero actions.
+                </p>
+                <p>
+                  Run computes the game before playback. Pause and speed affect the
+                  animation. Saved replays keep their original decisions.
+                </p>
+              </details>
+              <p id="guide-upload-note" class="gs-note" hidden>
+                Go uploads require hosted mode with an isolated runner. You can still
+                download these examples.
+              </p>
+              <div class="guide-finish">
+                <div>
+                  <strong>Uploaded code is public.</strong>
+                  <p>Keep passwords and private keys out of your file.</p>
+                </div>
+                <button id="guide-open-upload" class="primary" type="button">
+                  Upload an agent <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+            </section>
+          </article>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="source-dialog" aria-labelledby="source-title">
+      <button class="close" aria-label="Close">×</button>
+      <p class="eyebrow">PUBLIC AGENT</p>
+      <h2 id="source-title"></h2>
+      <pre id="source-code"></pre>
+      <a class="download" id="download-source" download="agent.go">↓ Download Go file</a>
+    </dialog>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

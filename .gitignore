@@ -1,0 +1,14 @@
+node_modules/
+.vercel/
+.env*
+!.env.example
+.local/
+.tools/
+*.log
+.DS_Store
+Thumbs.db
+coverage/
+playwright-report/
+test-results/
+supabase/.temp/
+*.exe

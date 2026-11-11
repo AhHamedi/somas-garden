@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SOMAS · Moderation</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="manage">
+      <p class="eyebrow">SOMAS</p>
+      <h1>Moderation</h1>
+      <p class="muted">
+        Hide an upload from the public library. Existing replays stay available.
+      </p>
+      <form id="login">
+        <input
+          id="password"
+          type="password"
+          placeholder="Moderation password"
+          aria-label="Moderation password"
+          required
+        /><button class="primary">Open moderation</button>
+      </form>
+      <p id="error" class="error" role="alert"></p>
+      <div id="list"></div>
+      <a class="download" href="/">← Back to the garden</a>
+    </main>
+    <script type="module">
+      let password = "";
+      const list = document.querySelector("#list"),
+        error = document.querySelector("#error");
+      async function request(action, id) {
+        const r = await fetch("/api/moderate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + password,
+          },
+          body: JSON.stringify({ action, id }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        return d;
+      }
+      async function load() {
+        list.replaceChildren();
+        for (const a of (await request("list")).agents) {
+          const row = document.createElement("div");
+          row.className = "manage-row";
+          const name = document.createElement("span");
+          name.textContent = a.name;
+          const b = document.createElement("button");
+          b.className = "secondary";
+          b.textContent = a.visible ? "Hide" : "Hidden";
+          b.disabled = !a.visible;
+          b.onclick = async () => {
+            b.disabled = true;
+            try {
+              await request("hide", a.id);
+              await load();
+            } catch (e) {
+              error.textContent = e.message;
+              b.disabled = false;
+            }
+          };
+          row.append(name, b);
+          list.append(row);
+        }
+      }
+      document.querySelector("#login").onsubmit = async (e) => {
+        e.preventDefault();
+        password = document.querySelector("#password").value;
+        try {
+          await load();
+          e.target.hidden = true;
+          document.querySelector("#password").value = "";
+          error.textContent = "";
+        } catch (e) {
+          error.textContent = e.message;
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "name": "selforg-garden",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:hosted": "node scripts/dev.mjs --hosted",
+    "test": "node scripts/test.mjs",
+    "test:js": "node scripts/test.mjs js",
+    "test:go": "node scripts/test.mjs go",
+    "test:browser": "node scripts/test-browser.mjs",
+    "test:browser:playback": "node scripts/test-browser.mjs playback",
+    "test:browser:audio": "node scripts/test-browser.mjs audio",
+    "format": "prettier --write .",
+    "check": "prettier --check . && npm test",
+    "test:hosted:preview": "node scripts/preview-check.mjs --hosted-writes",
+    "test:hosted:browser": "node scripts/hosted-browser-check.mjs --hosted-writes",
+    "test:hosted:guide": "node scripts/guide-examples-check.mjs --hosted-writes",
+    "test:hosted:runner": "node scripts/runner-check.mjs --hosted-writes"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "3.9.1",
+    "dotenv": "16.5.0"
+  },
+  "overrides": {
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0",
+    "prettier": "3.10.0"
+  },
+  "engines": {
+    "node": ">=20.18.1"
+  }
+}

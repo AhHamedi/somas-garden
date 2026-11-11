@@ -1,0 +1,15 @@
+{
+  "route": {
+    "name": "SOMAS hosted application",
+    "description": "Mooni tenant tn_somas: page, assets and Go simulation API under its managed hostname.",
+    "enabled": true,
+    "srcSyntax": "regex",
+    "route": {
+      "src": "^/(.*)$",
+      "dest": "https://mooni-selforg.vercel.app/$1",
+      "has": [{ "type": "host", "value": "somas.sites.moonisolutions.net" }],
+      "respectOriginCacheControl": true
+    }
+  },
+  "position": { "placement": "start" }
+}

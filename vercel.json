@@ -1,0 +1,67 @@
+{
+  "framework": null,
+  "outputDirectory": "public",
+  "functions": {
+    "api/controller.mjs": {
+      "maxDuration": 180,
+      "includeFiles": "runner/**"
+    },
+    "api/engine.go": {
+      "maxDuration": 120
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/capabilities",
+      "destination": "/api/controller?route=capabilities"
+    },
+    {
+      "source": "/api/builder",
+      "destination": "/api/controller?route=builder"
+    },
+    {
+      "source": "/api/agents",
+      "destination": "/api/controller?route=agents"
+    },
+    {
+      "source": "/api/agents/:id/source",
+      "destination": "/api/controller?route=source&id=:id"
+    },
+    {
+      "source": "/api/runs",
+      "destination": "/api/controller?route=runs"
+    },
+    {
+      "source": "/api/runs/:id",
+      "destination": "/api/controller?route=replay&id=:id"
+    },
+    {
+      "source": "/api/moderate",
+      "destination": "/api/controller?route=moderate"
+    },
+    {
+      "source": "/manage",
+      "destination": "/manage.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
+  ],
+  "regions": ["lhr1"]
+}

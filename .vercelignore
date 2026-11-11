@@ -1,0 +1,13 @@
+node_modules
+.tools
+.local
+.env*
+.git
+scripts
+supabase
+README.md
+test
+cmd
+
+.github
+hosting
