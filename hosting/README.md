@@ -40,7 +40,7 @@ The staged production deployment lets you check its configuration before assigni
 
 ## Existing Mooni site
 
-The current public address is `https://somas.sites.moonisolutions.net`. Its host-specific Mooni route forwards to `https://mooni-selforg.vercel.app`. The route definition is `hosting/mooni/route.json`.
+The hosted site is a separate release and may lag behind this repository. The public address is `https://somas.sites.moonisolutions.net`. Its host-specific Mooni route forwards to `https://mooni-selforg.vercel.app`. The route definition is `hosting/mooni/route.json`.
 
 The optional TypeScript scripts in `hosting/mooni/` require `MOONI_ROOT` pointing to a Mooni checkout, its TypeScript runner, and its server credentials. Run them from this repository root. `register.ts` registers the tenant and route metadata; `record-release.ts` records an already verified deployment ID. These are owner operations for the existing site.
 

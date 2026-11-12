@@ -2,8 +2,6 @@
 
 A shared-resource simulation for investigating self-organising multi-agent systems. Amoeboids request carrots, contribute energy to the shared field, and eat at the end of each day. The Go engine records their decisions; the browser plays the run and lets you inspect each agent.
 
-[Live site](https://somas.sites.moonisolutions.net) · [Agent-writing guide](https://somas.sites.moonisolutions.net/?guide=1)
-
 ## Run locally
 
 Install **Node 20.18.1+** and **Go 1.23+**, then run these commands from the cloned repository.
@@ -13,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:8787**. Create agents with the builder, change Garden rules, run a simulation, and open the Amoeboid journal in its results.
+Open **http://127.0.0.1:8787**. Create agents with the builder, change Garden rules, run a simulation, and open the Amoeboid journal in its results. The **Go guide** in the app explains how to write an agent.
 
 Local agents and replays are saved in `.local/data/`. Browser drafts stay in that browser. Local replay links work on the computer running the server. Press Ctrl+C to stop it.
 

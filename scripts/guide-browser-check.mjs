@@ -60,7 +60,14 @@ try {
     "true",
   );
   await dialog.locator('.guide-nav a[href="#guide-inputs"]').click();
-  await page.waitForTimeout(500);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("#help-dialog .guide-nav a[aria-current]")
+        ?.getAttribute("href") === "#guide-inputs",
+    null,
+    { timeout: 5000 },
+  );
   assert.equal(
     await dialog.locator(".guide-nav a[aria-current]").getAttribute("href"),
     "#guide-inputs",
