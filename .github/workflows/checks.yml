@@ -21,11 +21,9 @@ jobs:
         with:
           go-version: "1.23"
       - run: npm ci
-      - run: npm test
+      - run: npm run check
       - if: runner.os == 'Linux'
         run: npm run test:go -- --race
-      - if: runner.os == 'Linux'
-        run: npx prettier --check .
   browser:
     runs-on: ubuntu-latest
     steps:
