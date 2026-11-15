@@ -132,6 +132,7 @@ func (w *World) applyInstitution(p Pending) error {
 		for _, b := range w.Proposals {
 			if b.Input.Kind == "federationFound" && canonical(uniqueInts(b.Input.Members)) == canonical(f.Plots) && b.Status == "scheduled" {
 				b.Status = "activated"
+				b.Reason = ""
 			}
 		}
 		return nil

@@ -295,6 +295,45 @@ func TestUnknownStrategyAndInvalidBuilderFailClearly(t *testing.T) {
 		t.Fatal("unknown phase accepted")
 	}
 }
+func TestBuilderPolicyRunsConfiguredFirstDay(t *testing.T) {
+	for _, policy := range []string{"builder", "thinker"} {
+		t.Run(policy, func(t *testing.T) {
+			s := DefaultSettings()
+			s.Copies, s.Plots, s.Months, s.Days = 1, 1, 1, 3
+			w, err := New(s, []Team{{Name: "Builder", Policy: policy, Builder: &Builder{Harvest: 3, Eat: 2, Think: 1}}}, 7)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for w.Day == 1 && !w.Done {
+				if err := w.Step(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			a := w.Agents[0]
+			if !a.Alive || a.Plot != 0 || a.TotalHarvested != 3 || a.TotalEaten != 2 || a.Food != 1 || a.Score != 1 {
+				t.Fatalf("configured harvest, meal and thinking did not execute: %+v", a)
+			}
+		})
+	}
+}
+func TestBuilderPolicyRequiresValidPayload(t *testing.T) {
+	s := DefaultSettings()
+	s.Copies, s.Plots = 1, 1
+	for name, team := range map[string]Team{
+		"missing":             {Policy: "builder"},
+		"missingWithStrategy": {Policy: "builder", StrategyID: "uploaded"},
+		"negativeMeal":        {Policy: "builder", Builder: &Builder{Eat: -1}},
+		"unknownPhase":        {Policy: "builder", Builder: &Builder{Rules: []BehaviorRule{{Phase: "unknown", Op: "always"}}}},
+		"unknownFallback":     {Policy: "builder", Builder: &Builder{Fallback: "builder"}},
+		"unknownPolicy":       {Policy: "typo", Builder: &Builder{Harvest: 3, Eat: 2}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := New(s, []Team{team}, 7); err == nil {
+				t.Fatal("invalid builder team accepted")
+			}
+		})
+	}
+}
 func TestPrivateRandomStreamsAreStableAndDistinct(t *testing.T) {
 	w := smallWorld(t, 2)
 	a, b := w.View(0), w.View(1)

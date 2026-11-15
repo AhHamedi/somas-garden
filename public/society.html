@@ -2,249 +2,160 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f4f3ed" />
-    <meta
-      name="description"
-      content="A living world of independent agents, shared resources and emerging institutions."
-    />
-    <title>Amoeboids · A living society</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#182522" />
+    <meta name="description" content="Amoeboids society simulation." />
+    <title>Amoeboids</title>
     <link rel="stylesheet" href="/society.css" />
   </head>
-  <body>
-    <a class="skip-link" href="#world-content">Skip to the world</a>
-    <header class="app-header">
-      <a class="brand" href="/" aria-label="Amoeboids home">
-        <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
-          <path
-            d="M23 4c8-1 8 6 13 9 8 5 5 12 1 17-3 5-5 11-13 10-7 0-8-5-14-7-8-3-7-11-3-16C10 10 15 5 23 4Z"
-            fill="currentColor"
-          />
-          <ellipse cx="19" cy="21" rx="3" ry="4" fill="#f4f3ed" />
-          <ellipse cx="29" cy="20" rx="3" ry="4" fill="#f4f3ed" />
-          <circle cx="20" cy="22" r="1.4" fill="#263f32" />
-          <circle cx="30" cy="21" r="1.4" fill="#263f32" />
-          <path
-            d="M20 29q5 3 9-1"
-            stroke="#f4f3ed"
-            stroke-width="1.5"
-            fill="none"
-            stroke-linecap="round"
-          />
-        </svg>
-        <span>Amoeboids<span class="brand-tag">A SELF-ORGANISING WORLD</span></span>
-      </a>
-      <nav class="main-nav" aria-label="Main views">
+  <body class="game-shell">
+    <a class="skip-link" href="#play-button">Skip to playback controls</a>
+    <header class="game-topbar">
+      <a class="game-brand" href="/" aria-label="Amoeboids home"
+        ><span class="brand-creature" aria-hidden="true"><i></i><i></i></span>Amoeboids</a
+      >
+      <nav class="game-nav" aria-label="Views">
         <button class="nav-link active" data-page="world" aria-current="page">
-          World
-        </button>
-        <button class="nav-link" data-page="chronicle">Chronicle</button>
-        <button class="nav-link" data-page="results">Results</button>
+          World</button
+        ><button class="nav-link" data-page="chronicle">History</button
+        ><button class="nav-link" data-page="results">Results</button>
       </nav>
       <div class="header-actions">
-        <span class="seed-label" id="seed-label">SEED 42</span>
-        <button
-          class="button quiet"
-          id="saved-button"
-          title="Open a saved world"
-          aria-label="Open a saved world"
-        >
-          <span class="icon-slot" data-icon="history"></span>
-        </button>
-        <button
-          class="button quiet compact"
-          id="guide-button"
-          title="How the world works"
-          aria-label="How the world works"
-        >
-          ?
-        </button>
-        <button class="button secondary" id="setup-button">
-          <span class="icon-slot" data-icon="sliders"></span> Configure world
-        </button>
+        <span class="session-stats" id="world-metrics" aria-label="Population"></span>
+        <details class="game-menu" id="game-menu">
+          <summary>Menu <span aria-hidden="true">☰</span></summary>
+          <div class="game-menu-content">
+            <button id="setup-button">New world</button
+            ><button id="behaviours-button">Behaviours</button
+            ><button id="saved-button">Saved worlds</button
+            ><button id="guide-button">How to play</button
+            ><span id="seed-label">Seed 42</span>
+          </div>
+        </details>
       </div>
     </header>
-
     <main id="world-content">
       <div class="status-message" id="status-message" role="status" hidden></div>
-      <section class="world-heading">
-        <div>
-          <div class="eyebrow">
-            <span class="live-dot"></span><span id="world-state">READY TO BEGIN</span>
-          </div>
-          <h1 id="page-title">A world taking shape.</h1>
-          <p id="page-subtitle">Individual choices. Shared consequences.</p>
-        </div>
-        <div class="world-metrics" id="world-metrics" aria-label="World statistics"></div>
-      </section>
-      <section class="workspace" id="world-page">
-        <section class="atlas-panel" aria-labelledby="atlas-title">
-          <div class="atlas-top">
-            <div>
-              <h2 id="atlas-title">The commons</h2>
-              <span class="muted small" id="map-caption"
-                >Select a plot to look closer</span
-              >
-            </div>
-            <span class="observer-label"
-              ><span class="icon-slot" data-icon="eye"></span> Observer view</span
-            >
-          </div>
+      <section class="workspace" id="world-page" aria-label="Game world">
+        <div class="atlas-panel">
           <div class="atlas" id="atlas">
-            <svg
-              class="landscape"
-              viewBox="0 0 1000 650"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <defs>
-                <pattern id="grain" width="32" height="32" patternUnits="userSpaceOnUse">
-                  <circle cx="4" cy="8" r=".6" fill="#899d79" opacity=".2" />
-                  <circle cx="21" cy="25" r=".7" fill="#899d79" opacity=".2" />
-                </pattern>
-                <linearGradient id="land" x2="0" y2="1">
-                  <stop stop-color="#e8ecde" />
-                  <stop offset="1" stop-color="#f0efe2" />
-                </linearGradient>
-              </defs>
-              <rect width="1000" height="650" fill="url(#land)" />
-              <path
-                d="M-80 160C110 30 360 90 435 220s272 135 630 3v180c-201 111-434 76-605-15S114 322-80 442Z"
-                fill="#dde5d3"
-              />
-              <path
-                d="M-100 520C180 356 318 556 557 438S851 329 1120 424v300H-100Z"
-                fill="#e2e7d8"
-              />
-              <path
-                d="M526-35c-51 80-150 101-125 178s126 72 115 149-89 111-53 178 45 150-23 220"
-                fill="none"
-                stroke="#d0ddd9"
-                stroke-width="23"
-              />
-              <path
-                d="M526-35c-51 80-150 101-125 178s126 72 115 149-89 111-53 178 45 150-23 220"
-                fill="none"
-                stroke="#e5eeeb"
-                stroke-width="13"
-              />
-              <path
-                d="M22 337c152-50 249-19 355 20s179-40 271-52 181 82 344 51"
-                fill="none"
-                stroke="#c4cdb4"
-                stroke-width="2"
-                stroke-dasharray="3 8"
-                opacity=".65"
-              />
-              <rect width="1000" height="650" fill="url(#grain)" />
-              <g fill="#b5c5a4" opacity=".5">
-                <ellipse cx="58" cy="76" rx="11" ry="18" />
-                <ellipse cx="79" cy="94" rx="8" ry="14" />
-                <ellipse cx="932" cy="113" rx="11" ry="19" />
-                <ellipse cx="950" cy="131" rx="9" ry="16" />
-                <ellipse cx="841" cy="585" rx="9" ry="16" />
-                <ellipse cx="866" cy="591" rx="12" ry="20" />
-                <ellipse cx="122" cy="579" rx="11" ry="19" />
-              </g>
-              <g stroke="#9baf8b" stroke-width="2" opacity=".4">
-                <path
-                  d="M58 85v14m21 3v12m853 13v15m18-1v16m-109 436v14m25-7v18m-744-7v17"
-                />
-              </g>
-            </svg>
-            <div class="plot-layer" id="plot-layer"></div>
+            <canvas
+              id="world-canvas"
+              aria-label="Interactive world map. Select a plot using the map or numbered plot buttons."
+              role="img"
+            ></canvas>
             <div class="map-loading" id="map-loading">
-              <span class="loading-creature"></span><strong>Preparing your world</strong
-              ><span>Every society starts somewhere.</span>
+              <span class="loading-creature"></span><strong>Loading world…</strong>
             </div>
-            <button class="outside-camp" id="outside-camp">
-              <span class="icon-slot" data-icon="tent"></span
-              ><span><b id="outside-count">0</b> outside the plots</span
-              ><span class="camp-arrow">↗</span>
-            </button>
-            <div class="north-mark" aria-hidden="true">N<span>↑</span></div>
+            <div class="map-tooltip" id="map-tooltip" hidden></div>
             <div class="meteor-overlay" id="meteor-overlay" hidden>
               <div class="meteor-streak"></div>
               <div class="meteor-message">
-                <span class="eyebrow">A NEW BEGINNING</span>
-                <h2>The world begins again.</h2>
-                <p>Everything is renewed. Their memories remain.</p>
+                <h2>Meteor</h2>
+                <p>Memories retained. World reset.</p>
               </div>
             </div>
           </div>
-          <div class="atlas-footer">
-            <div class="team-legend" id="team-legend"></div>
-            <span class="small muted" id="atlas-footnote"
-              >No plot belongs to a team.</span
-            >
-          </div>
+        </div>
+        <nav class="plot-picker" aria-label="Select a plot">
+          <span>Plots</span>
+          <div id="plot-layer"></div>
+        </nav>
+        <div class="map-tools" aria-label="Map controls">
+          <button id="zoom-out" aria-label="Zoom out">−</button
+          ><button id="map-fit">Fit</button
+          ><button id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <button class="outside-camp" id="outside-camp">
+          <span class="icon-slot" data-icon="tent"></span>Outside
+          <b id="outside-count">0</b>
+        </button>
+        <div class="map-hint" id="map-hint">Select a plot to inspect it</div>
+        <section class="inspector-shell" id="inspector-shell" hidden>
+          <button
+            class="inspector-close"
+            id="inspector-close"
+            aria-label="Close inspector"
+          >
+            ×
+          </button>
+          <aside class="inspector" id="inspector" aria-label="Selection details"></aside>
         </section>
-        <aside class="inspector" id="inspector" aria-label="World inspector"></aside>
       </section>
-      <section class="secondary-page" id="chronicle-page" hidden></section>
-      <section class="secondary-page" id="results-page" hidden></section>
-      <section class="cycle-console" aria-label="Simulation playback">
+      <section
+        class="secondary-page"
+        id="chronicle-page"
+        aria-label="History"
+        hidden
+      ></section>
+      <section
+        class="secondary-page"
+        id="results-page"
+        aria-label="Results"
+        hidden
+      ></section>
+      <section class="cycle-console" id="cycle-console" aria-label="Simulation playback">
         <div class="cycle-top">
           <div class="date-readout">
-            <span class="calendar-icon icon-slot" data-icon="calendar"></span>
-            <div>
-              <b id="date-label">Month 1 <span>/ 12</span></b
-              ><span id="day-label">Day 1 of 30</span>
-            </div>
+            <b id="day-label">Day 1</b><span id="date-label">Month 1 / 12</span>
           </div>
-          <div class="phase-track" id="phase-track" aria-label="Daily phases"></div>
-          <span class="phase-explainer" id="phase-explainer">The world is ready.</span>
+          <div class="phase-readout">
+            <b id="phase-label">Ready</b>
+            <div class="phase-track" id="phase-track" aria-label="Daily phases"></div>
+          </div>
+          <span class="run-state" id="world-state">Paused</span
+          ><button
+            class="button quiet"
+            id="replay-toggle"
+            aria-expanded="false"
+            aria-controls="replay-panel"
+          >
+            Replay
+          </button>
         </div>
         <div class="playback-row">
           <div class="transport">
             <button class="button play-button" id="play-button">
               <span class="icon-slot" data-icon="play"></span><span>Play</span></button
-            ><button class="button secondary" id="step-button">
-              <span class="icon-slot" data-icon="step"></span> Phase</button
+            ><button class="button secondary" id="step-button" title="Advance one phase">
+              Step</button
             ><button class="button secondary" id="day-button">
-              Next day <span aria-hidden="true">→</span></button
+              Run day <span aria-hidden="true">→</span></button
             ><select id="speed-select" aria-label="Playback speed">
               <option value="1400">1×</option>
               <option value="600" selected>2×</option>
               <option value="180">4×</option>
             </select>
           </div>
+          <details class="time-options" id="time-options">
+            <summary title="More playback options" aria-label="More playback options">
+              •••
+            </summary>
+            <div>
+              <button id="month-button">Run month</button
+              ><button id="year-button">Run year</button
+              ><button id="export-button">Download replay</button>
+            </div>
+          </details>
+        </div>
+        <div class="replay-panel" id="replay-panel" hidden>
           <div class="timeline-wrap">
             <label for="timeline" class="visually-hidden">Replay timeline</label
             ><input type="range" min="0" max="0" value="0" id="timeline" /><span
               id="timeline-label"
               >Live</span
-            ><button class="button quiet compact" id="live-button" hidden>
+            ><button class="button secondary compact" id="live-button" hidden>
               Return to live
             </button>
           </div>
-          <div class="run-actions">
-            <button class="button quiet" id="month-button">Run month</button
-            ><button class="button quiet" id="year-button">
-              Run year <span aria-hidden="true">↗</span></button
-            ><button
-              class="button quiet compact"
-              id="export-button"
-              title="Download replay"
-              aria-label="Download replay"
-            >
-              <span class="icon-slot" data-icon="download"></span>
-            </button>
-          </div>
+          <p id="replay-caption"></p>
         </div>
       </section>
-      <footer class="app-footer">
-        <span>AMOEBOIDS <span class="footer-divider">/</span> IMPERIAL SOMAS</span
-        ><span id="footer-status">A sandbox for collective behaviour.</span
-        ><a href="/legacy" class="legacy-link">Legacy garden</a>
-      </footer>
     </main>
-
     <dialog id="setup-dialog" class="large-dialog">
       <div class="dialog-top">
         <div>
-          <span class="eyebrow">DESIGN THE CONDITIONS</span>
-          <h2>Configure your world</h2>
+          <h2>New world</h2>
         </div>
         <button
           class="button quiet compact dialog-close"
@@ -274,8 +185,7 @@
     <dialog id="strategy-dialog" class="large-dialog">
       <div class="dialog-top">
         <div>
-          <span class="eyebrow">DEFINE A BEHAVIOUR</span>
-          <h2 id="strategy-title">Strategy studio</h2>
+          <h2 id="strategy-title">Behaviour</h2>
         </div>
         <button
           class="button quiet compact dialog-close"
@@ -286,14 +196,13 @@
       </div>
       <div class="dialog-scroll" id="strategy-content"></div>
       <div class="dialog-footer">
-        <p>Each copy has its own decisions and memory.</p>
+        <p>Changes apply to your next world.</p>
         <button class="button primary" id="save-strategy">Save behaviour</button>
       </div>
     </dialog>
     <dialog id="saved-dialog" class="guide-dialog">
       <div class="dialog-top">
         <div>
-          <span class="eyebrow">WORLDS YOU HAVE CREATED</span>
           <h2>Saved worlds</h2>
         </div>
         <button class="button quiet compact dialog-close" aria-label="Close saved worlds">
@@ -305,62 +214,40 @@
     <dialog id="guide-dialog" class="guide-dialog">
       <div class="dialog-top">
         <div>
-          <span class="eyebrow">FIELD GUIDE</span>
-          <h2>A society, one day at a time.</h2>
+          <h2>How to play</h2>
         </div>
         <button class="button quiet compact dialog-close" aria-label="Close guide">
           ×
         </button>
       </div>
       <div class="dialog-scroll">
-        <p class="lead">The teams write the behaviours. The world keeps the rules.</p>
-        <div class="guide-grid">
-          <article>
-            <span class="guide-number">01</span>
-            <h3>Stay alive. Find satisfaction.</h3>
-            <p>
-              Agents choose where to live, how much to harvest and how much to eat. Extra
-              carrots earn diminishing satisfaction. Thinking converts mind into
-              satisfaction, one for one.
-            </p>
-          </article>
-          <article>
-            <span class="guide-number">02</span>
-            <h3>Decide whether to organise.</h3>
-            <p>
-              Governments start with zero rules. Members spend mind to propose and vote on
-              quotas, taxes, storage, officers and more. Passed decisions take effect the
-              following day.
-            </p>
-          </article>
-          <article>
-            <span class="guide-number">03</span>
-            <h3>Cooperate across plots.</h3>
-            <p>
-              Federations can unlock donations, shared records and movement rules.
-              Authorised representatives cast one combined vote per member plot.
-            </p>
-          </article>
-          <article>
-            <span class="guide-number">04</span>
-            <h3>Begin again, with experience.</h3>
-            <p>
-              Every month the meteor resets the world. Only each individual's private
-              memory survives. Whether it learns from that experience depends on its
-              team's code.
-            </p>
-          </article>
-        </div>
-        <div class="guide-note">
-          <strong>You are the observer.</strong>
+        <p>You observe the simulation. Your agents make the decisions.</p>
+        <dl class="controls-guide">
+          <dt>Play / Space</dt>
+          <dd>Run or pause the simulation.</dd>
+          <dt>Run day</dt>
+          <dd>Finish the current day's phases.</dd>
+          <dt>Select a plot</dt>
+          <dd>Inspect residents, food, government and votes.</dd>
+          <dt>Drag / scroll</dt>
+          <dd>Pan the map / zoom. Use Fit to see every plot.</dd>
+          <dt>History</dt>
+          <dd>Find recorded events. Replay lets you revisit a phase.</dd>
+          <dt>Menu → Behaviours</dt>
+          <dd>Edit the six teams for a new world. Each individual has private memory.</dd>
+        </dl>
+        <details>
+          <summary>Simulation rules</summary>
           <p>
-            Inspect the whole world, or switch an individual to its own view to see what
-            it actually knows. The controls change playback, never an agent's decisions.
+            Agents choose where to live, harvest, eat and think. Extra food earns
+            diminishing satisfaction; thinking earns one satisfaction per mind spent.
+            Governments start with zero rules. Votes can introduce quotas, taxes, officers
+            and other powers. Decisions activate the following day. Federation
+            representatives act for their plots. A meteor resets the world each month,
+            retaining only private memories.
           </p>
-        </div>
-        <a class="text-link" href="/society-example.go" download
-          >Download the Go agent example ↗</a
-        >
+        </details>
+        <a class="text-link" href="/society-example.go" download>Download Go example</a>
       </div>
     </dialog>
     <script type="module" src="/society.js"></script>

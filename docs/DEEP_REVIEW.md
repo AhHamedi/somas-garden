@@ -1,5 +1,7 @@
 # Independent MVP review
 
+This review covers the initial engine and interface. Its visual assessment is historical and superseded by the subsequent [independent game usability review](GAME_UX_REVIEW.md). The engine findings and regression evidence below remain applicable.
+
 **Assessment after corrections: 8.6/10.** This meets the requested 8.5 threshold for a polished, working local MVP. No material unresolved blocker was found within the reviewed scope. This is an engineering judgment supported by the checks below, not a guarantee that every possible policy combination is defect-free.
 
 Reviewed on 15 November 2026 by an independent review agent after the initial implementation. A separate visual reviewer inspected the rendered application. The implementation agents made the corrections; the reviewer independently reproduced defects, inspected corrections and reran checks. The reviewer added the permanent determinism regressions, not product behavior.

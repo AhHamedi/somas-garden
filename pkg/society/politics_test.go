@@ -347,16 +347,37 @@ func TestFederationFormationNoPowersAndRepresentation(t *testing.T) {
 	}
 	for i, a := range w.Agents {
 		a.Plot = i / 2
-		a.Pledges["federation"] = 9
+		a.Pledges["federation"] = 1
 	}
 	w.governancePhase(map[int]Decision{0: {Proposals: []ProposalInput{{Kind: "federationFound", Members: []int{0, 1, 2}}}}, 2: {Proposals: []ProposalInput{{Kind: "federationFound", Members: []int{0, 1, 2}}}}, 4: {Proposals: []ProposalInput{{Kind: "federationFound", Members: []int{0, 1, 2}}}}})
 	w.votingPhase(yesVotes(w))
+	for _, p := range w.Proposals {
+		if p.Status != "approved" || p.Reason != "Waiting for all member approvals and founding mind" {
+			t.Fatalf("unfunded formation must explain the pending requirement: %+v", p)
+		}
+	}
+	for _, a := range w.Agents {
+		a.Pledges["federation"] = 9
+	}
+	w.completeFormations()
+	for _, p := range w.Proposals {
+		if p.Status != "scheduled" || p.Reason != "" || p.Activate != w.AbsoluteDay+1 {
+			t.Fatalf("funded formation retained a stale waiting reason: %+v", p)
+		}
+	}
 	if len(w.Federations) != 0 {
 		t.Fatal("same-day federation")
 	}
+	// Activation must also clean an older scheduled ballot's stale explanation.
+	w.Proposals[0].Reason = "Waiting for all member approvals and founding mind"
 	tomorrow(w)
 	if len(w.Federations) != 1 {
 		t.Fatal("federation failed to form")
+	}
+	for _, p := range w.Proposals {
+		if p.Status != "activated" || p.Reason != "" {
+			t.Fatalf("activated formation retained a stale waiting reason: %+v", p)
+		}
 	}
 	f := w.Federations[0]
 	if len(f.Rules) != 0 || f.Funded {

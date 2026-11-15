@@ -58,10 +58,13 @@ func knownPolicy(p string) bool {
 	return p == "steward" || p == "thinker" || p == "gatherer" || p == "diplomat" || p == "wanderer" || p == "learner"
 }
 func (s Settings) validateTeam(t Team) error {
-	if t.StrategyID == "" && !knownPolicy(t.Policy) {
+	b := t.Builder
+	if t.Policy == "builder" && b == nil {
+		return fmt.Errorf("builder behaviour requires a builder configuration")
+	}
+	if t.StrategyID == "" && !knownPolicy(t.Policy) && t.Policy != "builder" {
 		return fmt.Errorf("unknown behaviour %q", t.Policy)
 	}
-	b := t.Builder
 	if b == nil {
 		return nil
 	}

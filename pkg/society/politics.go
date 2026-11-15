@@ -927,6 +927,7 @@ func (w *World) completeFormations() {
 		for _, p := range w.Proposals {
 			if p.Input.Kind == "federationFound" && canonical(uniqueInts(p.Input.Members)) == key && p.Status == "approved" {
 				p.Status = "scheduled"
+				p.Reason = ""
 				p.Activate = w.AbsoluteDay + 1
 			}
 		}

@@ -1,3 +1,4 @@
+import { SocietyWorld } from "/society-world.js";
 const $ = (id) => document.getElementById(id);
 const esc = (value) =>
   String(value ?? "").replace(
@@ -54,12 +55,12 @@ function icon(name, cls = "") {
 const phases = [
   ["environment", "Environment", "sun", "Weather, mind and new growth."],
   ["movement", "Movement", "move", "Agents choose where to live."],
-  ["harvest", "Harvest", "carrot", "A shared field, individual choices."],
+  ["harvest", "Harvest", "carrot", "Agents harvest."],
   ["proposals", "Proposals", "proposal", "Spend mind to propose change."],
-  ["voting", "Voting", "vote", "Every eligible voice can be heard."],
+  ["voting", "Voting", "vote", "Agents vote."],
   ["transfers", "Transfers", "transfer", "Officers act. Food changes hands."],
   ["eating", "Eating", "eat", "Eat, survive and think."],
-  ["close", "Nightfall", "dark", "A day of choices becomes history."],
+  ["close", "Nightfall", "dark", "Day ends."],
 ];
 const state = {
   config: null,
@@ -68,10 +69,15 @@ const state = {
   live: null,
   status: "paused",
   page: "world",
-  plot: 0,
+  plot: null,
   agent: null,
   tab: "overview",
-  govTab: "rules",
+  govTab: "votes",
+  fedTab: "votes",
+  replayPlaying: false,
+  seekToken: 0,
+  runToken: 0,
+  playbackToken: 0,
   federation: null,
   playing: false,
   busy: false,
@@ -169,6 +175,8 @@ function titleCase(v) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 function individualName(id) {
+  // Go omits zero-valued target IDs; an absent target therefore means agent 0.
+  id ??= 0;
   return agentByID(id)?.name || `Individual ${Number(id) + 1}`;
 }
 const powerNames = {
@@ -264,8 +272,16 @@ function ingest(data, historical = false) {
     } catch {}
   }
   state.historical = historical;
+  if (historical) {
+    $("replay-panel").hidden = false;
+    $("replay-toggle").setAttribute("aria-expanded", "true");
+  }
   $("map-loading").hidden = true;
-  if (!snapshot.plots.some((p) => p.id === state.plot) && state.plot >= 0)
+  if (
+    state.plot !== null &&
+    !snapshot.plots.some((p) => p.id === state.plot) &&
+    state.plot >= 0
+  )
     state.plot = snapshot.plots[0]?.id ?? 0;
   if (state.agent !== null && !agentByID(state.agent)) state.agent = null;
   render();
@@ -273,11 +289,11 @@ function ingest(data, historical = false) {
   if (snapshot.meteor && previous && meteorKey !== state.lastMeteor && !historical) {
     state.lastMeteor = meteorKey;
     $("meteor-overlay").querySelector("h2").textContent = snapshot.done
-      ? "A world of experience."
-      : "The world begins again.";
+      ? "Run complete"
+      : "Meteor";
     $("meteor-overlay").querySelector("p").textContent = snapshot.done
-      ? "The final month is complete. Explore what this world became."
-      : "Everything is renewed. Their memories remain.";
+      ? "Results are ready."
+      : "World reset. Private memories retained.";
     $("meteor-overlay").hidden = false;
     setTimeout(
       () => {
@@ -288,35 +304,58 @@ function ingest(data, historical = false) {
   }
 }
 
-async function createWorld(input) {
+function currentRun(id, token) {
+  return state.id === id && state.runToken === token;
+}
+function beginRunTransition() {
+  state.runToken++;
+  state.seekToken++;
   pauseLocal();
+  stopPolling();
   state.busy = true;
   updateTransport();
+  return state.runToken;
+}
+async function createWorld(input) {
+  const token = beginRunTransition();
   try {
     if (state.status === "running" && state.id) await api(`/runs/${state.id}/pause`, {});
+    if (token !== state.runToken) return;
     const result = await api("/runs", input);
+    if (token !== state.runToken) return;
     state.events.clear();
     state.snapshot = null;
     state.history = [];
     state.index = 0;
     state.maxIndex = 0;
     state.agent = null;
-    state.plot = 0;
+    state.federation = null;
+    state.plot = null;
     state.tab = "overview";
     state.lastMeteor = "";
     state.historical = false;
     state.privateObservation = null;
     ingest(result);
+    setPage("world");
+    worldView?.fit();
     await loadHistory();
+    if (token !== state.runToken) return;
     $("setup-dialog").close();
   } catch (error) {
-    notice(error.message, true);
+    if (token === state.runToken) notice(error.message, true);
   } finally {
-    state.busy = false;
-    updateTransport();
+    if (token === state.runToken) {
+      state.busy = false;
+      updateTransport();
+    }
   }
 }
 async function step(count = 1) {
+  if (state.historical) {
+    if (!state.busy && !state.replayPlaying)
+      await seek(Math.min(state.maxIndex, state.index + count));
+    return;
+  }
   if (
     state.busy ||
     !state.id ||
@@ -325,31 +364,74 @@ async function step(count = 1) {
   )
     return;
   if (state.historical) returnToLive();
+  const id = state.id,
+    token = state.runToken;
   state.busy = true;
   updateTransport();
   try {
-    ingest(await api(`/runs/${state.id}/step`, { count }));
+    const result = await api(`/runs/${id}/step`, { count });
+    if (!currentRun(id, token)) return;
+    ingest(result);
     if (state.live?.done) pauseLocal();
   } catch (error) {
-    pauseLocal();
-    notice(error.message, true);
+    if (currentRun(id, token)) {
+      pauseLocal();
+      notice(error.message, true);
+    }
   } finally {
-    state.busy = false;
-    updateTransport();
+    if (currentRun(id, token)) {
+      state.busy = false;
+      updateTransport();
+    }
   }
 }
 function pauseLocal() {
+  state.playbackToken++;
   state.playing = false;
+  state.replayPlaying = false;
   clearTimeout(state.timer);
   state.timer = null;
   updateTransport();
 }
 async function togglePlay() {
+  const id = state.id,
+    token = state.runToken;
+  if (state.historical) {
+    if (state.replayPlaying) {
+      pauseLocal();
+      return;
+    }
+    if (state.busy || state.index >= state.maxIndex) return;
+    state.replayPlaying = true;
+    const playback = ++state.playbackToken;
+    updateTransport();
+    const replayTick = async () => {
+      if (
+        !state.replayPlaying ||
+        state.playbackToken !== playback ||
+        !currentRun(id, token)
+      )
+        return;
+      await seek(Math.min(state.maxIndex, state.index + 1), true);
+      if (state.playbackToken !== playback || !currentRun(id, token)) return;
+      if (state.index >= state.maxIndex) {
+        pauseLocal();
+        return;
+      }
+      if (state.replayPlaying)
+        state.timer = setTimeout(replayTick, Number($("speed-select").value));
+    };
+    await replayTick();
+    return;
+  }
   if (state.status === "running") {
-    await api(`/runs/${state.id}/pause`, {});
+    await api(`/runs/${id}/pause`, {});
+    if (!currentRun(id, token)) return;
     state.status = "paused";
     stopPolling();
-    ingest(await api(`/runs/${state.id}`));
+    const result = await api(`/runs/${id}`);
+    if (!currentRun(id, token)) return;
+    ingest(result);
     await loadHistory();
     return;
   }
@@ -360,30 +442,53 @@ async function togglePlay() {
   }
   if (state.live?.done || state.status === "archived") return;
   state.playing = true;
+  const playback = ++state.playbackToken;
   updateTransport();
   const tick = async () => {
-    if (!state.playing) return;
+    if (!state.playing || state.playbackToken !== playback || !currentRun(id, token))
+      return;
     await step();
-    if (state.playing) state.timer = setTimeout(tick, Number($("speed-select").value));
+    if (state.playing && state.playbackToken === playback && currentRun(id, token))
+      state.timer = setTimeout(tick, Number($("speed-select").value));
   };
   await tick();
 }
 async function runUntil(until) {
+  const id = state.id,
+    token = state.runToken;
+  if (state.historical) {
+    if (state.busy) return;
+    await loadHistory();
+    if (!currentRun(id, token)) return;
+    const frames = state.history.filter((f) => f.index > state.index);
+    const next =
+      until === "day"
+        ? frames.find((f) => f.phase === "close")
+        : until === "month"
+          ? frames.find((f) => f.meteor)
+          : frames.at(-1);
+    await seek(next?.index ?? state.maxIndex);
+    return;
+  }
   if (!state.id || state.busy || state.live?.done || state.status === "archived") return;
   pauseLocal();
   returnToLive();
   state.busy = true;
   updateTransport();
   try {
-    ingest(await api(`/runs/${state.id}/run`, { until }));
+    const result = await api(`/runs/${id}/run`, { until });
+    if (!currentRun(id, token)) return;
+    ingest(result);
     state.status = "running";
     updateTransport();
     startPolling();
   } catch (error) {
-    notice(error.message, true);
+    if (currentRun(id, token)) notice(error.message, true);
   } finally {
-    state.busy = false;
-    updateTransport();
+    if (currentRun(id, token)) {
+      state.busy = false;
+      updateTransport();
+    }
   }
 }
 function stopPolling() {
@@ -392,17 +497,23 @@ function stopPolling() {
 }
 function startPolling() {
   stopPolling();
+  const id = state.id,
+    token = state.runToken;
   const poll = async () => {
+    if (!currentRun(id, token)) return;
     try {
-      const result = await api(`/runs/${state.id}`);
+      const result = await api(`/runs/${id}`);
+      if (!currentRun(id, token)) return;
       ingest(result);
       if (result.error) notice(result.error, true);
       if (state.status === "running") state.poll = setTimeout(poll, 650);
       else {
         await loadHistory();
+        if (!currentRun(id, token)) return;
         await loadEvents();
       }
     } catch (error) {
+      if (!currentRun(id, token)) return;
       state.status = "paused";
       notice(error.message, true);
       updateTransport();
@@ -412,8 +523,11 @@ function startPolling() {
 }
 async function loadHistory() {
   if (!state.id) return;
+  const id = state.id,
+    token = state.runToken;
   try {
-    const data = await api(`/runs/${state.id}/history`);
+    const data = await api(`/runs/${id}/history`);
+    if (!currentRun(id, token)) return;
     state.history = data.frames || [];
     state.maxIndex = state.history.at(-1)?.index ?? state.maxIndex;
     updateTransport();
@@ -424,28 +538,48 @@ async function loadHistory() {
 }
 async function loadEvents() {
   if (!state.id) return;
+  const id = state.id,
+    token = state.runToken;
   try {
-    const data = await api(`/runs/${state.id}/events`);
+    const data = await api(`/runs/${id}/events`);
+    if (!currentRun(id, token)) return;
     logEvents(data.events || []);
     if (state.page === "chronicle") renderChronicle();
   } catch {
     /* Current snapshot events remain available. */
   }
 }
-async function seek(index) {
-  if (!state.id) return;
-  pauseLocal();
-  if (state.status === "running") return;
+async function seek(index, keepPlayback = false) {
+  if (!state.id || state.status === "running") return;
+  if (!keepPlayback) pauseLocal();
+  const token = ++state.seekToken;
+  const id = state.id,
+    runToken = state.runToken;
+  state.busy = true;
+  updateTransport();
   try {
-    const data = await api(`/runs/${state.id}/frames/${index}`);
+    const data = await api(`/runs/${id}/frames/${index}`);
+    if (token !== state.seekToken || !currentRun(id, runToken)) return;
     state.index = Number(index);
     ingest(data, true);
   } catch (error) {
-    notice(error.message, true);
+    if (token === state.seekToken && currentRun(id, runToken)) {
+      pauseLocal();
+      notice(error.message, true);
+    }
+  } finally {
+    if (token === state.seekToken && currentRun(id, runToken)) {
+      state.busy = false;
+      updateTransport();
+    }
   }
 }
+
 function returnToLive() {
   if (!state.live) return;
+  pauseLocal();
+  state.seekToken++;
+  state.busy = false;
   state.snapshot = state.live;
   state.historical = false;
   state.index = state.maxIndex;
@@ -455,106 +589,91 @@ function returnToLive() {
 function render() {
   const s = state.snapshot;
   if (!s) return;
-  $("seed-label").textContent = `SEED ${s.seed}`;
-  $("world-state").textContent = state.historical
-    ? "EXPLORING THE PAST"
-    : state.status === "archived"
-      ? "A PRESERVED WORLD"
-      : s.done
-        ? "A YEAR OF EXPERIENCE"
-        : state.status === "running" || state.playing
-          ? "A WORLD IN MOTION"
-          : s.phase === "ready"
-            ? "READY TO BEGIN"
-            : "PAUSED FOR A CLOSER LOOK";
-  const titles = {
-    world: [
-      s.done ? "Every ending, a beginning." : "A world taking shape.",
-      "Individual choices. Shared consequences.",
-    ],
-    chronicle: ["The story of this world.", "Follow the choices that shape a society."],
-    results: [
-      "Experience, over time.",
-      `A record of outcomes. ${s.settings.months} chances to adapt.`,
-    ],
-  };
-  $("page-title").textContent = titles[state.page][0];
-  $("page-subtitle").textContent = titles[state.page][1];
-  const stats = s.stats || {};
-  const metrics = [
-    [
-      "agents",
-      stats.alive ?? s.agents?.filter((a) => a.alive).length,
-      "living amoeboids",
-    ],
-    ["plots", s.plots.length, "shared plots"],
-    [
-      "government",
-      stats.governments ?? s.plots.filter((p) => p.government).length,
-      "governments",
-    ],
-    [
-      "federation",
-      stats.federations ?? s.federations?.filter((f) => !f.dissolved).length ?? 0,
-      "federations",
-    ],
-  ];
-  $("world-metrics").innerHTML = metrics
-    .map(
-      ([i, n, label]) =>
-        `<div class="world-metric"><strong>${icon(i)}${fmt(n)}</strong><span>${label}</span></div>`,
-    )
-    .join("");
-  $("team-legend").innerHTML = s.teams
-    .map(
-      (t, i) =>
-        `<span class="legend-item"><i class="color-dot" style="--team-color:${teamColor(i)}"></i>${esc(t.name)}</span>`,
-    )
-    .join("");
+  $("seed-label").textContent = `Seed ${s.seed}`;
+  $("world-metrics").innerHTML =
+    `${icon("agents")}<b>${fmt(s.stats?.alive ?? s.agents.filter((a) => a.alive).length)}</b><span>alive</span>`;
   $("outside-count").textContent = fmt(
     s.agents.filter((a) => a.alive && a.plot < 0).length,
   );
   if (state.page === "world") {
+    const scroller = $("inspector").querySelector(".inspector-content");
+    const scroll = scroller?.scrollTop || 0;
+    const opened = [...$("inspector").querySelectorAll("details[open]")].map(
+      (d) => d.dataset.ballot || d.className || d.querySelector("summary")?.textContent,
+    );
     renderMap();
     renderInspector();
+    $("inspector")
+      .querySelectorAll("details")
+      .forEach((d) => {
+        if (
+          opened.includes(
+            d.dataset.ballot || d.className || d.querySelector("summary")?.textContent,
+          )
+        )
+          d.open = true;
+      });
+    const next = $("inspector").querySelector(".inspector-content");
+    if (next) next.scrollTop = scroll;
   }
   if (state.page === "chronicle") renderChronicle();
   if (state.page === "results") renderResults();
-  $("date-label").innerHTML = `Month ${s.month} <span>/ ${s.settings.months}</span>`;
-  $("day-label").textContent = `Day ${s.day} of ${s.settings.days}`;
+  $("date-label").textContent = `Month ${s.month} / ${s.settings.months}`;
+  $("day-label").textContent = `Day ${s.day} / ${s.settings.days}`;
   const current = phases.findIndex((p) => p[0] === s.phase);
+  $("phase-label").textContent = phases[current]?.[1] || "Ready";
   $("phase-track").innerHTML = phases
     .map(
-      ([id, name, symbol], i) =>
-        `<div class="phase ${i === current ? "active" : i < current ? "done" : ""}" title="${esc(phases[i][3])}" ${i === current ? 'aria-current="step"' : ""}><span class="phase-icon">${icon(symbol)}</span><span>${name}</span></div>`,
+      ([id, name], i) =>
+        `<span class="phase ${i === current ? "active" : i < current ? "done" : ""}" title="${esc(name)}" ${i === current ? 'aria-current="step"' : ""}><span class="visually-hidden">${name}</span></span>`,
     )
     .join("");
-  $("phase-explainer").textContent = phases[current]?.[3] || "The world is ready.";
-  $("footer-status").textContent = state.historical
-    ? "Viewing a recorded moment. Agent decisions are unchanged."
+  $("replay-caption").textContent = state.historical
+    ? `Recorded: month ${s.month}, day ${s.day}, ${phases[current]?.[1] || "initial world"}.`
     : state.status === "archived"
-      ? "Saved replay. Create a new world to run another simulation."
+      ? "Saved replay. Start a new world from Menu to run again."
       : s.done
-        ? "Run complete. Explore the year in Results."
-        : "A sandbox for collective behaviour.";
+        ? "Run complete. Scrub to revisit any phase."
+        : "Drag to revisit a recorded phase.";
+  $("map-hint").hidden = state.plot !== null || state.agent !== null;
+  $("map-hint").textContent =
+    s.phase === "ready"
+      ? "Press Play to begin · Select a plot to inspect"
+      : "Select a plot to inspect";
   updateTransport();
 }
 
 function updateTransport() {
-  const active = state.playing || state.status === "running";
+  const active = state.playing || state.replayPlaying || state.status === "running";
+  $("world-state").textContent = state.historical
+    ? "Replay"
+    : state.status === "archived"
+      ? "Saved replay"
+      : state.snapshot?.done
+        ? "Complete"
+        : active
+          ? "Playing"
+          : "Paused";
   $("play-button").innerHTML =
     `${icon(active ? "pause" : "play")}<span>${active ? "Pause" : "Play"}</span>`;
   $("play-button").disabled =
     !state.id ||
     (state.busy && !active) ||
-    ((!!state.live?.done || state.status === "archived") && !active);
+    ((state.historical
+      ? state.index >= state.maxIndex
+      : !!state.live?.done || state.status === "archived") &&
+      !active);
   for (const id of ["step-button", "day-button", "month-button", "year-button"])
     $(id).disabled =
       !state.id ||
       state.busy ||
       active ||
-      !!state.live?.done ||
-      state.status === "archived";
+      (state.historical
+        ? state.index >= state.maxIndex
+        : !!state.live?.done || state.status === "archived");
+  $("month-button").textContent = state.historical ? "Next month" : "Run month";
+  $("year-button").textContent = state.historical ? "End of replay" : "Run year";
+  $("day-button").textContent = state.historical ? "Next day" : "Run day →";
   $("export-button").disabled = !state.id || active;
   $("timeline").max = state.maxIndex;
   $("timeline").value = state.historical ? state.index : state.maxIndex;
@@ -570,166 +689,80 @@ function updateTransport() {
   if (!active) loader?.remove();
 }
 
-function terrain(plot) {
-  const residents = eligibleResidents(plot.id);
-  const counts = state.snapshot.teams.map(
-    (_, i) => residents.filter((a) => a.team === i).length,
-  );
-  const ratio = clamp(plot.stock / Math.max(1, plot.capacity), 0, 1);
-  const palette =
-    plot.weather === 2
-      ? ["#c7ceba", "#b2bea0", "#9cae8a"]
-      : plot.weather === 1
-        ? ["#d0dabc", "#bdcfa7", "#a5bd8d"]
-        : ["#dce3b9", "#c8d79e", "#afc68c"];
-  const coords = [
-    [48, 52],
-    [72, 40],
-    [100, 43],
-    [128, 39],
-    [152, 49],
-    [166, 64],
-    [139, 70],
-    [114, 62],
-    [87, 66],
-    [63, 73],
-    [100, 82],
-    [133, 88],
-    [75, 89],
-    [157, 83],
-    [45, 91],
-    [118, 32],
-    [181, 77],
-    [92, 30],
-  ];
-  const carrots = coords
-    .slice(0, Math.ceil(ratio * 15))
+let worldView;
+function renderMap() {
+  const s = state.snapshot;
+  if (!s) return;
+  worldView?.update(s, {
+    plot: state.plot,
+    agent: state.agent,
+    colors: s.teams.map((_, i) => teamColor(i)),
+  });
+  const focused = document.activeElement?.dataset?.plot;
+  $("plot-layer").innerHTML = s.plots
     .map(
-      ([x, y], i) =>
-        `<g transform="translate(${x} ${y}) rotate(${((i % 3) - 1) * 12})"><path d="M-2 1 0 8 3 1Z" fill="#cb9560"/><path d="M0 2q-5-6-4-7 4 0 4 5 0-6 4-7 2 4-3 8" fill="#819c5a"/></g>`,
+      (p) =>
+        `<button class="plot ${state.plot === p.id ? "selected" : ""}" data-plot="${p.id}" aria-label="${esc(p.name)}" aria-pressed="${state.plot === p.id}" title="${esc(p.name)} · ${eligibleResidents(p.id).length} residents">${esc(p.name.replace(/^Plot\s*/i, ""))}</button>`,
     )
     .join("");
-  let offset = 0;
-  const creatures = counts
-    .map((n, t) => {
-      const visible = n
-        ? Math.max(
-            1,
-            Math.round(
-              (n / Math.max(1, residents.length)) * Math.min(13, residents.length),
-            ),
-          )
-        : 0;
-      return Array.from({ length: visible }, () => {
-        const idx = offset++;
-        const x = 47 + ((idx * 29 + t * 11) % 130),
-          y = 86 + ((idx * 11) % 22);
-        return `<g class="island-creature" transform="translate(${x} ${y})"><ellipse cx="0" cy="6" rx="6" ry="2" fill="#657343" opacity=".13"/><path d="M-6 0c-1-8 11-10 12-1 1 8-12 9-12 1" fill="${teamColor(t)}"/><circle cx="-2" cy="-1" r="1.2" fill="#fffef5"/><circle cx="2.5" cy="-1" r="1.2" fill="#fffef5"/><path d="M-1 3h2" stroke="#53654a" stroke-width=".6"/></g>`;
-      }).join("");
-    })
-    .join("");
-  const government = plot.government
-    ? `<g transform="translate(166 52)"><path d="M-13 3h25v18h-25Z" fill="#eeeadd"/><path d="m-16 2 16-12L16 2Z" fill="#698368"/><path d="M-9 6v12m7-12v12m7-12v12m7-12v12" stroke="#c0c8b4" stroke-width="2"/><path d="M-15 22h31" stroke="#9cae8e" stroke-width="2"/><path d="M2-10v-13l11 3-11 4" stroke="#9ca688" fill="#e1bb72" stroke-width="1.2"/></g>`
-    : '<g opacity=".5" transform="translate(165 58)"><ellipse rx="11" ry="6" cy="7" fill="#bac69e"/><path d="m-8 7 8-12L8 7" fill="#dce3ca" stroke="#aebd96" stroke-width="1"/></g>';
-  return `<svg class="terrain-art" viewBox="0 0 230 140" aria-hidden="true"><ellipse class="island-halo" cx="115" cy="77" rx="107" ry="54"/><ellipse cx="115" cy="91" rx="98" ry="38" fill="#4e6638" opacity=".07"/><path d="M16 67c12-27 48-25 71-32s64-5 84 9 43 15 44 34-28 31-60 34-78 9-110-6S5 85 16 67Z" fill="#a5b58d"/><path d="M16 62c12-27 48-25 71-32s64-5 84 9 43 15 44 34-28 31-60 34-78 9-110-6S5 80 16 62Z" fill="${palette[0]}"/><path d="M22 68c18-19 36-14 62-17s51-18 76-3 39 15 37 26-27 18-52 21-60 5-84-4S11 82 22 68Z" fill="${palette[1]}"/><path d="M48 60c30-12 66-19 94-8 11 5 19 16 7 25-22 13-66 12-87 6S37 71 48 60Z" fill="#b7bd89" opacity=".45"/><path d="m60 56 70 14m-76-5 70 14m-76-5 62 12" stroke="#a4ae75" stroke-width=".65" opacity=".35"/>${carrots}<g fill="${palette[2]}" opacity=".8"><path d="m30 78-3-7 4 4 2-9 2 8 4-3-4 9"/><path d="m183 85-4-7 5 4 1-9 2 9 4-5-2 9"/><path d="m84 100-2-5 3 3 2-6 1 7"/></g>${government}${creatures}</svg>`;
-}
-function renderMap() {
-  const plots = state.snapshot.plots;
-  const rows = Math.ceil(plots.length / 3);
-  const height = rows * 205 + 75;
-  $("atlas").style.minHeight = plots.length > 6 ? `${height}px` : "";
-  const layouts =
-    plots.length === 1
-      ? [[50, 46]]
-      : plots.length === 2
-        ? [
-            [29, 44],
-            [72, 48],
-          ]
-        : plots.length === 3
-          ? [
-              [18, 44],
-              [50, 41],
-              [81, 47],
-            ]
-          : plots.length <= 6
-            ? [
-                [18, 24],
-                [50, 21],
-                [81, 24],
-                [19, 70],
-                [51, 70],
-                [82, 73],
-              ]
-            : null;
-  $("plot-layer").innerHTML = plots
-    .map((p, i) => {
-      const pos = layouts?.[i] || [
-        17 + (i % 3) * 33,
-        ((110 + Math.floor(i / 3) * 205) / height) * 100,
-      ];
-      const n = eligibleResidents(p.id).length;
-      return `<button class="plot ${state.plot === p.id && state.agent === null ? "selected" : ""}" data-plot="${p.id}" style="left:${pos[0]}%;top:${pos[1]}%;width:${24 * Math.sqrt(p.capacity / (plots.reduce((n, x) => n + x.capacity, 0) / plots.length))}%;max-width:260px;" aria-label="${esc(p.name)}, ${n} residents, ${p.stock} carrots, ${weather[p.weather] || "Sunny"}${p.government ? ", governed" : ", ungoverned"}" aria-pressed="${state.plot === p.id}"><div class="plot-label"><span class="weather-icon ${weather[p.weather]?.toLowerCase()}">${icon(["sun", "cloud", "dark"][p.weather] || "sun")}</span><span class="plot-name"><span class="plot-title">${esc(p.name)}</span><span class="plot-state">${p.government ? (p.federation >= 0 ? "Federated society" : "Governed society") : "Open commons"}</span></span></div><div class="plot-terrain">${terrain(p)}</div><div class="plot-values"><span>${icon("agents")}${n}</span><i></i><span class="field-value">${icon("carrot")}${p.stock}</span>${p.government ? `<i></i><span>${icon("storage")}${p.reserve}</span>` : ""}</div></button>`;
-    })
-    .join("");
-  if (state.migrations?.length && plots.length <= 6) {
-    const position = (id) =>
-      id < 0 ? [10, 92] : layouts[plots.findIndex((p) => p.id === id)] || [50, 50];
-    const lines = state.migrations
-      .map((r) => {
-        const [x1, y1] = position(r.from),
-          [x2, y2] = position(r.to);
-        return `<path d="M${x1 * 10} ${y1 * 6.5}Q${(x1 + x2) * 5 + 25} ${(y1 + y2) * 3.25 - 35} ${x2 * 10} ${y2 * 6.5}"/><text x="${(x1 + x2) * 5}" y="${(y1 + y2) * 3.25 - 18}" text-anchor="middle">${r.count} →</text>`;
-      })
-      .join("");
-    $("plot-layer").insertAdjacentHTML(
-      "afterbegin",
-      `<svg class="migration-routes" viewBox="0 0 1000 650" preserveAspectRatio="none" aria-label="Recent migration routes">${lines}</svg>`,
-    );
-  }
   $("plot-layer")
     .querySelectorAll("[data-plot]")
-    .forEach((el) =>
-      el.addEventListener("click", () => selectPlot(Number(el.dataset.plot))),
-    );
+    .forEach((b) => (b.onclick = () => selectPlot(Number(b.dataset.plot))));
+  if (focused !== undefined)
+    $("plot-layer")
+      .querySelector(`[data-plot="${focused}"]`)
+      ?.focus({ preventScroll: true });
 }
 function selectPlot(id) {
-  const restoreFocus = document.activeElement?.classList.contains("plot");
   state.plot = id;
   state.agent = null;
   state.federation = null;
   state.privateObservation = null;
   state.residentsPage = 0;
   state.residentSearch = "";
+  state.tab = "overview";
+  if (state.page !== "world") setPage("world");
   renderMap();
   renderInspector();
-  if (restoreFocus)
-    $("plot-layer").querySelector(`[data-plot="${id}"]`)?.focus({ preventScroll: true });
+  $("map-hint").hidden = true;
 }
+function closeInspector() {
+  const previous = state.plot;
+  state.plot = null;
+  state.agent = null;
+  state.federation = null;
+  $("inspector-shell").hidden = true;
+  renderMap();
+  $("map-hint").hidden = false;
+  $("plot-layer")
+    .querySelector(`[data-plot="${previous}"]`)
+    ?.focus({ preventScroll: true });
+}
+
 function resource(name, symbol, amount, capacity, note, color = "") {
   return `<div class="resource-block"><div class="resource-row"><span class="resource-name">${icon(symbol)}${name}</span><strong>${fmt(amount, 1)} <small>/ ${fmt(capacity)}</small></strong></div><div class="meter ${color}"><span style="width:${clamp((amount / Math.max(capacity, 1)) * 100, 0, 100)}%"></span></div>${note ? `<p class="resource-note">${esc(note)}</p>` : ""}</div>`;
 }
 function renderInspector() {
+  $("inspector-shell").hidden =
+    state.plot === null && state.agent === null && state.federation === null;
+  if ($("inspector-shell").hidden) return;
   if (state.agent !== null) return renderAgent();
   if (state.federation !== null) return renderFederation();
   if (state.plot < 0) return renderOutside();
   const p = plotByID(state.plot);
   if (!p) return;
   const residents = eligibleResidents(p.id);
-  const ruleCount = Object.keys(p.rules || {}).length;
   $("inspector").innerHTML =
-    `<div class="inspector-header"><div class="inspector-kicker"><span class="eyebrow">PLOT ${String(p.id + 1).padStart(2, "0")}</span>${tag(p.government ? "Government formed" : "Ungoverned", p.government ? "green" : "")}</div><div class="inspector-title-row"><h2>${esc(p.name)}</h2><span class="weather-icon ${weather[p.weather]?.toLowerCase()}">${icon(["sun", "cloud", "dark"][p.weather] || "sun")}</span></div><p>${weather[p.weather] || "Sunny"} · ${fmt(p.regeneration, 1)} mind per resident each morning</p></div><div class="inspector-tabs" role="tablist">${[
+    `<div class="inspector-header"><div class="inspector-title-row"><h2>${esc(p.name)}</h2><span class="weather-icon ${weather[p.weather]?.toLowerCase()}">${icon(["sun", "cloud", "dark"][p.weather] || "sun")}</span></div><p>${weather[p.weather] || "Sunny"} · ${fmt(p.regeneration, 1)} mind per day</p></div><div class="inspector-tabs" role="tablist">${[
       ["overview", "Overview"],
       ["residents", "Residents"],
-      ["governance", "Governance"],
+      ["governance", "Government"],
     ]
       .map(
         ([id, label]) =>
           `<button role="tab" aria-selected="${state.tab === id}" class="${state.tab === id ? "active" : ""}" data-inspector-tab="${id}">${label}${id === "residents" ? ` <span class="muted">${residents.length}</span>` : ""}</button>`,
       )
-      .join(
-        "",
-      )}</div><div class="inspector-content" id="inspector-content"></div><div class="inspector-footer">${icon("eye")} Observer access · ${ruleCount} enacted ${ruleCount === 1 ? "rule" : "rules"}</div>`;
+      .join("")}</div><div class="inspector-content" id="inspector-content"></div>`;
   $("inspector")
     .querySelectorAll("[data-inspector-tab]")
     .forEach(
@@ -747,31 +780,27 @@ function renderPlotOverview(p, residents) {
   const counts = state.snapshot.teams.map(
     (_, i) => residents.filter((a) => a.team === i).length,
   );
-  const growth =
-    (state.snapshot.settings.growth *
-      Math.min(
-        residents.length,
-        p.capacity / state.snapshot.settings.productiveCapacity,
-      ) *
-      p.stock) /
-    p.capacity;
+  const active = (state.snapshot.proposals || []).filter(
+    (x) =>
+      x.plot === p.id &&
+      x.federation < 0 &&
+      ["open", "scheduled", "approved"].includes(x.status),
+  ).length;
   $("inspector-content").innerHTML =
-    `<div class="section-label">Shared resources</div>${resource("Growing carrots", "carrot", p.stock, p.capacity, `${fmt(growth, 1)} projected growth at current stock and population`, "orange")}${resource("Government reserve", "storage", p.reserve, p.reserveCapacity, p.government ? "Stored carrots do not grow or spoil." : "Available when a government is formed.", "green")}<div class="divider"></div><div class="section-label">The residents</div><div class="resident-summary"><strong>${residents.length}</strong><span>${residents.length === 1 ? "individual" : "individuals"} sharing this plot</span></div><div class="population-strip">${counts.map((n, i) => (n ? `<span style="width:${(n / Math.max(1, residents.length)) * 100}%;--team-color:${teamColor(i)}" title="${esc(teamName(i))}: ${n}"></span>` : "")).join("")}</div><div class="team-mini-list">${counts.map((n, i) => `<div class="team-mini"><i class="color-dot" style="--team-color:${teamColor(i)}"></i>${esc(teamName(i))}<b>${n}</b></div>`).join("")}</div>${p.government ? `<div class="divider"></div><div class="section-label">Public services</div><div class="rule-row"><strong>Harvest enforcement</strong>${tag(p.hardFunded ? "Funded" : "Not funded", p.hardFunded ? "green" : "")}</div><div class="rule-row"><strong>Political records</strong>${tag(p.recordsFunded ? "Recording" : "Not recording", p.recordsFunded ? "green" : "")}</div>${p.federation >= 0 ? `<button class="subtle-link" data-fed="${p.federation}">${icon("federation")} Visit Federation Council →</button>` : ""}` : `<div class="empty-government">${icon("government")}<div><strong>No government. No imposed rules.</strong><p>Residents can spend mind to propose a government, then decide its powers together.</p></div></div>`}`;
-  const recent = [...state.events.values()]
-    .filter((e) => e.plot === p.id && visibleAtSnapshot(e))
-    .slice(-5)
-    .reverse();
-  if (recent.length) {
-    $("inspector-content").insertAdjacentHTML(
-      "beforeend",
-      `<div class="divider"></div><div class="section-label">Life on this plot</div>${recent.map(eventRecord).join("")}<button class="subtle-link" id="plot-chronicle">Follow this plot in the chronicle →</button>`,
-    );
-    $("plot-chronicle").onclick = () => {
-      state.eventPlot = String(p.id);
-      state.eventPage = 0;
-      setPage("chronicle");
-    };
-  }
+    `${resource("Field carrots", "carrot", p.stock, p.capacity, "", "orange")}${p.government ? resource("Government storage", "storage", p.reserve, p.reserveCapacity, "", "green") : ""}<button class="detail-link" id="open-residents"><span>${icon("agents")} Residents</span><b>${residents.length} →</b></button><div class="team-mini-list">${counts.map((n, i) => (n ? `<div class="team-mini"><i class="color-dot" style="--team-color:${teamColor(i)}"></i>${esc(teamName(i))}<b>${n}</b></div>` : "")).join("")}</div><button class="detail-link" id="open-government"><span>${icon("government")} Government</span><b>${p.government ? `${Object.keys(p.rules || {}).length} rules` : "None"} →</b></button>${active ? `<p class="small muted">${active} open or scheduled ${active === 1 ? "decision" : "decisions"}</p>` : ""}${p.federation >= 0 ? `<button class="detail-link" data-fed="${p.federation}"><span>${icon("federation")} Federation</span><b>View →</b></button>` : ""}<button class="subtle-link" id="plot-chronicle">Plot history →</button>`;
+  $("open-residents").onclick = () => {
+    state.tab = "residents";
+    renderInspector();
+  };
+  $("open-government").onclick = () => {
+    state.tab = "governance";
+    renderInspector();
+  };
+  $("plot-chronicle").onclick = () => {
+    state.eventPlot = String(p.id);
+    state.eventPage = 0;
+    setPage("chronicle");
+  };
   $("inspector-content")
     .querySelector("[data-fed]")
     ?.addEventListener("click", (e) => {
@@ -779,6 +808,7 @@ function renderPlotOverview(p, residents) {
       renderInspector();
     });
 }
+
 function renderResidents(residents) {
   const matches = residents.filter((a) =>
     `${a.name} ${teamName(a.team)} ${a.id}`
@@ -796,7 +826,7 @@ function renderResidents(residents) {
             `<button class="resident-row" data-agent="${a.id}"><span class="resident-avatar" style="--team-color:${teamColor(a.team)}"></span><span class="resident-info"><strong>${esc(a.name)}</strong><span>${esc(teamName(a.team))} · ${fmt(a.food)} carrots</span></span><span class="resident-score">${icon("star")}${fmt(a.score, 1)}</span></button>`,
         )
         .join("") ||
-      `<div class="empty-state">${icon("agents")}<strong>${residents.length ? "No matching individuals" : "Room for a society"}</strong>${residents.length ? "Try another name or team." : "Amoeboids begin outside. They choose a plot during movement."}</div>`
+      `<div class="empty-state">${icon("agents")}<strong>${residents.length ? "No matching individuals" : "No residents"}</strong>${residents.length ? "Try another name or team." : "Amoeboids begin outside. They choose a plot during movement."}</div>`
     }</div>${matches.length > 30 ? `<div class="pagination"><button class="button secondary" id="res-prev" ${state.residentsPage === 0 ? "disabled" : ""}>←</button><span>${state.residentsPage + 1} / ${pages}</span><button class="button secondary" id="res-next" ${state.residentsPage === pages - 1 ? "disabled" : ""}>→</button></div>` : ""}`;
   $("resident-search").oninput = (e) => {
     const pos = e.target.selectionStart;
@@ -830,7 +860,7 @@ function renderResidents(residents) {
 function renderOutside() {
   const agents = state.snapshot.agents.filter((a) => a.alive && a.plot < 0);
   $("inspector").innerHTML =
-    `<div class="inspector-header"><div class="inspector-kicker"><span class="eyebrow">BETWEEN SOCIETIES</span>${icon("tent")}</div><h2>Outside the plots</h2><p>${agents.length} individuals finding their place. Outside regeneration is ${state.snapshot.settings.outsideMind} mind per day.</p></div><div class="inspector-content" id="inspector-content"></div><div class="inspector-footer">${icon("move")} Everyone chooses their own destination.</div>`;
+    `<div class="inspector-header"><h2>Outside the plots</h2><p>${agents.length} individuals · ${state.snapshot.settings.outsideMind} mind per day.</p></div><div class="inspector-content" id="inspector-content"></div>`;
   renderResidents(agents);
 }
 function renderGovernance(p) {
@@ -840,11 +870,9 @@ function renderGovernance(p) {
   const rules = Object.entries(p.rules || {});
   const pending = (state.snapshot.pending || []).filter((item) => item.plot === p.id);
   const tabs = [
+    ["votes", "Votes"],
     ["rules", "Rules"],
-    ["votes", `Ballots ${proposals.length}`],
-    ["powers", "Available powers"],
     ["officers", "Officers"],
-    ["pending", `Scheduled ${pending.length}`],
   ];
   let html = `<div class="pill-nav">${tabs.map(([id, name]) => `<button data-gov-tab="${id}" class="${state.govTab === id ? "active" : ""}">${name}</button>`).join("")}</div>`;
   if (state.govTab === "rules")
@@ -855,12 +883,23 @@ function renderGovernance(p) {
               `<div class="rule-row"><strong>${esc(policyName(key))}</strong><span>${esc(ruleText(value, key))}</span></div>`,
           )
           .join("")
-      : `<div class="empty-state">${icon("government")}<strong>${p.government ? "A government with a clean slate" : "The commons are open"}</strong>${p.government ? "Formation unlocks powers. Rules exist only after residents propose and approve them." : "Residents must first vote to form a government. There are no imposed political rules."}</div>`;
-  if (state.govTab === "votes")
-    html += proposals.length
-      ? proposals.slice().reverse().map(proposalCard).join("")
-      : `<div class="empty-state">${icon("vote")}<strong>No proposals yet</strong>Agents submit proposals during the governance phase. Passing decisions take effect next day.</div>`;
-  if (state.govTab === "pending") {
+      : `<div class="empty-state">${icon("government")}<strong>${p.government ? "No rules enacted" : "No government"}</strong>${p.government ? "Agents can propose a rule and vote." : "Residents can vote to form one."}</div>`;
+  if (state.govTab === "votes") {
+    const active = proposals.filter((x) =>
+      ["open", "scheduled", "approved"].includes(x.status),
+    );
+    const past = proposals.filter(
+      (x) => !["open", "scheduled", "approved"].includes(x.status),
+    );
+    html += `<p class="small muted">Agents vote. Approved changes apply the next day.</p>`;
+    html += active.length
+      ? active.slice().reverse().map(proposalCard).join("")
+      : `<div class="empty-state"><strong>No active votes</strong></div>`;
+    if (past.length)
+      html += `<details class="previous-votes"><summary>Previous votes (${past.length})</summary>${past.slice().reverse().map(proposalCard).join("")}</details>`;
+  }
+  if (state.govTab === "votes" && pending.length) {
+    html += `<details class="scheduled-decisions"><summary>Scheduled operations (${pending.length})</summary>`;
     html += pending.length
       ? pending
           .map((item) => {
@@ -870,12 +909,14 @@ function renderGovernance(p) {
               input.amount !== undefined
                 ? `${fmt(input.amount)} carrots${input.target >= 0 ? ` → ${input.kind === "donation" ? plotName(input.target) : individualName(input.target)}` : ""}`
                 : ruleText(input.rule || {}, input.key || "");
-            return `<article class="proposal-card"><div class="proposal-head"><h4>${esc(label)}</h4>${tag("Scheduled", "green")}</div><p>${esc(details)}</p><div class="vote-counts"><span>${esc(individualName(item.actor))}${item.officer ? " · officer order" : " · approved vote"}</span><span>Applies cycle ${item.at}</span></div><p class="small muted">Authority and available resources are checked again when it executes.</p></article>`;
+            return `<article class="proposal-card"><div class="proposal-head"><h4>${esc(label)}</h4>${tag("Scheduled", "green")}</div><p>${esc(details)}</p><div class="vote-counts"><span>${esc(individualName(item.actor))}${item.officer ? " · officer order" : " · approved vote"}</span><span>Applies ${cycleDate(item.at)}</span></div><p class="small muted">Authority and available resources are checked again when it executes.</p></article>`;
           })
           .join("")
       : '<p class="small muted">No approved operations are waiting for the next cycle.</p>';
   }
-  if (state.govTab === "powers") {
+  if (state.govTab === "votes" && pending.length) html += "</details>";
+  if (state.govTab === "rules") {
+    html += `<details class="available-policies"><summary>Available rule changes</summary>`;
     const catalogue = Array.isArray(state.config.catalogue)
       ? state.config.catalogue
       : Object.entries(state.config.catalogue || {}).map(([key, value]) => ({
@@ -883,7 +924,7 @@ function renderGovernance(p) {
           ...value,
         }));
     html +=
-      `<div class="status-banner">${p.government ? "These powers are available to eligible agents. Every new policy needs a proposal and a vote." : "Forming a government unlocks these capabilities. Nothing is enabled automatically."}</div>` +
+      `<div class="status-banner">${p.government ? "Agents propose and vote." : "Available after founding a government."}</div>` +
       catalogue
         .filter((c) => c.scope !== "federation")
         .map(
@@ -891,6 +932,13 @@ function renderGovernance(p) {
             `<div class="policy-card">${icon(c.icon || "proposal")}<div><strong>${esc(c.name || c.label || titleCase(c.key || c.id))}</strong><p>${esc(c.description || c.summary || "Change this policy through a local vote.")}</p></div><span class="cost">${fmt(state.snapshot.settings.proposalCost, 1)} mind</span></div>`,
         )
         .join("");
+  }
+  if (state.govTab === "rules") {
+    html += "</details>";
+    if (p.rules.enforcement?.mode === "hard")
+      html += `<div class="rule-row"><strong>Harvest enforcement</strong>${tag(p.hardFunded ? "Funded" : "Unfunded · soft limits", p.hardFunded ? "green" : "orange")}</div>`;
+    if (p.rules.records?.mode === "on")
+      html += `<div class="rule-row"><strong>Records service</strong>${tag(p.recordsFunded ? "Recording" : "Unfunded", p.recordsFunded ? "green" : "orange")}</div>`;
   }
   if (state.govTab === "officers") {
     const offices = Object.entries(p.officers || {});
@@ -904,7 +952,7 @@ function renderGovernance(p) {
       : `<div class="empty-state">${icon("shield")}<strong>No officers appointed</strong>Residents can delegate powers and set their limits by vote.</div>`;
   }
   if (p.federation >= 0)
-    html += `<button class="subtle-link" data-fed="${p.federation}">${icon("federation")} Visit Federation Council →</button>`;
+    html += `<button class="subtle-link" data-fed="${p.federation}">${icon("federation")} Federation →</button>`;
   $("inspector-content").innerHTML = html;
   $("inspector-content")
     .querySelectorAll("[data-gov-tab]")
@@ -986,6 +1034,12 @@ function ruleText(r, key = "") {
   return parts.join(" · ") || "Enabled";
 }
 
+function cycleDate(cycle) {
+  const days = state.snapshot.settings.days;
+  const month = Math.floor((cycle - 1) / days) + 1;
+  const day = ((cycle - 1) % days) + 1;
+  return month === state.snapshot.month ? `day ${day}` : `month ${month}, day ${day}`;
+}
 function proposalCard(p) {
   const input = p.input || p;
   const yes = p.yes ?? p.yesWeight ?? 0,
@@ -1004,15 +1058,10 @@ function proposalCard(p) {
       : meteorWarning && (p.activate || p.effectiveDay)
         ? "Expires at meteor"
         : p.activate || p.effectiveDay
-          ? `Applies cycle ${p.activate || p.effectiveDay}`
+          ? `${status === "activated" ? "Active since" : "Applies"} ${cycleDate(p.activate || p.effectiveDay)}`
           : awaitingElectorate
             ? "Electorate pending"
             : `${fmt(total)} eligible ${p.federation >= 0 ? "plots" : "influence"}`;
-  const before = input.key
-    ? p.federation >= 0
-      ? state.snapshot.federations.find((f) => f.id === p.federation)?.rules?.[input.key]
-      : plotByID(p.plot)?.rules?.[input.key]
-    : null;
   const requirement = awaitingElectorate
     ? "Electorate and threshold are confirmed when voting opens."
     : p.threshold === "twoThirds"
@@ -1026,7 +1075,15 @@ function proposalCard(p) {
         `<span>${esc(plotName(id))} ${tag(titleCase(v), v === "yes" ? "green" : v === "no" ? "red" : "")}</span>`,
     )
     .join("");
-  return `<article class="proposal-card"><div class="proposal-head"><h4>${esc(proposalName(p))}</h4>${tag(titleCase(status), ["passed", "active", "activated", "scheduled"].includes(status) ? "green" : ["failed", "rejected"].includes(status) ? "red" : "")}</div><p>${input.key ? `<span class="proposal-before">Current: ${esc(before ? ruleText(before, input.key) : "No enacted rule")}</span><br>Proposed: ` : ""}${esc(input.kind === "found" ? "Unlocks governance without enacting any rules." : ruleText(input.rule || input.value || {}, input.key || ""))}${p.reason ? ` · ${esc(p.reason)}` : ""}</p><div class="vote-bar"><span class="yes" style="width:${clamp((yes / Math.max(1, total)) * 100, 0, 100)}%"></span><span class="no" style="width:${clamp((no / Math.max(1, total)) * 100, 0, 100)}%"></span></div><div class="vote-counts"><span>${awaitingElectorate ? "Awaiting voting phase" : `${fmt(yes)} yes · ${fmt(no)} no`}</span><span>${esc(activationLabel)}</span></div><div class="proposal-threshold">${esc(requirement)}</div>${meteorWarning ? `<p class="small">${esc(meteorWarning)}</p>` : ""}${positions ? `<div class="plot-votes">${positions}</div>` : ""}</article>`;
+  const reason =
+    input.kind === "federationFound" && ["scheduled", "activated"].includes(status)
+      ? ""
+      : p.reason;
+  const electorate = Object.entries(p.electorate || {});
+  const electorateDetail = electorate.length
+    ? `<details class="voter-details" data-ballot="${esc(p.id)}"><summary>Who voted (${electorate.length})</summary><div class="voter-list"></div></details>`
+    : "";
+  return `<article class="proposal-card"><div class="proposal-head"><h4>${esc(proposalName(p))}</h4>${tag(titleCase(status), ["passed", "active", "activated", "scheduled"].includes(status) ? "green" : ["failed", "rejected"].includes(status) ? "red" : "")}</div><div class="ballot-origin">${esc(individualName(p.author))}${p.federation >= 0 ? ` · ${esc(plotName(p.plot))}` : ""}</div><p>${esc(input.kind === "found" ? "Creates a government with no rules." : ruleText(input.rule || input.value || {}, input.key || ""))}${reason ? ` · ${esc(reason)}` : ""}</p><div class="vote-bar"><span class="yes" style="width:${clamp((yes / Math.max(1, total)) * 100, 0, 100)}%"></span><span class="no" style="width:${clamp((no / Math.max(1, total)) * 100, 0, 100)}%"></span></div><div class="vote-counts"><span>${awaitingElectorate ? "Awaiting voting phase" : `${fmt(yes)} yes · ${fmt(no)} no`}</span><span>${esc(activationLabel)}</span></div><div class="proposal-threshold">${esc(requirement)}</div>${meteorWarning ? `<p class="small">${esc(meteorWarning)}</p>` : ""}${positions ? `<div class="plot-votes">${positions}</div>` : ""}${electorateDetail}</article>`;
 }
 function renderFederation() {
   const f = (state.snapshot.federations || []).find((x) => x.id === state.federation);
@@ -1036,15 +1093,38 @@ function renderFederation() {
   }
   const members = f.members || f.plots || [];
   const proposals = (state.snapshot.proposals || []).filter((p) => p.federation === f.id);
-  $("inspector").innerHTML =
-    `<div class="inspector-header"><button class="back-button" id="back-plot">← Back to ${esc(plotName(state.plot))}</button><div class="inspector-kicker"><span class="eyebrow">FEDERATION COUNCIL</span>${tag(f.funded ? "Funded" : "Services paused", f.funded ? "green" : "orange")}</div><h2>${esc(f.name || `Federation ${f.id + 1}`)}</h2><p>One plot, one voice. Representatives decide their plot's position.</p></div><div class="inspector-content"><div class="section-label">Member societies</div>${members.map((id) => `<button class="resident-row" data-plot="${id}">${icon("government")}<span class="resident-info"><strong>${esc(plotName(id))}</strong><span>${Object.values(plotByID(id)?.officers || {}).filter((o) => (o.powers || []).some((x) => x.includes("federation") || x.includes("represent"))).length} appointed representatives</span></span><span>↗</span></button>`).join("")}<div class="divider"></div><div class="section-label">Federation charter</div>${
+  const active = proposals.filter((p) =>
+    ["open", "scheduled", "approved"].includes(p.status),
+  );
+  const past = proposals.filter(
+    (p) => !["open", "scheduled", "approved"].includes(p.status),
+  );
+  let content = "";
+  if (state.fedTab === "votes") {
+    content = `<p class="small muted">Representatives vote for their plots. Charter changes need every plot's support.</p>${active.length ? active.slice().reverse().map(proposalCard).join("") : '<div class="empty-state"><strong>No active votes</strong></div>'}${past.length ? `<details class="previous-votes"><summary>Previous votes (${past.length})</summary>${past.slice().reverse().map(proposalCard).join("")}</details>` : ""}`;
+  } else if (state.fedTab === "members") {
+    content = members
+      .map(
+        (id) =>
+          `<button class="resident-row" data-plot="${id}">${icon("government")}<span class="resident-info"><strong>${esc(plotName(id))}</strong><span>${Object.values(plotByID(id)?.officers || {}).filter((o) => (o.powers || []).includes("federationVote")).length} voting representatives</span></span><span>→</span></button>`,
+      )
+      .join("");
+  } else {
+    content =
       Object.entries(f.rules || {})
         .map(
-          ([k, v]) =>
-            `<div class="rule-row"><strong>${esc(policyName(k, "federation"))}</strong><span>${esc(ruleText(v, k))}</span></div>`,
+          ([key, value]) =>
+            `<div class="rule-row"><strong>${esc(policyName(key, "federation"))}</strong><span>${esc(ruleText(value, key))}</span></div>`,
         )
-        .join("") || '<p class="small muted">No operational policies enacted.</p>'
-    }<div class="divider"></div><div class="section-label">Available federation powers</div><p class="small muted">Only appointed representatives can propose here. Each member plot decides through its authorised representatives.</p>${(
+        .join("") || '<p class="small muted">No charter policies enacted.</p>';
+    const servicesEnabled =
+      ["donations", "gifts", "data", "sharedRecords", "disputes", "delegation"].some(
+        (key) => f.rules?.[key]?.enabled || f.rules?.[key]?.mode === "on",
+      ) ||
+      (f.rules?.immigration && f.rules.immigration.mode !== "restricted");
+    if (servicesEnabled)
+      content += `<p class="small muted">${f.funded ? "Federation services funded this cycle." : "Federation services awaiting mind pledges."}</p>`;
+    content += `<details class="available-policies"><summary>Available charter changes</summary>${(
       state.config.catalogue || []
     )
       .filter((c) => c.scope === "federation")
@@ -1052,17 +1132,37 @@ function renderFederation() {
         (c) =>
           `<details class="council-power"><summary>${esc(c.name)} <span class="muted">${fmt(state.snapshot.settings.proposalCost, 1)} mind</span></summary><p class="small muted">${esc(c.description)}</p></details>`,
       )
-      .join(
-        "",
-      )}<div class="divider"></div><div class="section-label">Council ballots</div>${proposals.map(proposalCard).join("") || '<p class="small muted">No council proposals yet.</p>'}</div><div class="inspector-footer">${icon("federation")} Membership does not transfer local sovereignty.</div>`;
+      .join("")}</details>`;
+  }
+  $("inspector").innerHTML =
+    `<div class="inspector-header"><button class="back-button" id="back-plot">← ${esc(plotName(state.plot))}</button><h2>${esc(f.name || `Federation ${f.id + 1}`)}</h2><p>${members.length} plots · one vote per plot</p></div><div class="inspector-tabs" role="tablist" aria-label="Federation sections">${[
+      ["votes", "Votes"],
+      ["charter", "Charter"],
+      ["members", "Members"],
+    ]
+      .map(
+        ([key, label]) =>
+          `<button role="tab" data-fed-tab="${key}" class="${state.fedTab === key ? "active" : ""}" aria-selected="${state.fedTab === key}">${label}</button>`,
+      )
+      .join("")}</div><div class="inspector-content">${content}</div>`;
   $("back-plot").onclick = () => {
     state.federation = null;
     renderInspector();
   };
   $("inspector")
+    .querySelectorAll("[data-fed-tab]")
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          state.fedTab = b.dataset.fedTab;
+          renderFederation();
+        }),
+    );
+  $("inspector")
     .querySelectorAll("[data-plot]")
     .forEach((b) => (b.onclick = () => selectPlot(Number(b.dataset.plot))));
 }
+
 async function changeAgentView(value) {
   state.agentView = value;
   state.privateObservation = null;
@@ -1090,6 +1190,7 @@ async function changeAgentView(value) {
   }
 }
 function renderAgent() {
+  $("inspector-shell").hidden = false;
   const a = agentByID(state.agent);
   if (!a) return;
   const events = [...state.events.values()]
@@ -1099,7 +1200,7 @@ function renderAgent() {
     .slice(-12)
     .reverse();
   const s = state.snapshot.settings;
-  const stats = `<div class="agent-stat-grid"><div class="agent-stat"><span>${icon("heart")} Body</span><strong>${fmt(a.body, 1)} <small>/ ${s.bodyCapacity}</small></strong></div><div class="agent-stat"><span>${icon("brain")} Mind</span><strong>${fmt(a.mind, 1)} <small>/ ${s.mindCapacity}</small></strong></div><div class="agent-stat"><span>${icon("carrot")} Stored carrots</span><strong>${fmt(a.food)} <small>/ ${s.personalCapacity}</small></strong></div><div class="agent-stat"><span>${icon("star")} Satisfaction</span><strong>${fmt(a.score, 1)}</strong></div></div><div class="rule-row"><strong>Mind pledged</strong><span>${fmt(pledgeTotal(a), 2)}</span></div><div class="rule-row"><strong>Political influence</strong><span>${a.influence}</span></div><div class="rule-row"><strong>Thought satisfaction</strong><span>${fmt(a.thought, 1)}</span></div><div class="rule-row"><strong>Mind spent organising</strong><span>${fmt(a.politicalMind, 1)}</span></div><div class="rule-row"><strong>Deaths this month</strong><span>${a.deaths}</span></div><div class="rule-row"><strong>Active days</strong><span>${a.activeDays}</span></div><div class="rule-row"><strong>Total carrots eaten</strong><span>${fmt(a.totalEaten)}</span></div><div class="rule-row"><strong>Total harvested</strong><span>${fmt(a.totalHarvested)}</span></div>`;
+  const stats = `<div class="agent-stat-grid"><div class="agent-stat"><span>${icon("heart")} Body</span><strong>${fmt(a.body, 1)} <small>/ ${s.bodyCapacity}</small></strong></div><div class="agent-stat"><span>${icon("brain")} Mind</span><strong>${fmt(a.mind, 1)} <small>/ ${s.mindCapacity}</small></strong></div><div class="agent-stat"><span>${icon("carrot")} Stored carrots</span><strong>${fmt(a.food)} <small>/ ${s.personalCapacity}</small></strong></div><div class="agent-stat"><span>${icon("star")} Satisfaction</span><strong>${fmt(a.score, 1)}</strong></div></div><details class="agent-details"><summary>Activity and politics</summary><div class="rule-row"><strong>Mind pledged</strong><span>${fmt(pledgeTotal(a), 2)}</span></div><div class="rule-row"><strong>Political influence</strong><span>${a.influence}</span></div><div class="rule-row"><strong>Thought satisfaction</strong><span>${fmt(a.thought, 1)}</span></div><div class="rule-row"><strong>Mind spent organising</strong><span>${fmt(a.politicalMind, 1)}</span></div><div class="rule-row"><strong>Deaths this month</strong><span>${a.deaths}</span></div><div class="rule-row"><strong>Active days</strong><span>${a.activeDays}</span></div><div class="rule-row"><strong>Total carrots eaten</strong><span>${fmt(a.totalEaten)}</span></div><div class="rule-row"><strong>Total harvested</strong><span>${fmt(a.totalHarvested)}</span></div></details>`;
   const privateContent =
     state.historical || state.status === "archived"
       ? '<div class="status-banner">Private observations are available for the live world. Return to live to inspect what this individual can currently see.</div>'
@@ -1107,7 +1208,7 @@ function renderAgent() {
         ? `<div class="status-banner">Observation from month ${state.privateObservation.month}, day ${state.privateObservation.day}, ${esc(titleCase(state.privateObservation.phase))}. Hidden state is excluded.<button class="subtle-link" id="refresh-observation">Refresh observation ↻</button></div><div class="section-label">Visible world</div>${(state.privateObservation.plots || []).map((p) => `<div class="rule-row"><strong>${esc(p.name)}</strong><span>${weather[p.weather]} · ${p.stock === undefined ? "Stock hidden" : `${p.stock} carrots`}</span></div>`).join("")}<div class="divider"></div><div class="section-label">Private memory</div><pre class="json-view">${esc(JSON.stringify(state.privateObservation.memory ?? {}, null, 2))}</pre><details><summary class="small muted">Complete permitted observation</summary><pre class="json-view">${esc(JSON.stringify(state.privateObservation, null, 2))}</pre></details>`
         : '<div class="empty-state">Reading the agent’s permitted observation…</div>';
   $("inspector").innerHTML =
-    `<div class="inspector-header"><button class="back-button" id="back-residents">← Back to residents</button><div class="agent-top"><span class="resident-avatar" style="--team-color:${teamColor(a.team)}"></span><div><h2>${esc(a.name)}</h2><div class="muted">${esc(teamName(a.team))} · ${esc(plotName(a.plot))}</div></div></div><div class="view-toggle"><button id="observer-view" class="${!state.agentView ? "active" : ""}">Observer view</button><button id="private-view" class="${state.agentView ? "active" : ""}">Agent's own view</button></div></div><div class="inspector-content">${!a.alive ? `<div class="status-banner">This individual has died.${a.respawnAt > 0 ? ` It can return on cycle ${a.respawnAt}.` : ""} Its memory and monthly score remain.</div>` : ""}${state.agentView ? privateContent : `${stats}<div class="divider"></div><div class="section-label">Recent experience</div>${events.map(eventRecord).join("") || '<p class="small muted">No recorded actions yet.</p>'}${a.lastResult ? `<div class="status-banner">${esc(a.lastResult)}</div>` : ""}${a.error ? `<div class="status-banner">Decision error: ${esc(a.error)}</div>` : ""}`}</div><div class="inspector-footer">${icon(state.agentView ? "lock" : "eye")}${state.agentView ? "Only the information this individual receives." : "Observer access · private agent state is never shared."}</div>`;
+    `<div class="inspector-header"><button class="back-button" id="back-residents">← Back to residents</button><div class="agent-top"><span class="resident-avatar" style="--team-color:${teamColor(a.team)}"></span><div><h2>${esc(a.name)}</h2><div class="muted">${esc(teamName(a.team))} · ${esc(plotName(a.plot))}</div></div></div><div class="view-toggle"><button id="observer-view" class="${!state.agentView ? "active" : ""}">Observer view</button><button id="private-view" class="${state.agentView ? "active" : ""}">Agent's own view</button></div></div><div class="inspector-content">${!a.alive ? `<div class="status-banner">This individual has died.${a.respawnAt > 0 ? ` It can return on cycle ${a.respawnAt}.` : ""} Its memory and monthly score remain.</div>` : ""}${state.agentView ? privateContent : `${stats}<div class="divider"></div><div class="section-label">Recent actions</div>${events.map(eventRecord).join("") || '<p class="small muted">No recorded actions yet.</p>'}${a.lastResult ? `<div class="status-banner">${esc(a.lastResult)}</div>` : ""}${a.error ? `<div class="status-banner">Decision error: ${esc(a.error)}</div>` : ""}`}</div>`;
   $("back-residents").onclick = () => {
     state.agent = null;
     state.tab = "residents";
@@ -1118,8 +1219,27 @@ function renderAgent() {
   $("private-view").onclick = () => changeAgentView(true);
   $("refresh-observation")?.addEventListener("click", () => changeAgentView(true));
 }
+function eventMessage(e) {
+  let message = e.message || titleCase(e.kind);
+  const policy = message.match(/^([A-Za-z][A-Za-z0-9]*)(?: · (\d+))?:\s*([A-Za-z]+)?/);
+  if (policy && (state.config.catalogue || []).some((c) => c.key === policy[1])) {
+    const def = state.config.catalogue.find((c) => c.key === policy[1]);
+    const name =
+      def.name + (policy[2] !== undefined ? ` · ${individualName(policy[2])}` : "");
+    message =
+      name +
+      (policy[3] ? `: ${ruleText({ mode: policy[3] }, policy[1])}` : "") +
+      message.slice(policy[0].length);
+  }
+  message = message.replace(/resident (\d+)/g, (_, id) => individualName(Number(id) - 1));
+  if (e.kind === "funding")
+    message = `Contributed ${fmt(e.amount, 3)} mind to ${message.endsWith("federation") ? "the federation" : "local services"}`;
+  if (e.kind === "pledge")
+    message = `Pledged ${fmt(e.amount, 3)} mind to ${message.endsWith("federation") ? "the federation" : "local services"}`;
+  return message;
+}
 function eventRecord(e) {
-  return `<div class="record"><span class="event-dot"></span><div><time>Day ${e.day} · ${esc(titleCase(e.phase))}</time><p>${esc(e.message || titleCase(e.kind))}</p></div></div>`;
+  return `<div class="record"><span class="event-dot"></span><div><time>Day ${e.day} · ${esc(phases.find((p) => p[0] === e.phase)?.[1] || titleCase(e.phase))}</time><p>${esc(eventMessage(e))}</p></div></div>`;
 }
 
 function setPage(page) {
@@ -1144,22 +1264,22 @@ function renderChronicle() {
     (e) =>
       (state.eventKind === "all" || e.kind === state.eventKind) &&
       (state.eventPlot === "all" || e.plot === Number(state.eventPlot)) &&
-      `${e.message} ${e.kind} ${agentByID(e.actor)?.name || ""}`
+      `${eventMessage(e)} ${e.kind} ${agentByID(e.actor)?.name || ""}`
         .toLowerCase()
         .includes(state.eventSearch.toLowerCase()),
   );
   const pageCount = Math.max(1, Math.ceil(events.length / 35));
   state.eventPage = Math.min(state.eventPage, pageCount - 1);
   $("chronicle-page").innerHTML =
-    `<div class="section-header"><div><h2>The chronicle</h2><p>${fmt(events.length)} events · a trace of actual decisions and outcomes</p></div><div class="filters"><input id="event-search" type="search" placeholder="Find an event…" aria-label="Search events" value="${esc(state.eventSearch)}"/><select id="event-plot" aria-label="Filter events by plot"><option value="all">Every plot</option>${state.snapshot.plots.map((p) => `<option value="${p.id}" ${state.eventPlot === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select><select id="event-kind" aria-label="Filter event types"><option value="all">Every event</option>${kinds.map((k) => `<option value="${esc(k)}" ${state.eventKind === k ? "selected" : ""}>${esc(titleCase(k))}</option>`).join("")}</select></div></div><table class="events-table"><thead><tr><th>When</th><th>Event</th><th>Where</th><th>What happened</th></tr></thead><tbody>${events
+    `<div class="section-header"><div><h2>History</h2><p>${fmt(events.length)} events · recorded</p></div><div class="filters"><input id="event-search" type="search" placeholder="Find an event…" aria-label="Search events" value="${esc(state.eventSearch)}"/><select id="event-plot" aria-label="Filter events by plot"><option value="all">Every plot</option>${state.snapshot.plots.map((p) => `<option value="${p.id}" ${state.eventPlot === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select><select id="event-kind" aria-label="Filter event types"><option value="all">Every event</option>${kinds.map((k) => `<option value="${esc(k)}" ${state.eventKind === k ? "selected" : ""}>${esc(titleCase(k))}</option>`).join("")}</select></div></div><table class="events-table"><thead><tr><th>When</th><th>Event</th><th>Where</th><th>What happened</th></tr></thead><tbody>${events
       .slice(state.eventPage * 35, (state.eventPage + 1) * 35)
       .map(
         (e) =>
-          `<tr><td>Month ${e.month} · Day ${e.day}<br><span class="muted">${esc(titleCase(e.phase))}</span></td><td>${tag(titleCase(e.kind), /death|invalid|fail/.test(e.kind) ? "red" : /found|passed|growth/.test(e.kind) ? "green" : "")}</td><td>${esc(plotName(e.plot))}</td><td>${esc(e.message || titleCase(e.kind))}</td></tr>`,
+          `<tr><td>Month ${e.month} · Day ${e.day}<br><span class="muted">${esc(phases.find((p) => p[0] === e.phase)?.[1] || titleCase(e.phase))}</span></td><td>${tag(titleCase(e.kind), /death|invalid|fail/.test(e.kind) ? "red" : /found|passed|growth/.test(e.kind) ? "green" : "")}</td><td>${esc(plotName(e.plot))}</td><td>${e.actor >= 0 ? `<strong class="record-actor">${esc(individualName(e.actor))}</strong>` : ""}${esc(eventMessage(e))}</td></tr>`,
       )
       .join(
         "",
-      )}</tbody></table>${!events.length ? `<div class="empty-state">${icon("proposal")}<strong>The first page is still unwritten.</strong>Advance the world to see its decisions unfold here.</div>` : ""}<div class="pagination"><button class="button secondary" id="events-prev" ${state.eventPage === 0 ? "disabled" : ""}>← Previous</button><span>Page ${state.eventPage + 1} of ${pageCount}</span><button class="button secondary" id="events-next" ${state.eventPage === pageCount - 1 ? "disabled" : ""}>Next →</button></div>`;
+      )}</tbody></table>${!events.length ? `<div class="empty-state">${icon("proposal")}<strong>No events yet.</strong>Press Play to begin.</div>` : ""}<div class="pagination"><button class="button secondary" id="events-prev" ${state.eventPage === 0 ? "disabled" : ""}>← Previous</button><span>Page ${state.eventPage + 1} of ${pageCount}</span><button class="button secondary" id="events-next" ${state.eventPage === pageCount - 1 ? "disabled" : ""}>Next →</button></div>`;
   $("event-search").oninput = (e) => {
     const pos = e.target.selectionStart;
     state.eventSearch = e.target.value;
@@ -1226,7 +1346,7 @@ function renderResults() {
     })
     .join("")}</svg>`;
   $("results-page").innerHTML =
-    `<div class="section-header"><div><h2>${s.settings.months === 12 ? "A year of experience" : `Experience across ${s.settings.months} ${s.settings.months === 1 ? "month" : "months"}`}</h2><p>${months.length} of ${s.settings.months} months complete · satisfaction resets, experience remains</p></div><button class="button secondary" id="results-export">${icon("download")} Download replay</button></div><div class="results-overview"><article class="chart-card"><h3>Average satisfaction per individual</h3><p class="chart-subtitle">${months.length ? "Completed monthly outcomes" : "Current month in progress"} · month along the horizontal axis</p>${chart}<div class="team-legend">${s.teams.map((t, i) => `<span class="legend-item"><i class="color-dot" style="--team-color:${teamColor(i)}"></i>${esc(t.name)}</span>`).join("")}</div></article><article class="score-card"><h3>Month ${s.month} · team comparison</h3><p class="chart-subtitle">Mean satisfaction, including individuals who died</p><div class="ranking-list">${ranked.map((t, i) => `<div class="ranking-item"><span class="rank-number">${String(i + 1).padStart(2, "0")}</span><div class="rank-team"><strong><i class="color-dot" style="--team-color:${teamColor(t.team)}"></i>${esc(t.name)}</strong><div class="rank-bar"><span style="width:${(t.mean / maxMean) * 100}%;--team-color:${teamColor(t.team)}"></span></div></div><b>${fmt(t.mean, 1)}</b></div>`).join("")}</div></article></div><div class="month-cards">${Array.from(
+    `<div class="section-header"><div><h2>${s.settings.months === 12 ? "Results" : "Results"}</h2><p>${months.length} of ${s.settings.months} months complete</p></div><button class="button secondary" id="results-export">${icon("download")} Download replay</button></div><div class="results-overview"><article class="chart-card"><h3>Average satisfaction per individual</h3><p class="chart-subtitle">${months.length ? "Completed monthly outcomes" : "Current month in progress"}</p>${chart}<div class="team-legend">${s.teams.map((t, i) => `<span class="legend-item"><i class="color-dot" style="--team-color:${teamColor(i)}"></i>${esc(t.name)}</span>`).join("")}</div></article><article class="score-card"><h3>Month ${s.month} · team comparison</h3><p class="chart-subtitle">Mean satisfaction, including individuals who died</p><div class="ranking-list">${ranked.map((t, i) => `<div class="ranking-item"><span class="rank-number">${String(i + 1).padStart(2, "0")}</span><div class="rank-team"><strong><i class="color-dot" style="--team-color:${teamColor(t.team)}"></i>${esc(t.name)}</strong><div class="rank-bar"><span style="width:${(t.mean / maxMean) * 100}%;--team-color:${teamColor(t.team)}"></span></div></div><b>${fmt(t.mean, 1)}</b></div>`).join("")}</div></article></div><div class="month-cards">${Array.from(
       { length: s.settings.months },
       (_, i) => {
         const month = months.find((m) => m.month === i + 1);
@@ -1234,7 +1354,7 @@ function renderResults() {
           ? (month.teams || []).reduce((n, t) => n + t.mean, 0) /
             Math.max(1, month.teams?.length)
           : null;
-        return `<button class="month-card" data-result-month="${i + 1}" ${month ? "" : "disabled"}><div class="eyebrow">MONTH ${String(i + 1).padStart(2, "0")}</div><strong>${avg === null ? "—" : fmt(avg, 1)}</strong><span>${month ? `${month.deaths} deaths · completed` : i + 1 === s.month ? "In progress" : "Yet to unfold"}</span></button>`;
+        return `<button class="month-card" data-result-month="${i + 1}" ${month ? "" : "disabled"}><div class="eyebrow">MONTH ${String(i + 1).padStart(2, "0")}</div><strong>${avg === null ? "—" : fmt(avg, 1)}</strong><span>${month ? `${month.deaths} deaths · completed` : i + 1 === s.month ? "In progress" : "Not started"}</span></button>`;
       },
     ).join(
       "",
@@ -1244,9 +1364,7 @@ function renderResults() {
         const sum = (k) => agents.reduce((n, a) => n + (a[k] || 0), 0);
         return `<tr><td><i class="color-dot" style="--team-color:${teamColor(i)}"></i> ${esc(t.name)}</td><td>${agents.filter((a) => a.alive).length}</td><td>${sum("deaths")}</td><td>${fmt(sum("totalEaten"))}</td><td>${fmt(sum("politicalMind"), 1)}</td><td>${fmt(sum("thought"), 1)}</td></tr>`;
       })
-      .join(
-        "",
-      )}</tbody></table></div></div><p class="results-note">Memory retention makes adaptation possible; it does not prove learning. Compare the same behaviours with memory resets across multiple seeds before drawing conclusions about cooperation or improvement.</p>`;
+      .join("")}</tbody></table></div></div>`;
   $("results-export").onclick = exportRun;
   $("results-page")
     .querySelectorAll("[data-result-month]")
@@ -1276,7 +1394,7 @@ const settingDefs = {
   world: [
     [
       "Population and time",
-      "The same behaviours can meet under different conditions.",
+      "",
       [
         ["plots", "Shared plots", 1, 24, 1, "No plot belongs to a team."],
         ["copies", "Copies per team", 1, 100, 1, "Each copy has private memory."],
@@ -1389,7 +1507,7 @@ const settingDefs = {
       "Individual political costs",
       "All costs are paid from each individual's own unpledged mind.",
       [
-        ["proposalCost", "Proposal", 0.01, 100, 0.1, "Each accepted proposal."],
+        ["proposalCost", "Proposal", 0.01, 100, 0.01, "Each accepted proposal."],
         ["voteCost", "Yes or no vote", 0, 100, 0.01, "Abstaining is free."],
         ["officerCost", "Officer order", 0, 100, 0.01, "Within a voted delegation."],
         ["readCost", "Read records", 0, 100, 0.01, "Each authorised query."],
@@ -1521,7 +1639,7 @@ function renderSetup() {
       state.config.policies ||
       state.config.teams.map((t) => ({ id: t.policy, name: titleCase(t.policy) }));
     $("setup-content").innerHTML =
-      `<section class="setting-section"><h3>Six behaviours. Independent lives.</h3><p class="setting-description">Choose an example, build a phased behaviour, or import a Go agent. Every copy has its own memory and makes its own decisions.</p>${state.draft.teams.map((t, i) => `<div class="team-editor"><span class="resident-avatar" style="--team-color:${/^#[\da-f]{3,8}$/i.test(t.color || "") ? t.color : colors[i % colors.length]}"></span><label><input data-team-name="${i}" value="${esc(t.name)}" maxlength="40" aria-label="Team ${i + 1} name"/><span>${t.strategyId ? "Imported Go agent" : t.builder ? "Custom visual behaviour" : esc(policyDescription(t.policy))}</span></label><select data-team-policy="${i}" aria-label="Team ${i + 1} behaviour">${policies.map((p) => `<option value="${esc(p.id || p.policy)}" ${t.policy === (p.id || p.policy) && !t.builder && !t.strategyId ? "selected" : ""}>${esc(p.name || titleCase(p.id || p.policy))}</option>`).join("")}${t.builder ? '<option value="custom" selected>Custom behaviour</option>' : ""}${t.strategyId ? '<option value="imported" selected>Imported Go agent</option>' : ""}</select><button type="button" class="button secondary" data-edit-team="${i}">Edit →</button></div>`).join("")}</section>`;
+      `<section class="setting-section"><h3>Behaviours</h3><p class="setting-description">Choose an example or edit a behaviour for your next world.</p>${state.draft.teams.map((t, i) => `<div class="team-editor"><span class="resident-avatar" style="--team-color:${/^#[\da-f]{3,8}$/i.test(t.color || "") ? t.color : colors[i % colors.length]}"></span><label><input data-team-name="${i}" value="${esc(t.name)}" maxlength="40" aria-label="Team ${i + 1} name"/><span>${t.strategyId ? "Imported Go agent" : t.builder ? "Custom visual behaviour" : esc(policyDescription(t.policy))}</span></label><select data-team-policy="${i}" aria-label="Team ${i + 1} behaviour">${policies.map((p) => `<option value="${esc(p.id || p.policy)}" ${t.policy === (p.id || p.policy) && !t.builder && !t.strategyId ? "selected" : ""}>${esc(p.name || titleCase(p.id || p.policy))}</option>`).join("")}${t.builder ? '<option value="custom" selected>Custom behaviour</option>' : ""}${t.strategyId ? '<option value="imported" selected>Imported Go agent</option>' : ""}</select><button type="button" class="button secondary" data-edit-team="${i}">Edit →</button></div>`).join("")}</section>`;
     $("setup-content")
       .querySelectorAll("[data-team-name]")
       .forEach(
@@ -1548,13 +1666,16 @@ function renderSetup() {
       .forEach((el) => (el.onclick = () => openStrategy(Number(el.dataset.editTeam))));
   } else {
     $("setup-content").innerHTML =
-      settingDefs[state.setupTab]
+      (state.setupTab === "world"
+        ? settingDefs.world.slice(0, 1)
+        : [...settingDefs.world.slice(1), ...settingDefs.advanced]
+      )
         .map(
           ([title, desc, fields]) =>
             `<section class="setting-section"><h3>${title}</h3><p class="setting-description">${desc}</p><div class="setting-grid">${fields.map(([key, label, min, max, step, help]) => `<label class="setting-field"><span>${label}</span><input type="number" data-setting="${key}" value="${getSetting(key) ?? ""}" min="${min}" max="${max}" step="${step}" required/><small>${help}</small></label>`).join("")}</div></section>`,
         )
         .join("") +
-      `<div class="setup-preview">${icon("plots")}<span>Settings define the world. Agents decide what happens in it. Creating a new world preserves the current run in your saved session history.</span></div>`;
+      `<div class="setup-preview">${icon("plots")}<span>Creates a new run. Your current world stays saved.</span></div>`;
     $("setup-content")
       .querySelectorAll("[data-setting]")
       .forEach(
@@ -1657,7 +1778,7 @@ function renderStrategy() {
       )
       .join(
         "",
-      )}<label class="setting-field"><span>Default ballot choice</span><select data-builder="vote">${["yes", "no", "abstain"].map((v) => `<option ${b.vote === v ? "selected" : ""}>${v}</option>`).join("")}</select><small>Yes and no votes each cost mind.</small></label><label class="setting-field"><span>Propose a government</span><select data-builder="government"><option value="true" ${b.government ? "selected" : ""}>When possible</option><option value="false" ${!b.government ? "selected" : ""}>Do not propose</option></select></label><label class="setting-field"><span>Movement</span><select data-builder="migrate"><option value="true" ${b.migrate ? "selected" : ""}>Seek a suitable plot</option><option value="false" ${!b.migrate ? "selected" : ""}>Settle and remain</option></select></label></div><div class="guide-note"><strong>Survival is part of the strategy.</strong><p>Daily food need is ${state.draft.settings.dailyFood}. Eating less can drain the body; eating more gives diminishing satisfaction. Thinking stays linear.</p></div>`;
+      )}<label class="setting-field"><span>Default ballot choice</span><select data-builder="vote">${["yes", "no", "abstain"].map((v) => `<option ${b.vote === v ? "selected" : ""}>${v}</option>`).join("")}</select><small>Yes and no votes each cost mind.</small></label><label class="setting-field"><span>Propose a government</span><select data-builder="government"><option value="true" ${b.government ? "selected" : ""}>When possible</option><option value="false" ${!b.government ? "selected" : ""}>Do not propose</option></select></label><label class="setting-field"><span>Movement</span><select data-builder="migrate"><option value="true" ${b.migrate ? "selected" : ""}>Seek a suitable plot</option><option value="false" ${!b.migrate ? "selected" : ""}>Settle and remain</option></select></label></div><div class="guide-note"><strong>Food and thinking</strong><p>Daily food need is ${state.draft.settings.dailyFood}. Eating less can drain the body; eating more gives diminishing satisfaction. Thinking stays linear.</p></div>`;
   if (state.strategyMode === "rules")
     html += `<p class="setting-description">Rules are checked in order for their phase. The first matching rule returns the specified action. Without a match, everyday choices apply. Action fields use the same contract as Go agents.</p><div id="builder-rule-list">${(b.rules || []).map((r, i) => ruleEditor(r, i)).join("")}</div><button class="builder-add" id="add-builder-rule">+ Add a conditional phase rule</button><label class="setting-field wide" style="margin-top:20px"><span>Standing proposals</span><textarea class="code-editor" style="min-height:100px" id="standing-proposals" spellcheck="false">${esc(JSON.stringify(b.proposals || [], null, 2))}</textarea><small>Proposal inputs evaluated in governance. Use the policy catalogue's keys and values. Empty [] submits no standing policy proposals.</small></label><details style="margin-top:15px"><summary class="small muted">Action examples and policy keys</summary><pre class="json-view">${esc(JSON.stringify({ harvest: 2, eat: 2, think: 5, proposals: [{ kind: "policy", key: "quota", rule: { mode: "limited", amount: 2 } }] }, null, 2))}</pre><p class="editor-note">Actions are phase-specific: move, harvest, pledge, proposals, votes, orders, read, offer, accept, deposit, eat, think, memory. Political actions still require valid authority.</p><div class="json-view">${esc((Array.isArray(state.config.catalogue) ? state.config.catalogue : []).map((c) => `${c.key || c.id}: ${c.description || c.name || ""}`).join("\n"))}</div></details>`;
   if (state.strategyMode === "go")
@@ -1799,6 +1920,23 @@ async function saveStrategy() {
   }
 }
 
+document.addEventListener(
+  "toggle",
+  (e) => {
+    const d = e.target;
+    if (!d.matches?.("details.voter-details") || !d.open) return;
+    const ballot = state.snapshot?.proposals?.find((p) => p.id === d.dataset.ballot);
+    if (!ballot) return;
+    d.querySelector(".voter-list").innerHTML = Object.entries(ballot.electorate || {})
+      .map(
+        ([id, weight]) =>
+          `<div class="rule-row"><strong>${esc(individualName(id))}</strong><span>${ballot.federation >= 0 ? esc(plotName(ballot.representativePlots?.[id])) : `${weight} influence`} · ${weight > 0 ? esc(titleCase(ballot.votes?.[id] || "abstain")) : "No vote"}</span></div>`,
+      )
+      .join("");
+  },
+  true,
+);
+
 document
   .querySelectorAll(".icon-slot[data-icon]")
   .forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
@@ -1826,7 +1964,49 @@ $("setup-button").onclick = () => {
   if (state.config) openSetup();
 };
 $("guide-button").onclick = () => $("guide-dialog").showModal();
+$("behaviours-button").onclick = () => {
+  if (state.config) {
+    openSetup();
+    state.setupTab = "teams";
+    renderSetup();
+  }
+};
+$("game-menu")
+  .querySelectorAll("button")
+  .forEach((b) => b.addEventListener("click", () => ($("game-menu").open = false)));
+$("time-options")
+  .querySelectorAll("button")
+  .forEach((b) => b.addEventListener("click", () => ($("time-options").open = false)));
+$("inspector-close").onclick = closeInspector;
+$("replay-toggle").onclick = () => {
+  const show = $("replay-panel").hidden;
+  $("replay-panel").hidden = !show;
+  $("replay-toggle").setAttribute("aria-expanded", String(show));
+  if (show) loadHistory();
+};
+$("zoom-in").onclick = () => worldView?.zoom(1);
+$("zoom-out").onclick = () => worldView?.zoom(-1);
+$("map-fit").onclick = () => worldView?.fit();
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+  for (const id of ["game-menu", "time-options"]) {
+    if ($(id).open) {
+      $(id).open = false;
+      $(id).querySelector("summary").focus();
+      return;
+    }
+  }
+  if (state.page !== "world") setPage("world");
+  else if (!$("inspector-shell").hidden) closeInspector();
+});
+
 $("saved-button").onclick = openSaved;
+document.addEventListener("click", (e) => {
+  for (const id of ["game-menu", "time-options"]) {
+    const menu = $(id);
+    if (!menu.contains(e.target)) menu.open = false;
+  }
+});
 $("outside-camp").onclick = () => {
   state.plot = -1;
   state.agent = null;
@@ -1859,10 +2039,32 @@ $("setup-form").onsubmit = async (e) => {
 };
 $("save-strategy").onclick = saveStrategy;
 document.addEventListener("keydown", (e) => {
+  if (["ArrowLeft", "ArrowRight"].includes(e.key) && e.target.matches('[role="tab"]')) {
+    const tabs = [...e.target.parentElement.querySelectorAll('[role="tab"]')];
+    const next =
+      tabs[
+        (tabs.indexOf(e.target) + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+          tabs.length
+      ];
+    e.preventDefault();
+    next.click();
+    document
+      .querySelector(
+        next.dataset.inspectorTab
+          ? `[data-inspector-tab="${next.dataset.inspectorTab}"]`
+          : `[data-fed-tab="${next.dataset.fedTab}"]`,
+      )
+      ?.focus();
+    return;
+  }
   if (
     e.code === "Space" &&
+    !e.defaultPrevented &&
     !document.querySelector("dialog[open]") &&
-    !/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)
+    !e.target.isContentEditable &&
+    !e.target.closest?.(
+      'input, textarea, select, button, summary, a, audio, video, [role="button"], [role="tab"], [role="slider"], [contenteditable]:not([contenteditable="false"])',
+    )
   ) {
     e.preventDefault();
     togglePlay().catch((err) => notice(err.message, true));
@@ -1870,25 +2072,33 @@ document.addEventListener("keydown", (e) => {
 });
 
 async function openRun(id) {
-  pauseLocal();
-  stopPolling();
-  const result = await api(`/runs/${id}`);
-  state.events.clear();
-  state.snapshot = null;
-  state.history = [];
-  state.id = id;
-  state.index = 0;
-  state.maxIndex = 0;
-  state.agent = null;
-  state.federation = null;
-  state.plot = 0;
-  state.tab = "overview";
-  state.lastMeteor = "";
-  state.privateObservation = null;
-  ingest(result);
-  await loadHistory();
-  await loadEvents();
-  if (state.status === "running") startPolling();
+  const token = beginRunTransition();
+  try {
+    const result = await api(`/runs/${id}`);
+    if (token !== state.runToken) return;
+    state.events.clear();
+    state.snapshot = null;
+    state.history = [];
+    state.id = id;
+    state.index = 0;
+    state.maxIndex = 0;
+    state.agent = null;
+    state.federation = null;
+    state.plot = null;
+    state.tab = "overview";
+    state.lastMeteor = "";
+    state.privateObservation = null;
+    ingest(result);
+    await loadHistory();
+    if (!currentRun(id, token)) return;
+    await loadEvents();
+    if (currentRun(id, token) && state.status === "running") startPolling();
+  } finally {
+    if (token === state.runToken) {
+      state.busy = false;
+      updateTransport();
+    }
+  }
 }
 async function openSaved() {
   $("saved-content").innerHTML =
@@ -1903,7 +2113,7 @@ async function openSaved() {
       ? runs
           .map(
             (r) =>
-              `<button class="saved-run resident-row" data-open-run="${esc(r.id)}">${icon("plots")}<span class="resident-info"><strong>${r.id === state.id ? "Current world" : "Amoeboids world"} · ${esc(new Date(r.created || Date.now()).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</strong><span>${fmt(r.frames)} recorded moments · ${esc(titleCase(r.status))}</span></span><span>↗</span></button>`,
+              `<button class="saved-run resident-row" data-open-run="${esc(r.id)}">${icon("plots")}<span class="resident-info"><strong>${r.id === state.id ? "Current world" : "World"} · ${esc(new Date(r.created || Date.now()).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</strong><span>${fmt(r.frames)} recorded moments · ${esc(titleCase(r.status))}</span></span><span>↗</span></button>`,
           )
           .join("")
       : '<div class="empty-state">No saved worlds yet.</div>';
@@ -1964,4 +2174,30 @@ async function init() {
     notice(error.message, true);
   }
 }
+worldView = new SocietyWorld($("world-canvas"), {
+  onSelectPlot: selectPlot,
+  onSelectAgent: (id) => {
+    const a = agentByID(id);
+    if (!a) return;
+    state.plot = a.plot;
+    state.agent = id;
+    state.federation = null;
+    state.agentView = false;
+    renderMap();
+    renderInspector();
+    $("map-hint").hidden = true;
+  },
+  onClear: () => {
+    if (!$("inspector-shell").hidden) closeInspector();
+  },
+  onHover: (hit) => {
+    const t = $("map-tooltip");
+    t.hidden = !hit;
+    if (hit) {
+      t.textContent = hit.label;
+      t.style.left = `${Math.min(hit.x + 16, innerWidth - 200)}px`;
+      t.style.top = `${Math.max(80, hit.y - 40)}px`;
+    }
+  },
+});
 init();
