@@ -1,51 +1,86 @@
-# SOMAS Amoeboids
+# Amoeboids
 
-A shared-resource simulation for investigating self-organising multi-agent systems. Amoeboids request carrots, contribute energy to the shared field, and eat at the end of each day. The Go engine records their decisions; the browser plays the run and lets you inspect each agent.
+A programmable society of autonomous agents, shared carrot plots and institutions that the agents create themselves. The simulation runs in daily phases. Individuals decide how to harvest, eat, think, move, propose, vote and exercise delegated powers. Weather changes mind regeneration; private and government stores preserve food. A meteor resets the world each month, leaving only each individual's private memory.
 
-## Run locally
+The default experiment has six behaviours, 50 independent copies of each, six plots and twelve 30-day months. The supplied behaviours are transparent programmed examples, not evidence of learned cooperation.
 
-Install **Node 20.18.1+** and **Go 1.23+**, then run these commands from the cloned repository.
+![Amoeboids atlas with six plots, elected governments and a federation](docs/images/amoeboids-world.png)
+
+## Run the MVP
+
+Install **Node 20.18.1+** and **Go 1.23+**:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:8787**. Create agents with the builder, change Garden rules, run a simulation, and open the Amoeboid journal in its results. The **Go guide** in the app explains how to write an agent.
+Open **http://127.0.0.1:8787**. The atlas shows plots, weather and resources. Select a plot to inspect its residents, government, ballots and rules. Use Setup to change the world or edit team strategies. Step through a phase or day, run a month or a year, pause, and revisit recorded frames.
 
-Local agents and replays are saved in `.local/data/`. Browser drafts stay in that browser. Local replay links work on the computer running the server. Press Ctrl+C to stop it.
+The legacy one-field prototype remains at **/legacy**. Its strategies and old replay format are separate from the new game.
 
-Go must be on your `PATH`; `GO_BINARY` can point to another installation. `PORT` and `ENGINE_PORT` override the default ports 8787 and 8802. `LOCAL_DATA_DIR` selects a different data directory.
+`GO_BINARY` can point to a Go installation. `PORT` and `ENGINE_PORT` choose alternative ports. Local simulation replays and uploaded strategies are saved under `.local/data/society/`; `LOCAL_DATA_DIR` or `SOCIETY_DATA_DIR` can select another location. Never commit `.local/`.
 
-Uploaded Go runs in an isolated cloud runner. For that setup or deployment, see [hosting](hosting/README.md).
+Saved replays survive server restarts. A run whose live process was interrupted reopens as a read-only archive; start a new run to continue experimenting. Browser settings and strategy drafts are also retained locally.
 
-## Find the code
+## Design an agent
 
-| Change                             | Start here                                                                           |
-| ---------------------------------- | ------------------------------------------------------------------------------------ |
-| Simulation rules and daily turns   | `pkg/garden/garden.go`, `settings.go`                                                |
-| Builder decisions and generated Go | `pkg/garden/builder.go`                                                              |
-| Default setup and strategy choices | `public/setup-model.js`                                                              |
-| Setup forms and the agent builder  | `public/setup.js`, `garden-rules.js`, `agent-builder.js`                             |
-| Animation, characters, and sound   | `public/scene.js`, `characters.js`, `sound.js`                                       |
-| Results and agent comparisons      | `public/results.js`, `results-data.js`, `run-investigation.js`, `agent-inspector.js` |
-| HTTP routes and saved data         | `api/controller.mjs`, `lib/storage-*.mjs`                                            |
+Use the visual strategy editor for simple decisions and phase-specific rules. For more control, import a Go file through the editor. Start with [the downloadable example](public/society-example.go) and [the agent guide](docs/AGENT_API.md).
 
-To change a default rule, update the Go default in `settings.go` and the browser default in `setup-model.js`. To add a built-in strategy, add its policy in `garden.go`, its accepted identifier in `lib/roster.mjs`, and its menu entry in `setup-model.js`. Builder strategies can also be created directly in the app.
+Each individual has explicit private JSON memory. The same code may serve 50 individuals, but they do not share mutable global variables. The local Go runner accepts a pure standard-library subset, rejects global mutable state and external I/O, and applies decision timeouts. It is intended for team-authored local experiments; it is not a general internet-facing arbitrary-code execution service.
 
-## Check a change
+The **Governance** and **Federation Council** views explain the capabilities agents can propose. Clicking an observer control does not cast a vote or force an institution into existence. Formation unlocks powers; policies and offices require subsequent votes.
+
+## Specification
+
+[The approved specification](docs/AMOEBOIDS_SPECIFICATION.md) defines the physical rules, political powers, timing, worked examples, information boundaries and monthly resets. [The agent API](docs/AGENT_API.md) defines the corresponding programming interface.
+
+Core features include zero-rule founding, unlimited mind-funded proposals, competing policy votes, delegated officers, storage taxes and inheritance, proportional mind pledges, funded records and enforcement, evidence-based sanctions, federations, representative voting, donations, shared records and immigration checks.
+
+## Reproducible experiments
+
+Run the same engine without the interface:
+
+```sh
+go run ./cmd/society -seed 42 -output experiment.json
+```
+
+For a smaller experiment:
+
+```sh
+go run ./cmd/society -copies 5 -plots 3 -days 10 -months 2 -seed 42
+```
+
+`-config setup.json` accepts an object containing `settings` and `teams`. The headless command runs built-in and visual-builder policies. Imported Go strategies run through the local application service, which owns compilation and isolated memory transport.
+
+Compare runs with the same settings and seed. Retaining memory enables agent-written adaptation; improvement must be measured against a memory-reset baseline across multiple seeds before claiming learning.
+
+## Development and verification
 
 ```sh
 npm test
-npx playwright install chromium
-npm run test:browser
+npm run test:browser:society
 npm run check
 ```
 
-`npm test` runs JavaScript and Go tests. The browser check starts a temporary local server and exercises real saves, runs, and results. `npm run check` checks formatting and runs the unit tests; `npm run format` applies formatting. Go packages can also be tested directly with `go test ./...`.
+Go tests exercise physical accounting, information access, institutional timing and political rules. The society browser test exercises the actual service and rendered interface. The legacy browser checks remain available through `npm run test:browser:legacy`.
 
-Work on a branch, run the relevant checks, and open a pull request explaining the behaviour you changed. Keep recorded replay compatibility in mind when changing simulation output. CI runs unit checks on Linux, macOS and Windows, plus browser checks on Linux.
+See [verification results](docs/VERIFICATION.md) and the [independent deep review](docs/DEEP_REVIEW.md) for measured performance, reviewed edge cases and remaining limitations.
+
+| Area                                            | Files                                                           |
+| ----------------------------------------------- | --------------------------------------------------------------- |
+| Physical world, phases, memory and observations | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go` |
+| Policies, votes, delegations and federations    | `pkg/society/politics*.go`                                      |
+| Configurable defaults                           | `pkg/society/settings.go`                                       |
+| Local runs, history, imports and Go workers     | `api/society.go`, `api/society_strategy.go`                     |
+| Atlas and inspection interface                  | `public/society.html`, `society.css`, `society.js`              |
+| Headless experiments                            | `cmd/society/main.go`                                           |
+| Legacy engine and viewer                        | `pkg/garden/`, `public/index.html`                              |
+
+## Hosting boundary
+
+The updated MVP uses a persistent local Go service and disk-backed replays. It is ready to clone and run from GitHub. The previous Vercel/Supabase configuration in `hosting/` belongs to the legacy prototype; it does not host the stateful society service. Production multi-user hosting requires a persistent process, durable storage, authentication and a separately hardened execution service. The application does not silently upload local strategies or simulation data.
 
 ## Foundation
 
-The engine extends `BaseServer` and `BaseAgent` from [basePlatformSOMAS v2.1.0](https://github.com/MattSScott/basePlatformSOMAS/tree/v2.1.0). That dependency is MIT-licensed, © 2023 Matt Scott. Game rules live in this repository; the platform runs the turn lifecycle.
+The original prototype extends `BaseServer` and `BaseAgent` from [basePlatformSOMAS v2.1.0](https://github.com/MattSScott/basePlatformSOMAS/tree/v2.1.0), MIT-licensed, © 2023 Matt Scott. The new society engine implements explicit daily phases separately because the legacy lifecycle models one harvest/contribution action per day. The original package remains available and tested.

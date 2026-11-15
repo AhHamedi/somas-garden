@@ -8,6 +8,7 @@ import { resolve, extname, dirname } from "node:path";
 import { createHandler } from "../api/controller.mjs";
 import { createLocalStore } from "../lib/storage-local.mjs";
 import { createCloudStore } from "../lib/storage-cloud.mjs";
+import { goBinary } from "./go.mjs";
 
 const hosted = process.argv.includes("--hosted");
 if (hosted) {
@@ -87,6 +88,7 @@ async function startEngine(binary, enginePort) {
       ...process.env,
       ENGINE_PORT: String(enginePort),
       SELFORG_ENGINE_SECRET: engineSecret,
+      GO_BINARY: goBinary(),
     },
     stdio: ["ignore", "pipe", "inherit"],
   });
@@ -141,11 +143,9 @@ try {
     dirname(stateFile),
     process.platform === "win32" ? "garden-engine.exe" : "garden-engine",
   );
-  const built = spawnSync(
-    process.env.GO_BINARY || "go",
-    ["build", "-o", binary, "./cmd/dev"],
-    { stdio: "inherit" },
-  );
+  const built = spawnSync(goBinary(), ["build", "-o", binary, "./cmd/dev"], {
+    stdio: "inherit",
+  });
   if (built.error?.code === "ENOENT")
     throw new Error(
       "Go was not found. Install Go 1.23 or newer, or set GO_BINARY to its executable.",
@@ -167,14 +167,66 @@ try {
   server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url, "http://localhost");
+      if (url.pathname.startsWith("/api/society/")) {
+        // Keep the internal service secret on the server. Local strategy uploads
+        // and simulation mutations must originate from this same application.
+        if (
+          req.method !== "GET" &&
+          req.headers.origin &&
+          req.headers.origin !== `http://${req.headers.host}`
+        ) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({ error: "Use the simulation's own window for this action." }),
+          );
+          return;
+        }
+        const parts = [];
+        let length = 0;
+        for await (const chunk of req) {
+          length += chunk.length;
+          if (length > 2 * 1024 * 1024) {
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Request is too large." }));
+            return;
+          }
+          parts.push(chunk);
+        }
+        const upstream = await fetch(engineOrigin + url.pathname + url.search, {
+          method: req.method,
+          headers: {
+            Authorization: `Bearer ${engineSecret}`,
+            "Content-Type": "application/json",
+          },
+          ...(req.method === "GET" ? {} : { body: Buffer.concat(parts) }),
+          signal: AbortSignal.timeout(120000),
+        });
+        res.writeHead(upstream.status, {
+          "Content-Type": upstream.headers.get("content-type") || "application/json",
+          "Cache-Control": "no-store",
+          ...(upstream.headers.has("content-disposition")
+            ? { "Content-Disposition": upstream.headers.get("content-disposition") }
+            : {}),
+        });
+        for await (const chunk of upstream.body) {
+          if (res.destroyed) break;
+          if (!res.write(chunk)) await new Promise((done) => res.once("drain", done));
+        }
+        res.end();
+        return;
+      }
       req.query = route(url);
       if (req.query) return await handler(req, res);
       const pathname =
         url.pathname === "/"
-          ? "/index.html"
-          : url.pathname === "/manage"
-            ? "/manage.html"
-            : decodeURIComponent(url.pathname);
+          ? process.env.DEV_LEGACY_HOME === "1"
+            ? "/index.html"
+            : "/society.html"
+          : url.pathname === "/legacy"
+            ? "/index.html"
+            : url.pathname === "/manage"
+              ? "/manage.html"
+              : decodeURIComponent(url.pathname);
       const path = resolve(publicRoot, "." + pathname);
       if (!path.startsWith(publicRoot + (process.platform === "win32" ? "\\" : "/"))) {
         res.writeHead(403);
