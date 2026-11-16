@@ -12,3 +12,6 @@ playwright-report/
 test-results/
 supabase/.temp/
 *.exe
+runner/society-engine
+runner/society-source.json
+hosted-public/

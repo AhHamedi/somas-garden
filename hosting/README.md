@@ -1,6 +1,43 @@
-# Legacy hosted development and releases
+# Hosted development and releases
 
-These instructions apply only to the original one-field prototype, available locally at `/legacy`. They do not deploy the current Amoeboids society MVP. Start with the [repository README](../README.md) to run the current game; its persistent Go service and disk-backed replays require a different hosting setup.
+## Current Amoeboids game
+
+The public address is **https://somas.sites.moonisolutions.net/**. Mooni's existing host-specific route forwards to `https://mooni-selforg.vercel.app`; keep that route and DNS unchanged when releasing this application.
+
+The static game calls `api/society-hosted.mjs`. Its signed HttpOnly cookie selects a browser's isolated named Vercel Sandbox, with a 1 GiB persistent Drive mounted at `/data`. No platform credential is passed to the sandbox. Its engine receives a workspace-specific bearer token; arbitrary callers cannot read or modify worlds through the engine's public port. The sandbox denies outbound network access, including for uploaded Go.
+
+Every phase commits an observer replay and a private checkpoint before publishing the new history index. Checkpoints retain private memory, political state and exact random streams. A sleeping/restarted workspace resumes at the last committed phase; older saves without checkpoints remain archives. Failed persistence returns committed state and rejects further changes, avoiding gaps in history.
+
+The browser cookie is the workspace key: different browsers get separate worlds. Clearing it loses access to that workspace. Run URLs are not cross-browser sharing links; use the game's exports to share results. A new workspace is not created for each new world. Hosted allocation is currently capped at 30 new workspaces per environment/day and 4 per connection/day; returning workspaces are admitted without counting again. Idle runtimes stop after their timeout, renewed by activity. Drives retain data independently of runtime shutdown.
+
+### Release the current game
+
+Use Node 20.18.1+ and Go 1.23+, with this checkout linked to the existing `mooni-selforg` Vercel project. The project needs the existing `SELFORG_ENGINE_SECRET`, `SELFORG_GO_SNAPSHOT`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings. The Go snapshot supplies `/vercel/go/bin/go` and writable Go caches. Vercel's OIDC credentials authorize the proxy's Sandbox and Drive calls; keep them out of the browser and engine.
+
+Apply `supabase/migrations/20261116124303_society_hosted_session_limits.sql` once to the configured database. It adds only the society allocation table and service-role-only RPC, without changing legacy data.
+
+```sh
+npm ci
+npm run check
+npx playwright install chromium
+npm run test:browser:society
+npm run build:hosted
+vercel deploy --prod --skip-domain
+```
+
+Always run `build:hosted` immediately before deployment: it builds the Linux engine and its Go contract sources into private, Git-ignored assets under `runner/`. Both are included in the hosted proxy function, never in `public/`. A bare Git deployment without this build step is insufficient. `.vercelignore` excludes the local Go API helpers from serverless function discovery.
+
+Verify the staged production URL, including creating/playing a world, Results, saved-world reload and an imported Go strategy. Then promote that exact deployment:
+
+```sh
+vercel promote <verified-production-deployment>
+```
+
+Verify the Mooni address after promotion. Roll back by promoting the preceding verified production deployment. Local development remains `npm run dev` and does not require cloud credentials. Use a separate browser workspace for hosted checks; never test against a user's existing world.
+
+## Legacy one-field prototype
+
+The original app remains at `/legacy`. The instructions below concern only its agent library, replay storage and older execution runner.
 
 The hosted app stores agents and runs in Supabase and executes uploaded Go in Vercel Sandbox. The normal `npm run dev` command uses local files. Use a separate Supabase project or the preview environment for hosted development.
 

@@ -39,6 +39,6 @@ The visual review also found and verified corrections for raw internal officer/p
 
 **Practical limits**
 
-Saved replays survive a service restart, but interrupted live simulations reopen as read-only archives rather than resumable processes. The Go worker is a constrained local strategy runner, not a certified general-purpose operating-system sandbox or a production multi-user hosting service. The visual review covered the tested Chromium desktop/mobile states, not every browser, assistive technology or possible institutional configuration. Exhaustive model checking and prolonged adversarial load testing were outside this review.
+At the time of this review, saved replays survived a service restart but interrupted live simulations reopened as read-only archives. The current release adds private checkpoints and isolated hosted workspaces; see [current verification](VERIFICATION.md) and [hosting](../hosting/README.md). The local Go worker remains a constrained strategy runner. The visual review covered the tested Chromium desktop/mobile states, not every browser, assistive technology or possible institutional configuration. Exhaustive model checking and prolonged adversarial load testing were outside this review.
 
 The supplied strategies are programmed examples. Private memory makes agent-written adaptation possible; these checks do not establish learned cooperation or improvement. Those claims require separate controlled experiments across multiple seeds.

@@ -53,7 +53,12 @@ const state = (page) =>
 try {
   assert.ok(origin, "server started");
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  // Hosted checks can reuse a dedicated test workspace across staged releases.
+  const storageState = process.env.SOCIETY_BROWSER_STATE || undefined;
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+    storageState,
+  });
   page.on("pageerror", (e) => failures.push(e.message));
   await page.goto(origin);
   await page.waitForFunction(() => window.amoeboids?.ix, null, { timeout: 30000 });
@@ -335,7 +340,10 @@ try {
     page.waitForResponse((r) => new URL(r.url()).pathname === "/game/main.js"),
     page.reload(),
   ]);
-  assert.equal(mainResponse.status(), 200, "reload serves the rebuilt game entry point");
+  assert.ok(
+    [200, 304].includes(mainResponse.status()),
+    "reload serves or revalidates the rebuilt game entry point",
+  );
   await page.waitForFunction(
     (id) => window.amoeboids?.pb.id === id && amoeboids.ix?.s.agents.length === 300,
     initialRunId,
@@ -364,6 +372,7 @@ try {
   const calm = await browser.newPage({
     viewport: { width: 1280, height: 800 },
     reducedMotion: "reduce",
+    storageState,
   });
   calm.on("pageerror", (e) => failures.push(e.message));
   await calm.goto(origin);

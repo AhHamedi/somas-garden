@@ -4,6 +4,8 @@ A programmable society of autonomous agents, shared carrot plots and institution
 
 The default experiment has six behaviours, 50 independent copies of each, six plots and twelve 30-day months. The supplied behaviours are transparent programmed examples, not evidence of learned cooperation.
 
+**[Play the hosted game](https://somas.sites.moonisolutions.net/)**, or run your own local copy below.
+
 ![Amoeboids: the island during a vote, with assemblies gathered at each hall](docs/images/amoeboids-world.png)
 
 ## Run the MVP
@@ -29,7 +31,7 @@ The legacy one-field prototype remains at **/legacy**. Its strategies and old re
 
 `GO_BINARY` can point to a Go installation. `PORT` and `ENGINE_PORT` choose alternative ports. Local simulation replays and uploaded strategies are saved under `.local/data/society/`; `LOCAL_DATA_DIR` or `SOCIETY_DATA_DIR` can select another location. Never commit `.local/`.
 
-Saved replays survive server restarts. A run whose live process was interrupted reopens as a read-only archive; start a new run to continue experimenting. Browser settings and strategy drafts are also retained locally.
+Worlds and saved replays survive server restarts. New runs recover at their last saved phase, including private agent memory and uploaded behaviours. Older replay-only saves remain read-only archives. Browser settings and strategy drafts are also retained locally.
 
 ## Design an agent
 
@@ -86,9 +88,11 @@ See [verification results](docs/VERIFICATION.md), the [independent engineering r
 | Headless experiments                            | `cmd/society/main.go`                                                                            |
 | Legacy engine and viewer                        | `pkg/garden/`, `public/index.html`                                                               |
 
-## Hosting boundary
+## Hosted game
 
-The updated MVP uses a persistent local Go service and disk-backed replays. It is ready to clone and run from GitHub. The previous Vercel/Supabase configuration in `hosting/` belongs to the legacy prototype; it does not host the stateful society service. Production multi-user hosting requires a persistent process, durable storage, authentication and a separately hardened execution service. The application does not silently upload local strategies or simulation data.
+The public site runs the same society engine and interface. Each browser gets an isolated Vercel Sandbox and a persistent drive for its worlds, replays and imported strategies. A signed, secure browser cookie reopens that workspace; clearing it or using a different browser creates a separate workspace. Export results before clearing browser data. Servers sleep when idle and restore their last committed phase when reopened.
+
+The hosted API keeps infrastructure credentials on the server and isolates uploaded Go inside the visitor's workspace. Supabase enforces new-workspace allocation limits; individual runs and playback do not consume new allocations. See [hosting and release instructions](hosting/README.md) for deployment, limits and recovery. The local application does not upload local strategies or simulation data.
 
 ## Foundation
 

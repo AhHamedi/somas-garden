@@ -24,6 +24,8 @@ jobs:
       - run: npm run check
       - if: runner.os == 'Linux'
         run: npm run test:go -- --race
+      - if: runner.os == 'Linux'
+        run: npm run build:hosted
   browser:
     runs-on: ubuntu-latest
     steps:

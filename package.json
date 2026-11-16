@@ -19,7 +19,8 @@
     "test:hosted:guide": "node scripts/guide-examples-check.mjs --hosted-writes",
     "test:hosted:runner": "node scripts/runner-check.mjs --hosted-writes",
     "test:browser:legacy": "node scripts/test-browser.mjs",
-    "test:browser:society": "node scripts/test-society-browser.mjs"
+    "test:browser:society": "node scripts/test-society-browser.mjs",
+    "build:hosted": "node scripts/build-hosted.mjs"
   },
   "dependencies": {
     "@vercel/sandbox": "3.9.1",
