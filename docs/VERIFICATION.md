@@ -1,8 +1,28 @@
 # MVP verification
 
-Verified locally on 15 November 2026 against the approved specification and defaults. The implementation includes the physical world, local governments, federations, agent contracts, saved replays and observer interface. The [initial engineering review](DEEP_REVIEW.md) records the rules and service findings. The redesigned game interface has a separate [independent usability review](GAME_UX_REVIEW.md): **8.7/10 overall and 8.7/10 for intuitiveness**, with all eight reviewed newcomer tasks passing.
+The implementation includes the physical world, local governments, federations, agent contracts, saved replays and observer interface. The [initial engineering review](DEEP_REVIEW.md) records the rules and service findings. The [interface review](GAME_UX_REVIEW.md) records the rebuilt observer interface. Results below distinguish the current release checks from earlier measurements. Functional test results do not establish design quality.
 
-## Checks
+## Release checks — 16 November 2026
+
+- `npm run check`: formatting, all 65 JavaScript tests, all Go packages and the downloadable legacy Go example passed.
+- `go vet ./...` and `npm run test:go -- --race`: passed.
+- Results regression tests cover exact-frame data after rewind and forward playback, late responses when changing runs, shared Rulebook updates, and consistent periods for completed-month and month-to-date comparisons.
+- `npm run test:browser:society`: passed against the actual development launcher and service in Chromium. The suite now also checks that edited team behaviours reach the engine, saved worlds can be opened, and reloading or revisiting the home URL restores the selected world. Its temporary service uses isolated data directories.
+
+## Interface rebuild checks
+
+The observer interface was rebuilt on 15 November 2026 (see [presentation](PRESENTATION_DESIGN.md) and [review](GAME_UX_REVIEW.md)). Agent contracts and the replay format remain compatible. The default respawn delay changed from one day to the monthly meteor (`respawnDelay: -1`); other delays remain configurable.
+
+- `test/game-model.test.mjs` covers law sentences, grouping and funding state, roles, motion titles, before/after text, tallies and thresholds in residents, influence and plots, phase stories, notable events, plot averages, event wording and hemicycle seating for 1 to 300 voters.
+- `test/game-statutes.test.mjs` parses the engine's policy catalogue and checks that the statute book offers exactly the options the engine accepts for all 28 laws, that options only name defined parameters, and that one-off decisions are real proposal kinds.
+- `pkg/society/study_test.go` runs a world for a month and checks that every nightfall summary agrees with the engine's own totals (living, field, stores, residents plus the wilds, daily deaths against month totals), that votes counted by team match each ballot, the Gini coefficient and first-day arrivals.
+- `test/game-study.test.mjs` covers the Results analysis: quantiles, Gini and Lorenz curves, scoping to completed months, per-team tables and distributions, motion subjects including charter changes, voting by team, law adoption compared at the same day of the month, residence shares and CSV quoting.
+- `test/game-playback.test.mjs` covers opening at the newest frame, replay without re-simulating, the look-ahead buffer while playing, bounded fast-forward, read-only replays and phase pacing.
+- `npm run test:browser:society` drives the real society service in Chromium: continuous play across days at 8×, selection without pausing, every inspector tab, the statute book and a law unfolding in place with all its options, widening and narrowing the inspector, the full resident list, the Amoeboid card, phase and day replay with no write requests, council seats matching the electorate, chronicle, every Results section with a table view, a team filter and a CSV export, study data never beyond the phase on screen, the Rulebook's 45 entries, search and option lists, the new-world charts and the meteor respawn default, creating a 24-Amoeboid world, the meteor and month card, a phone layout without horizontal scroll, and reduced motion. It accepts `SOCIETY_ORIGIN` to target a running server.
+
+The initial rebuild checks ran in a container that could not download npm or Go modules. Its browser flow used the same Go society handler served directly rather than through `scripts/dev.mjs`; the JavaScript tests ran under Node 22. In that headless, GPU-less browser the map drew in about 11 ms per frame for the whole island and 15 ms zoomed in, and a phase change cost about 8 ms. These are historical measurements, not a measurement of the release checkout or a performance guarantee.
+
+## Previous foundation checks
 
 | Check                               | Result                                                                                                                                                                                                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,11 +34,11 @@ Verified locally on 15 November 2026 against the approved specification and defa
 | Custom Go strategies                | Real compilation and workers verified separate individual memory, deterministic private random seeds, invalid-output diagnostics and termination of an infinite loop. Independent HTTP probes also passed.                                                                                                                            |
 | Visual review                       | Full-screen game map, context panels and federation tabs inspected at desktop and 390 px mobile widths. Named voters, historical labels and service status verified. No browser exceptions or horizontal mobile overflow in the reviewed flows.                                                                                       |
 
-There are 49 society-engine test functions and four society API test functions. They cover food and mind accounting, deliberate eating, diminishing food returns, linear thinking, weather, storage, inheritance, private observations, zero-rule founding, competing proposals, electorate snapshots, scoped officers, taxation, service funding, historical sanction evidence, federation representation and ratification, joining/leaving, immigration, donations, disputes, paginated records, deterministic boundaries, resets and a complete default year. Individual tests include multiple cases; the count is not a claim of exhaustive coverage.
+Those foundation checks included 49 society-engine test functions and four society API test functions. They covered food and mind accounting, deliberate eating, diminishing food returns, linear thinking, weather, storage, inheritance, private observations, zero-rule founding, competing proposals, electorate snapshots, scoped officers, taxation, service funding, historical sanction evidence, federation representation and ratification, joining/leaving, immigration, donations, disputes, paginated records, deterministic boundaries, resets and a complete default year. Individual tests include multiple cases; the count is not a claim of exhaustive coverage.
 
-## Full default year with saved playback
+## Previous full-year benchmark with saved playback
 
-The actual application service ran seed 42 with six behaviours, 50 copies each, six plots, twelve months and 30 days per month. Every daily phase was compressed and written to disk. The measured run completed successfully:
+Before the interface rebuild, the actual application service ran seed 42 with six behaviours, 50 copies each, six plots, twelve months and 30 days per month, using the previous one-day respawn default. Every daily phase was compressed and written to disk. The measured run completed successfully:
 
 | Measurement                                                     | Result                       |
 | --------------------------------------------------------------- | ---------------------------- |
@@ -33,7 +53,7 @@ The actual application service ran seed 42 with six behaviours, 50 copies each, 
 
 Initial, middle and final saved frames (0, 1,440 and 2,880) were retrieved and checked for the expected population and absence of private memory. The browser suite separately verified timeline seeking and returning to the live frame. This is a measurement on the development machine, not a performance guarantee for other hardware or arbitrary uploaded strategies.
 
-For another measurement, start the application, keep the default setup, choose seed 42 and select **Run year**. Saved frames and the index appear in `.local/data/society/runs/`. The headless command `go run ./cmd/society -seed 42 -output experiment.json` runs the same mechanics but does not include the application's per-phase recording cost.
+For a new measurement, start the application, choose seed 42 and the desired respawn setting, and use **Menu → Skip to the end of the month** for each month. Saved frames and the index appear in `.local/data/society/runs/`. The headless command `go run ./cmd/society -seed 42 -output experiment.json` runs the current default mechanics but does not include the application's per-phase recording cost. The old numbers above should not be treated as a benchmark of the new defaults.
 
 ## Scope and practical limits
 

@@ -3,253 +3,378 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#182522" />
-    <meta name="description" content="Amoeboids society simulation." />
+    <meta name="theme-color" content="#10262c" />
+    <meta
+      name="description"
+      content="Amoeboids: a self-organising society of programmable agents."
+    />
     <title>Amoeboids</title>
-    <link rel="stylesheet" href="/society.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400..700&display=swap"
+    />
+    <link rel="stylesheet" href="/game/game.css" />
   </head>
-  <body class="game-shell">
-    <a class="skip-link" href="#play-button">Skip to playback controls</a>
-    <header class="game-topbar">
-      <a class="game-brand" href="/" aria-label="Amoeboids home"
-        ><span class="brand-creature" aria-hidden="true"><i></i><i></i></span>Amoeboids</a
-      >
-      <nav class="game-nav" aria-label="Views">
-        <button class="nav-link active" data-page="world" aria-current="page">
-          World</button
-        ><button class="nav-link" data-page="chronicle">History</button
-        ><button class="nav-link" data-page="results">Results</button>
+  <body data-view="world">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-sun" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4.2" />
+          <path
+            d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M5.3 18.7 7 17M17 7l1.7-1.7"
+          />
+        </symbol>
+        <symbol id="i-cloud" viewBox="0 0 24 24">
+          <path
+            d="M7 18.5a4.5 4.5 0 0 1-.4-9 5.6 5.6 0 0 1 10.8 1.4A3.8 3.8 0 0 1 17.5 18.5Z"
+          />
+        </symbol>
+        <symbol id="i-rain" viewBox="0 0 24 24">
+          <path
+            d="M7 14.5a4.2 4.2 0 0 1-.4-8.4 5.4 5.4 0 0 1 10.4 1.3 3.6 3.6 0 0 1 .5 7.1Z"
+          />
+          <path d="m8.5 17.5-1 3M12.5 17.5l-1 3M16.5 17.5l-1 3" />
+        </symbol>
+        <symbol id="i-hall" viewBox="0 0 24 24">
+          <path d="m3.5 9 8.5-5 8.5 5" />
+          <path
+            d="M5 9.5h14M6.5 10v7.5M10 10v7.5M14 10v7.5M17.5 10v7.5M4 18h16M3 21h18"
+          />
+        </symbol>
+        <symbol id="i-federation" viewBox="0 0 24 24">
+          <circle cx="12" cy="5.5" r="2.6" />
+          <circle cx="5.5" cy="17.5" r="2.6" />
+          <circle cx="18.5" cy="17.5" r="2.6" />
+          <path d="m10.6 7.8-3.7 7.3M13.4 7.8l3.7 7.3M8.1 17.5h7.8" />
+        </symbol>
+        <symbol id="i-tent" viewBox="0 0 24 24">
+          <path d="M2.5 20 12 4l9.5 16ZM9 20l3-5.5 3 5.5" />
+        </symbol>
+        <symbol id="i-carrot" viewBox="0 0 24 24">
+          <path
+            d="M14.6 9.4c-2.6-2.6-6-.4-7.6 2.7-1.5 2.9-2.7 6.3-3.5 8.4 2.1-.8 5.5-2 8.4-3.5 3.1-1.6 5.3-5 2.7-7.6Z"
+          />
+          <path d="M14.6 9.4 18 6M15.5 4.5l-.9 4.9 4.9-.9M9.5 13.5l1.5 1.5M7 16l1 1" />
+        </symbol>
+        <symbol id="i-granary" viewBox="0 0 24 24">
+          <path d="M6 10v10h12V10M4.5 10 12 4l7.5 6Z" />
+          <path d="M10 20v-4.5h4V20M9 12.5h6" />
+        </symbol>
+        <symbol id="i-people" viewBox="0 0 24 24">
+          <circle cx="9" cy="8" r="3.2" />
+          <path
+            d="M3.5 19.5a5.5 5.5 0 0 1 11 0M16 5.2a3 3 0 0 1 0 5.6M17.5 14a5 5 0 0 1 3 5.5"
+          />
+        </symbol>
+        <symbol id="i-mind" viewBox="0 0 24 24">
+          <path
+            d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.4A3.2 3.2 0 0 0 8 18a2.7 2.7 0 0 0 4 1.5V5.5A3 3 0 0 0 9 4.5ZM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.4A3.2 3.2 0 0 1 16 18a2.7 2.7 0 0 1-4 1.5"
+          />
+        </symbol>
+        <symbol id="i-joy" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M8.5 13.5a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01" />
+        </symbol>
+        <symbol id="i-body" viewBox="0 0 24 24">
+          <path
+            d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z"
+          />
+        </symbol>
+        <symbol id="i-influence" viewBox="0 0 24 24">
+          <path d="M6 20V9.5M12 20V4M18 20v-7" />
+        </symbol>
+        <symbol id="i-scroll" viewBox="0 0 24 24">
+          <path
+            d="M7 4h10.5a2 2 0 0 1 2 2v1.5H17M7 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V6"
+          />
+          <path d="M8.5 9h6M8.5 12.5h6M8.5 16h4" />
+        </symbol>
+        <symbol id="i-ballot" viewBox="0 0 24 24">
+          <path d="M4 14.5h16v6H4Z" />
+          <path d="m8 11 2.5 2.5L16 8" />
+          <path d="M6.5 14.5V5.5h11v9" />
+        </symbol>
+        <symbol id="i-play" viewBox="0 0 24 24">
+          <path d="M8 5.5v13l10.5-6.5Z" fill="currentColor" stroke="none" />
+        </symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24">
+          <path d="M8.5 5.5v13M15.5 5.5v13" stroke-width="3" />
+        </symbol>
+        <symbol id="i-step" viewBox="0 0 24 24">
+          <path d="M6.5 6v12l8.5-6Z" />
+          <path d="M18 6v12" />
+        </symbol>
+        <symbol id="i-skip" viewBox="0 0 24 24">
+          <path d="M4 6v12l7-6ZM12 6v12l7-6Z" />
+          <path d="M20.5 6v12" />
+        </symbol>
+        <symbol id="i-path" viewBox="0 0 24 24">
+          <circle cx="6" cy="18" r="2.2" />
+          <circle cx="18" cy="6" r="2.2" />
+          <path d="M8 17c6 0 2-9 8-10" stroke-dasharray="2.5 2.5" />
+        </symbol>
+        <symbol id="i-sprout" viewBox="0 0 24 24">
+          <path
+            d="M12 20v-8M12 12c0-4 3-6 7-6 0 4-3 6-7 6ZM12 14.5c0-3-2.4-5-5.5-5 0 3 2.4 5 5.5 5Z"
+          />
+        </symbol>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path d="M12 3.5 13.8 10l6.7 2-6.7 2L12 20.5 10.2 14l-6.7-2 6.7-2Z" />
+        </symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24">
+          <path d="M12 4 21 19.5H3Z" />
+          <path d="M12 10v4.5M12 17h.01" />
+        </symbol>
+        <symbol id="i-seal" viewBox="0 0 24 24">
+          <circle cx="12" cy="10" r="5.5" />
+          <path d="m9 15-1.5 5.5L12 18.5l4.5 2L15 15" />
+        </symbol>
+        <symbol id="i-gift" viewBox="0 0 24 24">
+          <path d="M4.5 10h15v10h-15ZM3.5 7h17v3h-17ZM12 7v13" />
+          <path
+            d="M12 7c-1.5-3.5-5-3.5-5-1.2C7 7 12 7 12 7Zm0 0c1.5-3.5 5-3.5 5-1.2C17 7 12 7 12 7Z"
+          />
+        </symbol>
+        <symbol id="i-bowl" viewBox="0 0 24 24">
+          <path
+            d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0ZM9 8c0-1.5 1-1.5 1-3M13 8c0-1.5 1-1.5 1-3"
+          />
+        </symbol>
+        <symbol id="i-skull" viewBox="0 0 24 24">
+          <path d="M5.5 11a6.5 6.5 0 0 1 13 0v3l-2 1.5V19h-9v-3.5l-2-1.5Z" />
+          <circle cx="9.5" cy="11.5" r="1.3" />
+          <circle cx="14.5" cy="11.5" r="1.3" />
+          <path d="M10.5 19v-2M13.5 19v-2" />
+        </symbol>
+        <symbol id="i-gate" viewBox="0 0 24 24">
+          <path d="M4 20V8a8 8 0 0 1 16 0v12M8 20v-9M12 20V9M16 20v-9M4 13h16" />
+        </symbol>
+        <symbol id="i-crown" viewBox="0 0 24 24">
+          <path d="M4 17.5h16L18.5 8l-4 3.5L12 6l-2.5 5.5-4-3.5Z" />
+        </symbol>
+        <symbol id="i-flag" viewBox="0 0 24 24">
+          <path d="M6 21V4M6 4.5h11l-2.5 4 2.5 4H6" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+          <path d="m6.5 6.5 11 11M17.5 6.5l-11 11" />
+        </symbol>
+        <symbol id="i-back" viewBox="0 0 24 24">
+          <path d="M15 5.5 8.5 12l6.5 6.5" />
+        </symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24">
+          <path d="m9 5.5 6.5 6.5L9 18.5" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol>
+        <symbol id="i-fit" viewBox="0 0 24 24">
+          <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+        </symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </symbol>
+        <symbol id="i-world" viewBox="0 0 24 24">
+          <path d="m3 9 9-5 9 5-9 5Z" />
+          <path d="m3 14 9 5 9-5" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 24 24">
+          <path
+            d="M12 6.5C10 5 7 4.5 4 5v13.5c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5ZM12 6.5V20"
+          />
+        </symbol>
+        <symbol id="i-rulebook" viewBox="0 0 24 24">
+          <path d="M6 3.5h11.5a1 1 0 0 1 1 1V18H7a2 2 0 0 0-2 2V5a1.5 1.5 0 0 1 1-1.5Z" />
+          <path d="M5 20a2 2 0 0 0 2 1h11.5v-3" />
+          <path d="M9 7.5h6M9 11h6" />
+        </symbol>
+        <symbol id="i-table" viewBox="0 0 24 24">
+          <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+          <path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="m16 16 4.5 4.5" />
+        </symbol>
+        <symbol id="i-chart" viewBox="0 0 24 24">
+          <path d="M4 4v16h16" />
+          <path d="m7.5 15 4-4.5 3 3L20 7" />
+        </symbol>
+        <symbol id="i-council" viewBox="0 0 24 24">
+          <path d="M3 18a9 9 0 0 1 18 0" />
+          <path d="M7 18a5 5 0 0 1 10 0" />
+          <circle cx="12" cy="18" r="1" />
+        </symbol>
+        <symbol id="i-meteor" viewBox="0 0 24 24">
+          <circle cx="8" cy="16" r="4.2" />
+          <path d="m11.5 12.5 8-8M10 9.5l6-6M14.5 14l6-6" />
+        </symbol>
+        <symbol id="i-live" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3.5" fill="currentColor" />
+          <path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4" />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+          <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M4.5 19.5h15" />
+        </symbol>
+        <symbol id="i-night" viewBox="0 0 24 24">
+          <path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z" />
+        </symbol>
+        <symbol id="i-widen" viewBox="0 0 24 24">
+          <path d="M3 12h18M7 7.5 2.5 12 7 16.5M17 7.5l4.5 4.5-4.5 4.5" />
+        </symbol>
+        <symbol id="i-narrow" viewBox="0 0 24 24">
+          <path d="M2.5 12h7M14.5 12h7M5.5 7.5 10 12l-4.5 4.5M18.5 7.5 14 12l4.5 4.5" />
+        </symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24">
+          <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <a class="skip-link" href="#play">Skip to playback controls</a>
+
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Amoeboids">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span>Amoeboids</span>
+      </a>
+      <nav class="views" aria-label="Views">
+        <button class="view-tab active" data-view="world" aria-current="page">
+          <svg class="i"><use href="#i-world" /></svg>World
+        </button>
+        <button class="view-tab" data-view="council">
+          <svg class="i"><use href="#i-council" /></svg>Council<span
+            class="tab-count"
+            id="council-count"
+            hidden
+          ></span>
+        </button>
+        <button class="view-tab" data-view="rulebook">
+          <svg class="i"><use href="#i-rulebook" /></svg>Rulebook
+        </button>
+        <button class="view-tab" data-view="chronicle">
+          <svg class="i"><use href="#i-book" /></svg>Chronicle
+        </button>
+        <button class="view-tab" data-view="results">
+          <svg class="i"><use href="#i-chart" /></svg>Results
+        </button>
       </nav>
-      <div class="header-actions">
-        <span class="session-stats" id="world-metrics" aria-label="Population"></span>
-        <details class="game-menu" id="game-menu">
-          <summary>Menu <span aria-hidden="true">☰</span></summary>
-          <div class="game-menu-content">
-            <button id="setup-button">New world</button
-            ><button id="behaviours-button">Behaviours</button
-            ><button id="saved-button">Saved worlds</button
-            ><button id="guide-button">How to play</button
-            ><span id="seed-label">Seed 42</span>
-          </div>
-        </details>
+      <div class="vitals" id="vitals" aria-label="World at a glance"></div>
+      <div class="menu-wrap">
+        <button
+          class="icon-button"
+          id="menu-button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-label="Menu"
+        >
+          <svg class="i"><use href="#i-menu" /></svg>
+        </button>
+        <div class="menu" id="menu" hidden>
+          <button data-action="new-world">New world…</button>
+          <button data-action="behaviours">Team behaviours…</button>
+          <button data-action="saved">Saved worlds…</button>
+          <button data-action="export">Download replay</button>
+          <button data-action="guide">How to watch</button>
+          <p class="menu-meta" id="menu-meta"></p>
+        </div>
       </div>
     </header>
-    <main id="world-content">
-      <div class="status-message" id="status-message" role="status" hidden></div>
-      <section class="workspace" id="world-page" aria-label="Game world">
-        <div class="atlas-panel">
-          <div class="atlas" id="atlas">
-            <canvas
-              id="world-canvas"
-              aria-label="Interactive world map. Select a plot using the map or numbered plot buttons."
-              role="img"
-            ></canvas>
-            <div class="map-loading" id="map-loading">
-              <span class="loading-creature"></span><strong>Loading world…</strong>
-            </div>
-            <div class="map-tooltip" id="map-tooltip" hidden></div>
-            <div class="meteor-overlay" id="meteor-overlay" hidden>
-              <div class="meteor-streak"></div>
-              <div class="meteor-message">
-                <h2>Meteor</h2>
-                <p>Memories retained. World reset.</p>
-              </div>
-            </div>
-          </div>
+
+    <main class="stage-wrap">
+      <section class="stage" id="stage" aria-label="World map">
+        <canvas id="world" aria-hidden="true"></canvas>
+        <div class="plaques" id="plaques" aria-label="Plots on the map"></div>
+        <div class="loading" id="loading">
+          <span class="brand-mark big" aria-hidden="true"><i></i><i></i></span>
+          <p>Growing the world…</p>
         </div>
-        <nav class="plot-picker" aria-label="Select a plot">
-          <span>Plots</span>
-          <div id="plot-layer"></div>
-        </nav>
-        <div class="map-tools" aria-label="Map controls">
-          <button id="zoom-out" aria-label="Zoom out">−</button
-          ><button id="map-fit">Fit</button
-          ><button id="zoom-in" aria-label="Zoom in">+</button>
-        </div>
-        <button class="outside-camp" id="outside-camp">
-          <span class="icon-slot" data-icon="tent"></span>Outside
-          <b id="outside-count">0</b>
+        <div class="tooltip" id="tooltip" hidden></div>
+      </section>
+
+      <aside class="ledger panel" id="ledger" aria-label="Plots"></aside>
+      <div class="map-tools" aria-label="Map controls">
+        <button class="icon-button" id="zoom-in" aria-label="Zoom in">
+          <svg class="i"><use href="#i-plus" /></svg>
         </button>
-        <div class="map-hint" id="map-hint">Select a plot to inspect it</div>
-        <section class="inspector-shell" id="inspector-shell" hidden>
-          <button
-            class="inspector-close"
-            id="inspector-close"
-            aria-label="Close inspector"
-          >
-            ×
-          </button>
-          <aside class="inspector" id="inspector" aria-label="Selection details"></aside>
-        </section>
-      </section>
-      <section
-        class="secondary-page"
-        id="chronicle-page"
-        aria-label="History"
-        hidden
-      ></section>
-      <section
-        class="secondary-page"
-        id="results-page"
-        aria-label="Results"
-        hidden
-      ></section>
-      <section class="cycle-console" id="cycle-console" aria-label="Simulation playback">
-        <div class="cycle-top">
-          <div class="date-readout">
-            <b id="day-label">Day 1</b><span id="date-label">Month 1 / 12</span>
-          </div>
-          <div class="phase-readout">
-            <b id="phase-label">Ready</b>
-            <div class="phase-track" id="phase-track" aria-label="Daily phases"></div>
-          </div>
-          <span class="run-state" id="world-state">Paused</span
-          ><button
-            class="button quiet"
-            id="replay-toggle"
-            aria-expanded="false"
-            aria-controls="replay-panel"
-          >
-            Replay
-          </button>
-        </div>
-        <div class="playback-row">
-          <div class="transport">
-            <button class="button play-button" id="play-button">
-              <span class="icon-slot" data-icon="play"></span><span>Play</span></button
-            ><button class="button secondary" id="step-button" title="Advance one phase">
-              Step</button
-            ><button class="button secondary" id="day-button">
-              Run day <span aria-hidden="true">→</span></button
-            ><select id="speed-select" aria-label="Playback speed">
-              <option value="1400">1×</option>
-              <option value="600" selected>2×</option>
-              <option value="180">4×</option>
-            </select>
-          </div>
-          <details class="time-options" id="time-options">
-            <summary title="More playback options" aria-label="More playback options">
-              •••
-            </summary>
-            <div>
-              <button id="month-button">Run month</button
-              ><button id="year-button">Run year</button
-              ><button id="export-button">Download replay</button>
-            </div>
-          </details>
-        </div>
-        <div class="replay-panel" id="replay-panel" hidden>
-          <div class="timeline-wrap">
-            <label for="timeline" class="visually-hidden">Replay timeline</label
-            ><input type="range" min="0" max="0" value="0" id="timeline" /><span
-              id="timeline-label"
-              >Live</span
-            ><button class="button secondary compact" id="live-button" hidden>
-              Return to live
-            </button>
-          </div>
-          <p id="replay-caption"></p>
-        </div>
-      </section>
+        <button class="icon-button" id="zoom-fit" aria-label="Show the whole island">
+          <svg class="i"><use href="#i-fit" /></svg>
+        </button>
+        <button class="icon-button" id="zoom-out" aria-label="Zoom out">
+          <svg class="i"><use href="#i-minus" /></svg>
+        </button>
+      </div>
+      <div class="ticker" id="ticker" aria-live="polite"></div>
+      <aside class="inspector panel" id="inspector" aria-label="Selection" hidden></aside>
+      <div
+        class="insp-handle"
+        id="insp-handle"
+        title="Drag to resize; double-click to widen"
+      ></div>
+
+      <section class="page" id="view-council" aria-label="Council" hidden></section>
+      <section class="page" id="view-chronicle" aria-label="Chronicle" hidden></section>
+      <section class="page" id="view-rulebook" aria-label="Rulebook" hidden></section>
+      <section class="page" id="view-results" aria-label="Results" hidden></section>
+
+      <div class="month-card" id="month-card" hidden></div>
     </main>
-    <dialog id="setup-dialog" class="large-dialog">
-      <div class="dialog-top">
-        <div>
-          <h2>New world</h2>
-        </div>
+
+    <footer class="console panel" id="console" aria-label="Time">
+      <div class="transport">
+        <button class="play" id="play" aria-label="Play">
+          <svg class="i"><use href="#i-play" /></svg>
+        </button>
         <button
-          class="button quiet compact dialog-close"
-          aria-label="Close configuration"
+          class="icon-button"
+          id="step"
+          aria-label="Advance one phase"
+          title="Advance one phase (→)"
         >
-          ×
+          <svg class="i"><use href="#i-step" /></svg>
         </button>
-      </div>
-      <form id="setup-form">
-        <div class="dialog-tabs">
-          <button type="button" class="active" data-setup-tab="world">Environment</button
-          ><button type="button" data-setup-tab="teams">Teams & behaviours</button
-          ><button type="button" data-setup-tab="advanced">Advanced rules</button>
-        </div>
-        <div class="dialog-scroll" id="setup-content"></div>
-        <div class="dialog-footer">
-          <p id="setup-summary">300 individuals · 6 plots · 360 days</p>
-          <div>
-            <button type="button" class="button secondary dialog-close">Cancel</button
-            ><button type="submit" class="button primary">
-              Create world <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </div>
-      </form>
-    </dialog>
-    <dialog id="strategy-dialog" class="large-dialog">
-      <div class="dialog-top">
-        <div>
-          <h2 id="strategy-title">Behaviour</h2>
-        </div>
         <button
-          class="button quiet compact dialog-close"
-          aria-label="Close strategy editor"
+          class="icon-button"
+          id="next-day"
+          aria-label="Skip to nightfall"
+          title="Skip to nightfall (Shift + →)"
         >
-          ×
+          <svg class="i"><use href="#i-skip" /></svg>
         </button>
+        <div class="speed" id="speed" role="radiogroup" aria-label="Speed"></div>
       </div>
-      <div class="dialog-scroll" id="strategy-content"></div>
-      <div class="dialog-footer">
-        <p>Changes apply to your next world.</p>
-        <button class="button primary" id="save-strategy">Save behaviour</button>
+      <div class="date" id="date">
+        <span class="date-day" id="date-day">Day 1</span
+        ><span class="date-sub" id="date-sub">Month 1</span>
       </div>
-    </dialog>
-    <dialog id="saved-dialog" class="guide-dialog">
-      <div class="dialog-top">
-        <div>
-          <h2>Saved worlds</h2>
+      <ol class="rail" id="rail" aria-label="Phases of the day"></ol>
+      <div class="story" id="story" aria-live="polite">
+        <p class="headline" id="headline"></p>
+        <div class="figures" id="figures"></div>
+      </div>
+      <div class="timeline" id="timeline">
+        <div class="track" id="track">
+          <div class="track-fill" id="track-fill"></div>
+          <div class="track-marks" id="track-marks"></div>
+          <div class="track-head" id="track-head"></div>
         </div>
-        <button class="button quiet compact dialog-close" aria-label="Close saved worlds">
-          ×
-        </button>
+        <span class="track-label" id="track-label"></span>
+        <div class="edge" id="edge"></div>
       </div>
-      <div class="dialog-scroll" id="saved-content"></div>
-    </dialog>
-    <dialog id="guide-dialog" class="guide-dialog">
-      <div class="dialog-top">
-        <div>
-          <h2>How to play</h2>
-        </div>
-        <button class="button quiet compact dialog-close" aria-label="Close guide">
-          ×
-        </button>
-      </div>
-      <div class="dialog-scroll">
-        <p>You observe the simulation. Your agents make the decisions.</p>
-        <dl class="controls-guide">
-          <dt>Play / Space</dt>
-          <dd>Run or pause the simulation.</dd>
-          <dt>Run day</dt>
-          <dd>Finish the current day's phases.</dd>
-          <dt>Select a plot</dt>
-          <dd>Inspect residents, food, government and votes.</dd>
-          <dt>Drag / scroll</dt>
-          <dd>Pan the map / zoom. Use Fit to see every plot.</dd>
-          <dt>History</dt>
-          <dd>Find recorded events. Replay lets you revisit a phase.</dd>
-          <dt>Menu → Behaviours</dt>
-          <dd>Edit the six teams for a new world. Each individual has private memory.</dd>
-        </dl>
-        <details>
-          <summary>Simulation rules</summary>
-          <p>
-            Agents choose where to live, harvest, eat and think. Extra food earns
-            diminishing satisfaction; thinking earns one satisfaction per mind spent.
-            Governments start with zero rules. Votes can introduce quotas, taxes, officers
-            and other powers. Decisions activate the following day. Federation
-            representatives act for their plots. A meteor resets the world each month,
-            retaining only private memories.
-          </p>
-        </details>
-        <a class="text-link" href="/society-example.go" download>Download Go example</a>
-      </div>
-    </dialog>
-    <script type="module" src="/society.js"></script>
+    </footer>
+
+    <dialog class="dialog wide" id="setup-dialog" aria-labelledby="setup-title"></dialog>
+    <dialog
+      class="dialog wide"
+      id="strategy-dialog"
+      aria-labelledby="strategy-title"
+    ></dialog>
+    <dialog class="dialog" id="saved-dialog" aria-labelledby="saved-title"></dialog>
+    <dialog class="dialog" id="guide-dialog" aria-labelledby="guide-title"></dialog>
+    <dialog class="dialog" id="progress-dialog" aria-labelledby="progress-title"></dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <script type="module" src="/game/main.js"></script>
   </body>
 </html>

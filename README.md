@@ -4,18 +4,26 @@ A programmable society of autonomous agents, shared carrot plots and institution
 
 The default experiment has six behaviours, 50 independent copies of each, six plots and twelve 30-day months. The supplied behaviours are transparent programmed examples, not evidence of learned cooperation.
 
-![Amoeboids game world with six plots, residents and government halls](docs/images/amoeboids-world.png)
+![Amoeboids: the island during a vote, with assemblies gathered at each hall](docs/images/amoeboids-world.png)
 
 ## Run the MVP
 
 Install **Node 20.18.1+** and **Go 1.23+**:
 
 ```sh
+git clone https://github.com/AhHamedi/somas-garden.git
+cd somas-garden
 npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:8787**. Select a plot on the game map to inspect its residents, government, votes and rules. Drag to pan; scroll to zoom. Play, Step and Run day control the simulation. Replay revisits recorded phases. **Menu → New world** changes the setup; **Menu → Behaviours** edits team strategies for a new run.
+Open **http://127.0.0.1:8787** and press **Play**. The island lights up through each day's eight phases while every Amoeboid migrates, harvests, debates, votes, eats and sleeps. Play continues until you pause; selecting things never stops it.
+
+- **World:** select a plot on the map, in the ledger or with the number keys. Its inspector shows what is happening there now, field and treasury, residents with roles and influence, every law in force, today's motions and the day's activity. Select an Amoeboid for its body, mind, food, satisfaction, powers and votes. Widen the inspector with its ↔ button or drag its edge.
+- **Council:** every motion seated as a chamber, with the passing line, before and after, and support by team.
+- **Rulebook:** every law, charter rule and one-off decision the Amoeboids can vote on, with every option, how it is decided and where it is in force.
+- **Chronicle** and **Results:** the month day by day, and a study of the run (outcomes, behaviour, the commons and institutions) with table views and CSV exports.
+- The console at the bottom shows the phase, what it achieved, speed (½× to 8×) and a scrubbable month timeline. Space plays and pauses; the arrows step; Shift and the right arrow skip to nightfall. **Menu → New world** changes the setup, with live charts for meals, field regrowth and weather and the respawn rule (by default the dead return at the meteor); **Menu → Team behaviours** edits strategies.
 
 The legacy one-field prototype remains at **/legacy**. Its strategies and old replay format are separate from the new game.
 
@@ -29,7 +37,7 @@ Use the visual strategy editor for simple decisions and phase-specific rules. Fo
 
 Each individual has explicit private JSON memory. The same code may serve 50 individuals, but they do not share mutable global variables. The local Go runner accepts a pure standard-library subset, rejects global mutable state and external I/O, and applies decision timeouts. It is intended for team-authored local experiments; it is not a general internet-facing arbitrary-code execution service.
 
-The **Government** and **Federation** views explain the capabilities agents can propose. Clicking an observer control does not cast a vote or force an institution into existence. Formation unlocks powers; policies and offices require subsequent votes.
+The plot's **Assembly** tab shows its laws and motions, **Council** shows the votes, and **Rulebook** explains the available local and federal powers. Clicking an observer control does not cast a vote or force an institution into existence. Formation unlocks powers; policies and offices require subsequent votes.
 
 ## Specification
 
@@ -59,23 +67,24 @@ Compare runs with the same settings and seed. Retaining memory enables agent-wri
 
 ```sh
 npm test
+npx playwright install chromium
 npm run test:browser:society
 npm run check
 ```
 
 Go tests exercise physical accounting, information access, institutional timing and political rules. The society browser test exercises the actual service and rendered interface. The legacy browser checks remain available through `npm run test:browser:legacy`.
 
-See [verification results](docs/VERIFICATION.md), the [independent engineering review](docs/DEEP_REVIEW.md) and the [game usability review](docs/GAME_UX_REVIEW.md) for measured performance, reviewed flows and remaining limitations. [Presentation decisions](docs/PRESENTATION_DESIGN.md) explain the map and navigation design.
+See [verification results](docs/VERIFICATION.md), the [independent engineering review](docs/DEEP_REVIEW.md) and the [interface review](docs/GAME_UX_REVIEW.md) for measured performance, reviewed flows and remaining limitations. [Presentation decisions](docs/PRESENTATION_DESIGN.md) explain the visual and interaction design.
 
-| Area                                            | Files                                                                  |
-| ----------------------------------------------- | ---------------------------------------------------------------------- |
-| Physical world, phases, memory and observations | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go`        |
-| Policies, votes, delegations and federations    | `pkg/society/politics*.go`                                             |
-| Configurable defaults                           | `pkg/society/settings.go`                                              |
-| Local runs, history, imports and Go workers     | `api/society.go`, `api/society_strategy.go`                            |
-| Game world and inspection interface             | `public/society.html`, `society.css`, `society.js`, `society-world.js` |
-| Headless experiments                            | `cmd/society/main.go`                                                  |
-| Legacy engine and viewer                        | `pkg/garden/`, `public/index.html`                                     |
+| Area                                            | Files                                                                                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Physical world, phases, memory and observations | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go`                                  |
+| Policies, votes, delegations and federations    | `pkg/society/politics*.go`                                                                       |
+| Configurable defaults                           | `pkg/society/settings.go`                                                                        |
+| Local runs, history, imports and Go workers     | `api/society.go`, `api/society_strategy.go`                                                      |
+| Observer interface                              | `public/society.html`, `public/game/` (map, playback, panels, council, rulebook, results, setup) |
+| Headless experiments                            | `cmd/society/main.go`                                                                            |
+| Legacy engine and viewer                        | `pkg/garden/`, `public/index.html`                                                               |
 
 ## Hosting boundary
 

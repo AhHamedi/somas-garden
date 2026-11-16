@@ -37,6 +37,7 @@ func TestDailyMealAndThinking(t *testing.T) {
 }
 func TestEatingIsNeverAutomatic(t *testing.T) {
 	w := smallWorld(t, 1)
+	w.Settings.RespawnDelay = 1
 	a := resident(w, 0)
 	a.Food = 12
 	w.eating(map[int]Decision{})
@@ -45,6 +46,17 @@ func TestEatingIsNeverAutomatic(t *testing.T) {
 	}
 	if len(w.Events) < 2 {
 		t.Fatal("missing death receipt")
+	}
+}
+func TestDefaultDeathLastsUntilTheMeteor(t *testing.T) {
+	w := smallWorld(t, 1)
+	if w.Settings.RespawnDelay != -1 {
+		t.Fatalf("default respawn delay is %d, want -1 (return after the meteor)", w.Settings.RespawnDelay)
+	}
+	a := resident(w, 0)
+	w.eating(map[int]Decision{})
+	if a.Alive || a.RespawnAt != 0 {
+		t.Fatalf("a death should not schedule an ordinary respawn: %+v", a)
 	}
 }
 func TestStorageAndFieldLimits(t *testing.T) {

@@ -1,4 +1,6 @@
-# Hosted development and releases
+# Legacy hosted development and releases
+
+These instructions apply only to the original one-field prototype, available locally at `/legacy`. They do not deploy the current Amoeboids society MVP. Start with the [repository README](../README.md) to run the current game; its persistent Go service and disk-backed replays require a different hosting setup.
 
 The hosted app stores agents and runs in Supabase and executes uploaded Go in Vercel Sandbox. The normal `npm run dev` command uses local files. Use a separate Supabase project or the preview environment for hosted development.
 

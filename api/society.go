@@ -23,15 +23,16 @@ import (
 )
 
 type societyRun struct {
-	mu      sync.Mutex
-	ID      string         `json:"id"`
-	World   *society.World `json:"-"`
-	Status  string         `json:"status"`
-	Error   string         `json:"error,omitempty"`
-	Frames  []frameIndex   `json:"frames"`
-	Created string         `json:"created"`
-	stop    bool
-	workers []*strategyWorker
+	mu        sync.Mutex
+	ID        string         `json:"id"`
+	World     *society.World `json:"-"`
+	Status    string         `json:"status"`
+	Error     string         `json:"error,omitempty"`
+	Frames    []frameIndex   `json:"frames"`
+	Created   string         `json:"created"`
+	stop      bool
+	workers   []*strategyWorker
+	studyData *studyCache
 }
 type frameIndex struct {
 	Index  int           `json:"index"`
@@ -287,6 +288,24 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 			months = f.Months
 		}
 		jsonReply(w, 200, map[string]any{"frames": s.Frames, "months": months})
+		return
+	}
+	if len(parts) == 3 && parts[2] == "study" && r.Method == "GET" {
+		upto := len(s.Frames) - 1
+		if q := r.URL.Query().Get("frame"); q != "" {
+			n, e := strconv.Atoi(q)
+			if e != nil || n < 0 {
+				apiError(w, 400, errors.New("frame must be a phase index"))
+				return
+			}
+			upto = n
+		}
+		out, e := s.study(upto)
+		if e != nil {
+			apiError(w, 500, e)
+			return
+		}
+		jsonReply(w, 200, out)
 		return
 	}
 	if len(parts) == 3 && parts[2] == "events" && r.Method == "GET" {

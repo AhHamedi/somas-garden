@@ -40,48 +40,48 @@ The discussion overrides the PDFs. The corrected decision is that **eating is ch
 
 ### 1.2 Principal proposed details to review
 
-The major additions are daily body accounting; taxation of reserved food with explicit offer cancellation; a 12-carrot personal capacity; government capacity of 10 carrots per plot's baseline resident equivalent; six plots by default; three weather states; a complete missed day before respawn; no upkeep for an idle federation; explicit officer orders executed the following morning; atomic single-subject proposals; and deterministic handling of transfers, capacity and incompatible decisions. Sections below specify these rather than leaving implementation to invent behaviour.
+The major additions are daily body accounting; taxation of reserved food with explicit offer cancellation; a 12-carrot personal capacity; government capacity of 10 carrots per plot's baseline resident equivalent; six plots by default; three weather states; death lasting until the meteor by default; no upkeep for an idle federation; explicit officer orders executed the following morning; atomic single-subject proposals; and deterministic handling of transfers, capacity and incompatible decisions. Sections below specify these rather than leaving implementation to invent behaviour.
 
 ## 2 World and configurable defaults
 
 All physical settings and costs are chosen before a run and remain fixed through that run. Government rules can change only the political settings expressly exposed in the policy catalogue. Settings, seed and rules version are saved with results.
 
-| Setting                                   | Draft default                                          | Status                                         |
-| ----------------------------------------- | ------------------------------------------------------ | ---------------------------------------------- |
-| Team behaviours                           | 6                                                      | Agreed                                         |
-| Copies per behaviour                      | 50                                                     | Agreed                                         |
-| Plot count                                | 6, independently configurable                          | Proposed default; configurability agreed       |
-| Days per month                            | 30                                                     | Agreed                                         |
-| Months per run                            | 12                                                     | Proposed exact default from the requested year |
-| Total daily cycles                        | 360                                                    | Derived                                        |
-| Plot size weights                         | 0.8, 1.0, 1.2, repeated and normalised                 | Retained                                       |
-| Total field capacity                      | 10 carrots per starting individual                     | Retained                                       |
-| Starting field stock                      | Floor of 80% of each field capacity                    | Retained                                       |
-| Growth coefficient g                      | 4 carrots per productive resident per day              | Retained                                       |
-| Capacity per productive resident c        | 10 carrots                                             | Retained                                       |
-| Daily food need                           | 2 carrots                                              | Retained                                       |
-| Body capacity and starting body           | 2                                                      | Retained                                       |
-| Mind capacity / starting mind             | 12 / 6                                                 | Retained                                       |
-| Personal storage capacity                 | 12 carrots                                             | Proposed                                       |
-| Harvest request limit                     | 4 carrots per individual per day                       | Retained quantity; adapted to daily phases     |
-| Government storage capacity               | Floor of field capacity / c, multiplied by 10 carrots  | Proposed                                       |
-| Starting personal / government storage    | 0 / 0                                                  | Agreed empty reset; proposed initial stores    |
-| Carrot satisfaction                       | log2(1 + daily extra carrots)                          | Agreed                                         |
-| Thinking satisfaction                     | 1 per mind spent                                       | Retained and agreed linearity                  |
-| Ordinary respawn delay                    | 1 complete missed cycle; configurable, including never | Proposed daily translation                     |
-| Initial / maximum influence               | 1 / 5                                                  | Retained                                       |
-| Ballot duration                           | Current day's voting phase                             | Proposed daily translation                     |
-| Government / federation founding cost     | 10 / 50 mind                                           | Retained                                       |
-| Federation joining cost                   | 10 mind                                                | Retained                                       |
-| Federation formation approval window      | 5 consecutive cycles, including first approval day     | Retained duration; proposed boundary           |
-| Permit lifetime                           | 1 movement phase                                       | Proposed daily translation                     |
-| Maximum exit notice / last-place sanction | 1 cycle / 1 harvest phase                              | Proposed translation of 100 ticks              |
-| Sanction application window               | Next cycle's officer phase after authorisation         | Proposed daily translation                     |
-| Federation exit notice                    | 1 full cycle                                           | Retained duration                              |
-| Federation dispute window                 | 5 cycles                                               | Retained                                       |
-| Immigration sanction lookback             | 10 cycles                                              | Retained                                       |
-| Agent decision budget                     | 100 ms compute per callback; configurable              | Retained target, adapted to phased callbacks   |
-| Private memory limit                      | 1 MiB serialised per individual; configurable          | Proposed                                       |
+| Setting                                   | Draft default                                                                        | Status                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Team behaviours                           | 6                                                                                    | Agreed                                         |
+| Copies per behaviour                      | 50                                                                                   | Agreed                                         |
+| Plot count                                | 6, independently configurable                                                        | Proposed default; configurability agreed       |
+| Days per month                            | 30                                                                                   | Agreed                                         |
+| Months per run                            | 12                                                                                   | Proposed exact default from the requested year |
+| Total daily cycles                        | 360                                                                                  | Derived                                        |
+| Plot size weights                         | 0.8, 1.0, 1.2, repeated and normalised                                               | Retained                                       |
+| Total field capacity                      | 10 carrots per starting individual                                                   | Retained                                       |
+| Starting field stock                      | Floor of 80% of each field capacity                                                  | Retained                                       |
+| Growth coefficient g                      | 4 carrots per productive resident per day                                            | Retained                                       |
+| Capacity per productive resident c        | 10 carrots                                                                           | Retained                                       |
+| Daily food need                           | 2 carrots                                                                            | Retained                                       |
+| Body capacity and starting body           | 2                                                                                    | Retained                                       |
+| Mind capacity / starting mind             | 12 / 6                                                                               | Retained                                       |
+| Personal storage capacity                 | 12 carrots                                                                           | Proposed                                       |
+| Harvest request limit                     | 4 carrots per individual per day                                                     | Retained quantity; adapted to daily phases     |
+| Government storage capacity               | Floor of field capacity / c, multiplied by 10 carrots                                | Proposed                                       |
+| Starting personal / government storage    | 0 / 0                                                                                | Agreed empty reset; proposed initial stores    |
+| Carrot satisfaction                       | log2(1 + daily extra carrots)                                                        | Agreed                                         |
+| Thinking satisfaction                     | 1 per mind spent                                                                     | Retained and agreed linearity                  |
+| Ordinary respawn delay                    | Never within a month: the dead return at the meteor; configurable to N missed cycles | Changed by the owner on 15 November 2026       |
+| Initial / maximum influence               | 1 / 5                                                                                | Retained                                       |
+| Ballot duration                           | Current day's voting phase                                                           | Proposed daily translation                     |
+| Government / federation founding cost     | 10 / 50 mind                                                                         | Retained                                       |
+| Federation joining cost                   | 10 mind                                                                              | Retained                                       |
+| Federation formation approval window      | 5 consecutive cycles, including first approval day                                   | Retained duration; proposed boundary           |
+| Permit lifetime                           | 1 movement phase                                                                     | Proposed daily translation                     |
+| Maximum exit notice / last-place sanction | 1 cycle / 1 harvest phase                                                            | Proposed translation of 100 ticks              |
+| Sanction application window               | Next cycle's officer phase after authorisation                                       | Proposed daily translation                     |
+| Federation exit notice                    | 1 full cycle                                                                         | Retained duration                              |
+| Federation dispute window                 | 5 cycles                                                                             | Retained                                       |
+| Immigration sanction lookback             | 10 cycles                                                                            | Retained                                       |
+| Agent decision budget                     | 100 ms compute per callback; configurable                                            | Retained target, adapted to phased callbacks   |
+| Private memory limit                      | 1 MiB serialised per individual; configurable                                        | Proposed                                       |
 
 With 300 individuals and six plots, field capacities are 400, 500, 600, 400, 500 and 600. Their initial stocks are 320, 400, 480, 320, 400 and 480. Government capacities are respectively 400, 500, 600, 400, 500 and 600. Capacity is based on the initial setup, not the changing resident count. Population changes never resize a container automatically.
 

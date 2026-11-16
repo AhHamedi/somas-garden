@@ -8,7 +8,7 @@ import (
 )
 
 func DefaultSettings() Settings {
-	return Settings{Plots: 6, Copies: 50, Days: 30, Months: 12, CapacityPerAgent: 10, StartingStock: .8, Growth: 4, ProductiveCapacity: 10, DailyFood: 2, BodyCapacity: 2, MindCapacity: 12, StartingMind: 6, PersonalCapacity: 12, HarvestLimit: 4, ReservePerResident: 10, WeatherRates: []float64{12, 8, 4}, WeatherPersistence: .6, OutsideMind: 4, RespawnDelay: 1, StartingInfluence: 1, MaxInfluence: 5, ProposalCost: 1, VoteCost: .1, OfficerCost: .2, ReadCost: .2, OfferCost: .1, GovernmentCost: 10, FederationCost: 50, JoiningCost: 10, EnforcementCost: .04, RecordsCost: .04, FederationRunningCost: .5, FoundingWindow: 5, DisputeWindow: 5, ImmigrationLookback: 10, DecisionMS: 100, MemoryBytes: 1 << 20}
+	return Settings{Plots: 6, Copies: 50, Days: 30, Months: 12, CapacityPerAgent: 10, StartingStock: .8, Growth: 4, ProductiveCapacity: 10, DailyFood: 2, BodyCapacity: 2, MindCapacity: 12, StartingMind: 6, PersonalCapacity: 12, HarvestLimit: 4, ReservePerResident: 10, WeatherRates: []float64{12, 8, 4}, WeatherPersistence: .6, OutsideMind: 4, RespawnDelay: -1, StartingInfluence: 1, MaxInfluence: 5, ProposalCost: 1, VoteCost: .1, OfficerCost: .2, ReadCost: .2, OfferCost: .1, GovernmentCost: 10, FederationCost: 50, JoiningCost: 10, EnforcementCost: .04, RecordsCost: .04, FederationRunningCost: .5, FoundingWindow: 5, DisputeWindow: 5, ImmigrationLookback: 10, DecisionMS: 100, MemoryBytes: 1 << 20}
 }
 func (s *Settings) UnmarshalJSON(b []byte) error {
 	type raw Settings
