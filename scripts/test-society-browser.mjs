@@ -395,6 +395,8 @@ try {
   });
   calm.on("pageerror", (e) => failures.push(e.message));
   await calm.goto(origin);
+  await calm.waitForSelector("#setup-dialog[open]");
+  await calm.click('#setup-dialog button[type="submit"]');
   await calm.waitForFunction(() => window.amoeboids?.ix);
   await calm.keyboard.press("ArrowRight");
   await calm.waitForFunction(
