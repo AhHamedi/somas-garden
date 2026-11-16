@@ -32,6 +32,7 @@ const directory = await mkdtemp(join(tmpdir(), "somas-browser-"));
 const stateFile = join(directory, "dev.json");
 const env = {
   ...process.env,
+  DEV_LEGACY_HOME: "1",
   PORT: "0",
   ENGINE_PORT: "0",
   LOCAL_DATA_DIR: join(directory, "data"),

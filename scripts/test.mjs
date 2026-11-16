@@ -2,6 +2,7 @@ import { readdir, copyFile, mkdtemp, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { goBinary } from "./go.mjs";
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -23,7 +24,7 @@ if (group !== "go") {
   await run(process.execPath, ["--test", ...files.map((file) => join("test", file))]);
 }
 if (group !== "js") {
-  const configuredGo = process.env.GO_BINARY || "go";
+  const configuredGo = goBinary();
   const go = /[\\/]/.test(configuredGo) ? resolve(configuredGo) : configuredGo;
   await run(go, ["test", ...(process.argv.includes("--race") ? ["-race"] : []), "./..."]);
   // The downloaded fragment is built with the same supplied types as an upload.

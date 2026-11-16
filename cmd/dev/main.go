@@ -20,6 +20,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/engine", handler.Handler)
+	mux.HandleFunc("/api/society/", handler.SocietyHandler)
 	fmt.Printf("SOMAS_ENGINE_URL=http://%s\n", listener.Addr())
 	log.Fatal(http.Serve(listener, mux))
 }
