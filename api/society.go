@@ -1,7 +1,7 @@
 package handler
 
-// The society API is deliberately stateful. It runs in the local Go service,
-// with compressed replay frames on disk, rather than a short-lived function.
+// The society API runs in a Go service with compressed replay frames and private
+// checkpoints on disk. A durable volume lets a restarted service resume a world.
 import (
 	"compress/gzip"
 	"crypto/rand"
@@ -92,6 +92,56 @@ func decodeSociety(w http.ResponseWriter, r *http.Request, v any) error {
 	return nil
 }
 func runDir(id string) string { return filepath.Join(societyData(), "runs", id) }
+func checkpointPath(id string, index int) string {
+	return filepath.Join(runDir(id), fmt.Sprintf("state-%05d.json.gz", index))
+}
+
+func saveCheckpoint(id string, index int, world *society.World) error {
+	b, e := world.Checkpoint()
+	if e != nil {
+		return e
+	}
+	name := checkpointPath(id, index)
+	file, e := os.OpenFile(name+".tmp", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if e != nil {
+		return e
+	}
+	z, _ := gzip.NewWriterLevel(file, gzip.BestSpeed)
+	_, e = z.Write(b)
+	if e2 := z.Close(); e == nil {
+		e = e2
+	}
+	if e == nil {
+		e = file.Sync()
+	}
+	if e2 := file.Close(); e == nil {
+		e = e2
+	}
+	if e != nil {
+		_ = os.Remove(name + ".tmp")
+		return e
+	}
+	return os.Rename(name+".tmp", name)
+}
+
+func readCheckpoint(id string, index int) (*society.World, error) {
+	f, e := os.Open(checkpointPath(id, index))
+	if e != nil {
+		return nil, e
+	}
+	defer f.Close()
+	z, e := gzip.NewReader(f)
+	if e != nil {
+		return nil, e
+	}
+	defer z.Close()
+	b, e := io.ReadAll(z)
+	if e != nil {
+		return nil, e
+	}
+	return society.RestoreCheckpoint(b)
+}
+
 func (s *societyRun) saveFrame() error {
 	snap := s.World.Snapshot()
 	index := len(s.Frames)
@@ -119,8 +169,20 @@ func (s *societyRun) saveFrame() error {
 	if e = os.Rename(name+".tmp", name); e != nil {
 		return e
 	}
+	// The index is the commit marker. A crash before its replacement leaves the
+	// previous checkpoint authoritative, even if a newer frame was already written.
+	if e = saveCheckpoint(s.ID, index, s.World); e != nil {
+		return fmt.Errorf("could not save simulation checkpoint: %w", e)
+	}
 	s.Frames = append(s.Frames, frameIndex{index, snap.Month, snap.Day, snap.Phase, snap.Meteor, snap.Stats})
-	return s.saveIndex()
+	if e = s.saveIndex(); e != nil {
+		s.Frames = s.Frames[:index]
+		return e
+	}
+	if index > 0 {
+		_ = os.Remove(checkpointPath(s.ID, index-1))
+	}
+	return nil
 }
 func (s *societyRun) saveIndex() error {
 	b, e := json.Marshal(s)
@@ -138,10 +200,11 @@ func loadRun(id string) (*societyRun, error) {
 		return nil, errors.New("unknown simulation")
 	}
 	societyRuns.Lock()
-	defer societyRuns.Unlock()
 	if s := societyRuns.runs[id]; s != nil {
+		societyRuns.Unlock()
 		return s, nil
 	}
+	societyRuns.Unlock()
 	b, e := os.ReadFile(filepath.Join(runDir(id), "index.json"))
 	if e != nil {
 		return nil, errors.New("simulation not found")
@@ -150,8 +213,34 @@ func loadRun(id string) (*societyRun, error) {
 	if e = json.Unmarshal(b, s); e != nil {
 		return nil, e
 	}
-	if s.Status == "running" || s.Status == "paused" {
-		s.Status = "archived"
+	if len(s.Frames) > 0 {
+		world, checkpointError := readCheckpoint(id, len(s.Frames)-1)
+		switch {
+		case checkpointError == nil:
+			s.World = world
+			if s.Status == "running" {
+				s.Status = "paused"
+			}
+			if !world.Done && s.Status != "error" {
+				if e = s.attachStrategies(); e != nil {
+					s.closeWorkers()
+					return nil, fmt.Errorf("could not restore simulation strategies: %w", e)
+				}
+			}
+		case os.IsNotExist(checkpointError):
+			// Replay-only saves made before checkpoints remain readable archives.
+			if s.Status == "running" || s.Status == "paused" {
+				s.Status = "archived"
+			}
+		default:
+			return nil, fmt.Errorf("could not restore simulation checkpoint: %w", checkpointError)
+		}
+	}
+	societyRuns.Lock()
+	defer societyRuns.Unlock()
+	if existing := societyRuns.runs[id]; existing != nil {
+		s.closeWorkers()
+		return existing, nil
 	}
 	societyRuns.runs[id] = s
 	return s, nil
@@ -181,13 +270,27 @@ func (s *societyRun) response() any {
 }
 func (s *societyRun) advance() error {
 	if e := s.World.Step(); e != nil {
+		s.failAdvance(e)
 		return e
 	}
 	if s.World.Done {
 		s.Status = "complete"
 		s.closeWorkers()
 	}
-	return s.saveFrame()
+	if e := s.saveFrame(); e != nil {
+		s.failAdvance(e)
+		return e
+	}
+	return nil
+}
+
+func (s *societyRun) failAdvance(err error) {
+	// Step mutates the world before persistence. An unsuccessful commit must not
+	// expose that future state under the previous frame index or advance it again.
+	// Reads fall back to the last committed replay; restart may restore its checkpoint.
+	s.Status, s.Error, s.stop = "error", err.Error(), true
+	s.closeWorkers()
+	s.World = nil
 }
 func (s *societyRun) closeWorkers() {
 	for _, w := range s.workers {
@@ -392,6 +495,10 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != "POST" || len(parts) != 3 {
 		apiError(w, 405, errors.New("unsupported request"))
+		return
+	}
+	if s.Status == "error" {
+		apiError(w, 409, errors.New("this simulation stopped after an error; its saved replay is read-only"))
 		return
 	}
 	if parts[2] == "pause" {

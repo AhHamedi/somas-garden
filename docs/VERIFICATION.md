@@ -4,6 +4,8 @@ The implementation includes the physical world, local governments, federations, 
 
 ## Release checks — 16 November 2026
 
+- Hosted release: all 78 JavaScript tests and Go packages pass, including signed workspace cookies, cross-origin rejection, request bounds, streaming exports and atomic session allocation. Checkpoint tests compare uninterrupted execution with restart after every phase across meteors, including private memories, ballots and records. Persistence-failure tests ensure no uncommitted phase can be returned or skipped in later history.
+- An actual named Vercel Sandbox with a persistent Drive accepted the Go example, ran through a meteor, stopped and resumed with identical world, private observation and study data, then advanced into month two. Unauthenticated engine requests returned 401.
 - `npm run check`: formatting, all 65 JavaScript tests, all Go packages and the downloadable legacy Go example passed.
 - `go vet ./...` and `npm run test:go -- --race`: passed.
 - Results regression tests cover exact-frame data after rewind and forward playback, late responses when changing runs, shared Rulebook updates, and consistent periods for completed-month and month-to-date comparisons.
@@ -57,8 +59,8 @@ For a new measurement, start the application, choose seed 42 and the desired res
 
 ## Scope and practical limits
 
-- The deliverable runs locally from a repository checkout. The legacy hosting configuration does not deploy this persistent service.
-- Saved replays survive restarts. An interrupted live simulation becomes a read-only archive after a service restart.
+- The game runs locally or through the hosted proxy and isolated persistent workspaces described in [hosting](../hosting/README.md).
+- New simulations recover from a private checkpoint after restart. Older replay-only saves remain read-only archives.
 - Imported Go is intended for team-authored local experiments. Its restricted imports, explicit memory and timeouts are not a production hostile-code security boundary.
 - The included behaviours are programmed examples. Memory persists as specified; improved learning is an experimental question for the behaviours the group writes.
 - Review covered the documented flows and tested rules. It does not establish every policy combination, every browser or full accessibility conformance.

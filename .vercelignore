@@ -3,7 +3,8 @@ node_modules
 .local
 .env*
 .git
-scripts
+scripts/*
+!scripts/build-hosted-static.mjs
 supabase
 README.md
 test
@@ -11,3 +12,5 @@ cmd
 
 .github
 hosting
+api/society*.go
+hosted-public

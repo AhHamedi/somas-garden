@@ -300,6 +300,8 @@ type World struct {
 	Deciders                map[int]Decider
 	rng                     *rand.Rand
 	weather                 []*rand.Rand
+	rngSource               *countedSource
+	weatherSources          []*countedSource
 	phaseIndex              int
 	advance                 bool
 	eventStart              int

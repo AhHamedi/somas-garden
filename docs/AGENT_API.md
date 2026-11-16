@@ -150,6 +150,6 @@ A sanction requires authentic evidence and an enabled sanction type. A voted aut
 
 ## Run and evaluate
 
-The interface uses `/api/society/runs` to create live simulations and exposes phase stepping, background execution, pause, compressed saved frames and JSON export. Loading a saved replay never reruns its decisions. After restarting the server, archived unfinished runs are read-only; create a new run with the same seed and configuration to reproduce it.
+The interface uses `/api/society/runs` to create live simulations and exposes phase stepping, background execution, pause, compressed saved frames and JSON export. Loading a saved replay never reruns its decisions. New runs store private checkpoints and resume at the last committed phase after a server restart, preserving individual memory, political state and exact random streams. Older replay-only saves remain read-only archives. Hosted worlds belong to the browser workspace identified by its secure cookie; exported observer frames never include checkpoint data.
 
 Test a strategy on several seeds and compare its memory-preserving run with an appropriate memory-reset baseline before claiming learning. Institutions, generous donations or a high score may be programmed choices rather than learned outcomes.

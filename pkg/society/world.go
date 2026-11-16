@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 )
 
@@ -48,8 +47,9 @@ func (w *World) resetMonth() {
 	w.eventStart = 0
 	w.recordCursors = map[string]*recordCursor{}
 	w.recordPages = map[int][]RecordPage{}
-	w.rng = rand.New(rand.NewSource(w.Seed + int64(w.Month)*0x27d4eb2d))
+	w.rng, w.rngSource = newCountedRandom(w.Seed + int64(w.Month)*0x27d4eb2d)
 	w.weather = nil
+	w.weatherSources = nil
 	w.Plots = nil
 	w.Federations = []*Federation{}
 	w.Proposals = []*Proposal{}
@@ -82,9 +82,10 @@ func (w *World) resetMonth() {
 		caps[idx[i%len(idx)]]++
 	}
 	for i, k := range caps {
-		r := rand.New(rand.NewSource(w.Seed ^ int64((w.Month*104729)+(i+1)*7919)))
+		r, source := newCountedRandom(w.Seed ^ int64((w.Month*104729)+(i+1)*7919))
 		weather := r.Intn(3)
 		w.weather = append(w.weather, r)
+		w.weatherSources = append(w.weatherSources, source)
 		w.Plots = append(w.Plots, &Plot{ID: i, Name: fmt.Sprintf("Plot %c", 'A'+i), Capacity: k, Stock: int(float64(k) * w.Settings.StartingStock), ReserveCapacity: int(float64(k)/w.Settings.ProductiveCapacity) * w.Settings.ReservePerResident, Weather: weather, Regeneration: w.Settings.WeatherRates[weather], Rules: map[string]Rule{}, Officers: map[int]Office{}, Federation: -1, Residents: []int{}})
 	}
 	for _, a := range w.Agents {

@@ -1,7 +1,12 @@
 {
   "framework": null,
-  "outputDirectory": "public",
+  "outputDirectory": "hosted-public",
+  "buildCommand": "node scripts/build-hosted-static.mjs",
   "functions": {
+    "api/society-hosted.mjs": {
+      "maxDuration": 180,
+      "includeFiles": "runner/society-*"
+    },
     "api/controller.mjs": {
       "maxDuration": 180,
       "includeFiles": "runner/**"
@@ -11,6 +16,14 @@
     }
   },
   "rewrites": [
+    {
+      "source": "/api/society/:path*",
+      "destination": "/api/society-hosted?path=:path*"
+    },
+    {
+      "source": "/legacy",
+      "destination": "/legacy.html"
+    },
     {
       "source": "/api/capabilities",
       "destination": "/api/controller?route=capabilities"
