@@ -693,31 +693,79 @@ export class Setup {
   // ---------------------------------------------------------------- saved worlds
   async openSaved() {
     const dlg = $("saved-dialog");
-    dlg.innerHTML = `<div class="dlg-head"><h2 id="saved-title">Saved worlds</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div><div class="dlg-body" id="saved-body"><p class="note">Loading…</p></div>`;
+    dlg.innerHTML = `<div class="dlg-head"><h2 id="saved-title">Saved worlds</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div><div class="dlg-body"><p class="note">Private to this browser. Opening a world keeps its saved progress.</p><label class="field saved-search"><span>Find a world</span><input type="search" id="saved-search" placeholder="Date, month, day or status"/></label><div id="saved-body" aria-live="polite"><p class="note">Loading…</p></div></div><div class="dlg-foot"><p id="saved-count"></p><button class="btn primary" id="saved-new">New world</button></div>`;
     dlg.querySelector("[data-close]").onclick = () => dlg.close();
+    $("saved-new").onclick = () => {
+      dlg.close();
+      this.open();
+    };
     dlg.showModal();
     try {
       const data = await this.app.api("/runs");
-      const runs = (data.runs || []).sort((a, b) =>
-        String(b.created).localeCompare(String(a.created)),
+      const runs = (data.runs || []).sort(
+        (a, b) =>
+          Number(b.id === this.app.pb.id) - Number(a.id === this.app.pb.id) ||
+          String(b.created).localeCompare(String(a.created)),
       );
-      $("saved-body").innerHTML = runs.length
-        ? runs
-            .map(
-              (r) =>
-                `<button class="saved-row" data-run="${esc(r.id)}"><span><strong>${r.id === this.app.pb.id ? "This world" : new Date(r.created || Date.now()).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</strong><span>${fmt(Math.max(0, r.frames - 1))} phases recorded, ${esc(r.status === "archived" ? "read only" : r.status)}</span></span>${icon("chevron")}</button>`,
+      $("saved-count").textContent = plural(runs.length, "saved world");
+      const render = () => {
+        const query = $("saved-search").value.trim().toLowerCase();
+        const rows = runs
+          .map((r) => {
+            const date = r.created
+              ? new Date(r.created).toLocaleString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "Earlier world";
+            const current = r.id === this.app.pb.id;
+            const latest = r.latest;
+            const phase =
+              PHASES.find((p) => p.id === latest?.phase)?.name ||
+              (latest?.phase === "ready" ? "Ready" : "");
+            const progress = latest
+              ? `Month ${latest.month} · Day ${latest.day}${phase ? " · " + phase : ""}`
+              : `${fmt(Math.max(0, r.frames - 1))} phases recorded`;
+            const status =
+              {
+                archived: "Read-only archive",
+                complete: "Completed",
+                running: "Running",
+                paused: "Paused",
+                ready: "Ready",
+                error: "Stopped",
+              }[r.status] || r.status;
+            if (
+              !`${date} ${progress} ${status} ${current ? "current" : ""}`
+                .toLowerCase()
+                .includes(query)
             )
-            .join("")
-        : `<p class="note">No saved worlds yet.</p>`;
-      $("saved-body")
-        .querySelectorAll("[data-run]")
-        .forEach(
-          (b) =>
-            (b.onclick = async () => {
-              dlg.close();
-              await this.app.actions.openRun(b.dataset.run);
-            }),
-        );
+              return "";
+            return `<button class="saved-row ${current ? "saved-current" : ""}" data-run="${esc(r.id)}"><span><strong>${current ? "Current world" : esc(date)}</strong><span class="saved-progress">${esc(progress)}</span><span>${esc(status)}${current ? " · " + esc(date) : ""}</span></span><span class="saved-action">${r.status === "archived" || r.status === "complete" ? "Review" : "Open"} ${icon("chevron")}</span></button>`;
+          })
+          .filter(Boolean);
+        $("saved-body").innerHTML =
+          rows.join("") ||
+          `<p class="note">${runs.length ? "No worlds match your search." : "No saved worlds yet. Create one to begin."}</p>`;
+        $("saved-body")
+          .querySelectorAll("[data-run]")
+          .forEach((b) => {
+            b.onclick = async () => {
+              b.disabled = true;
+              try {
+                await this.app.actions.openRun(b.dataset.run);
+                dlg.close();
+              } catch (error) {
+                b.disabled = false;
+                toast(error.message, true);
+              }
+            };
+          });
+      };
+      $("saved-search").oninput = render;
+      render();
     } catch (error) {
       $("saved-body").innerHTML = `<p class="note fail">${esc(error.message)}</p>`;
     }

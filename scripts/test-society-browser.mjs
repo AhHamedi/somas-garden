@@ -323,6 +323,14 @@ try {
   await page.click('[data-action="saved"]');
   await page.waitForSelector(`#saved-dialog[open] [data-run="${initialRunId}"]`);
   assert.equal(
+    await page.locator("#saved-dialog [data-run]").first().getAttribute("data-run"),
+    editedRunId,
+  );
+  assert.match(await page.locator("#saved-dialog .saved-current").innerText(), /Month 2/);
+  await page.fill("#saved-search", "no matching world");
+  assert.equal(await page.locator("#saved-dialog [data-run]").count(), 0);
+  await page.fill("#saved-search", "");
+  assert.equal(
     await page.locator(`#saved-dialog [data-run="${editedRunId}"]`).count(),
     1,
   );

@@ -328,7 +328,12 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			s.mu.Lock()
-			out = append(out, map[string]any{"id": s.ID, "created": s.Created, "status": s.Status, "frames": len(s.Frames)})
+			var latest *frameIndex
+			if len(s.Frames) > 0 {
+				frame := s.Frames[len(s.Frames)-1]
+				latest = &frame
+			}
+			out = append(out, map[string]any{"id": s.ID, "created": s.Created, "status": s.Status, "frames": len(s.Frames), "latest": latest})
 			s.mu.Unlock()
 		}
 		jsonReply(w, 200, map[string]any{"runs": out})

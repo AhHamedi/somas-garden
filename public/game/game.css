@@ -4960,3 +4960,24 @@ body.resizing .inspector {
     display: none !important;
   }
 }
+
+.saved-search {
+  margin: 16px 0;
+}
+.saved-row.saved-current {
+  border-color: var(--focus);
+}
+.saved-row strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.saved-row .saved-progress {
+  display: block;
+  margin: 4px 0;
+  color: var(--ink-2);
+}
+.saved-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
