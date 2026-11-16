@@ -21,7 +21,7 @@ async function listen(t, handler) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function fixture(t, { claim, upstream, scope = "production" } = {}) {
+async function fixture(t, { claim, upstream, sandboxError, scope = "production" } = {}) {
   const requests = [],
     identities = [],
     allocations = [];
@@ -44,12 +44,14 @@ async function fixture(t, { claim, upstream, scope = "production" } = {}) {
       VERCEL_ENV: scope,
       VERCEL_URL: "verified-deployment.vercel.app",
     },
+    getConfig: async () => ({ settings: { days: 20 } }),
     async claim(value) {
       allocations.push(value);
       return claim ? claim(value) : { allowed: true };
     },
     async getSandbox(identity) {
       identities.push(identity);
+      if (sandboxError) throw sandboxError;
       return { origin: target, token: identity.token };
     },
   });
@@ -63,7 +65,7 @@ async function fixture(t, { claim, upstream, scope = "production" } = {}) {
 
 test("hosted sessions persist with signed cookies and isolate browsers and environments", async (t) => {
   const f = await fixture(t);
-  const first = await fetch(`${f.origin}/api/society/config`);
+  const first = await fetch(`${f.origin}/api/society/runs`);
   assert.equal(first.status, 200);
   await first.json();
   const cookie = cookieValue(first);
@@ -71,7 +73,7 @@ test("hosted sessions persist with signed cookies and isolate browsers and envir
   assert.match(cookie, new RegExp(`^${SESSION_COOKIE}=[a-f0-9]{32}\\.[a-f0-9]{64}$`));
 
   await (await fetch(`${f.origin}/api/society/runs`, { headers: { cookie } })).json();
-  await (await fetch(`${f.origin}/api/society/config`)).json();
+  await (await fetch(`${f.origin}/api/society/runs`)).json();
   assert.equal(f.identities[0].id, f.identities[1].id);
   assert.equal(f.identities[0].token, f.identities[1].token);
   assert.notEqual(f.identities[0].id, f.identities[2].id);
@@ -156,7 +158,7 @@ test("quota denial returns retry guidance without booting an engine", async (t) 
   const f = await fixture(t, {
     claim: () => ({ allowed: false, retryAfter: 60, message: "Try again later." }),
   });
-  const response = await fetch(`${f.origin}/api/society/config`);
+  const response = await fetch(`${f.origin}/api/society/runs`);
   assert.equal(response.status, 429);
   assert.equal(response.headers.get("retry-after"), "60");
   assert.deepEqual(await response.json(), { error: "Try again later." });
@@ -254,4 +256,34 @@ test("an interrupted mutation is never retried and returns a generic failure", a
   assert.equal(JSON.stringify(data).includes(secret), false);
   assert.equal(f.requests.length, 1, "the server may already have applied the mutation");
   assert.equal(f.identities.length, 1);
+});
+
+test("configuration needs neither admission nor storage, and establishes the browser cookie", async (t) => {
+  const f = await fixture(t, {
+    claim: () => {
+      throw new Error("No capacity");
+    },
+  });
+  for (let i = 0; i < 3; i++) {
+    const response = await fetch(`${f.origin}/api/society/config`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { settings: { days: 20 } });
+    assert.ok(cookieValue(response));
+  }
+  assert.equal(f.allocations.length, 0);
+  assert.equal(f.identities.length, 0);
+});
+
+test("storage exhaustion is not described as a server waking up", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const f = await fixture(t, {
+    sandboxError: new Error(
+      "Status code 402 is not ok: Hobby teams can use up to 15 GiB of Drive storage.",
+    ),
+  });
+  const response = await fetch(`${f.origin}/api/society/runs`);
+  assert.equal(response.status, 503);
+  const data = await response.json();
+  assert.match(data.error, /storage capacity/);
+  assert.doesNotMatch(data.error, /waking up/);
 });

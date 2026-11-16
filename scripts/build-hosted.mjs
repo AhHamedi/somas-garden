@@ -22,3 +22,13 @@ for (const name of (await readdir("pkg/society")).sort()) {
 }
 await writeFile("runner/society-source.json", JSON.stringify({ files }));
 console.log("Hosted society engine built for Linux.");
+
+const config = spawnSync(goBinary(), ["run", "./cmd/hosted", "--config"], {
+  encoding: "utf8",
+  env: { ...process.env, CGO_ENABLED: "0" },
+});
+if (config.error) throw config.error;
+if (config.status !== 0)
+  throw new Error(config.stderr || "Could not export game configuration.");
+JSON.parse(config.stdout);
+await writeFile("runner/society-config.json", config.stdout);

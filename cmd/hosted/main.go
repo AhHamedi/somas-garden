@@ -17,6 +17,12 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--config" {
+		if err := json.NewEncoder(os.Stdout).Encode(handler.SocietyConfig()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	secret := os.Getenv("SELFORG_ENGINE_SECRET")
 	if secret == "" {
 		log.Fatal("engine authentication is required")

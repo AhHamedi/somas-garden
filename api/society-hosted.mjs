@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import {
@@ -7,6 +8,23 @@ import {
 } from "../lib/society-hosted-session.mjs";
 import { hostedSandbox } from "../lib/society-hosted-sandbox.mjs";
 import { claimSocietySession } from "../lib/society-hosted-limits.mjs";
+
+// Configuration is a build asset: health checks and empty visits must not
+// reserve a Drive or a whole server snapshot. Retry a failed asset read.
+let configAsset;
+async function hostedConfig() {
+  if (!configAsset)
+    configAsset = readFile(
+      new URL("../runner/society-config.json", import.meta.url),
+      "utf8",
+    )
+      .then(JSON.parse)
+      .catch((error) => {
+        configAsset = null;
+        throw error;
+      });
+  return configAsset;
+}
 
 const MAX_BODY = 2 * 1024 * 1024;
 async function readBody(req) {
@@ -32,6 +50,7 @@ async function readBody(req) {
 export function createSocietyProxy({
   getSandbox = hostedSandbox,
   claim = claimSocietySession,
+  getConfig = hostedConfig,
   env = process.env,
 } = {}) {
   return async function societyProxy(req, res) {
@@ -70,6 +89,13 @@ export function createSocietyProxy({
         scope,
       );
       res.setHeader("Set-Cookie", identity.cookie);
+      if (path === "config" && req.method === "GET") {
+        const config = await getConfig();
+        res.setHeader("Content-Type", "application/json");
+        res.statusCode = 200;
+        res.end(JSON.stringify(config));
+        return;
+      }
       const quota = await claim({
         sessionId: identity.id,
         clientKey: clientIdentity(req, env.SELFORG_ENGINE_SECRET),
@@ -109,6 +135,11 @@ export function createSocietyProxy({
         res.destroy();
         return;
       }
+      const capacity =
+        (error.status === 402 ||
+          error.response?.status === 402 ||
+          /Status code 402/.test(error.message || "")) &&
+        /storage|Drive|snapshot/i.test(error.message || "");
       const status = error.status >= 400 && error.status < 500 ? error.status : 503;
       res.statusCode = status;
       res.setHeader("Content-Type", "application/json");
@@ -121,9 +152,10 @@ export function createSocietyProxy({
         );
       res.end(
         JSON.stringify({
-          error:
-            status === 503
-              ? "The game server is waking up. Please try again in a moment."
+          error: capacity
+            ? "The server has reached its storage capacity. Your saved worlds are safe, but a new workspace cannot start until space is freed."
+            : status === 503
+              ? "The game server could not start. Please try again shortly."
               : error.message,
         }),
       );
