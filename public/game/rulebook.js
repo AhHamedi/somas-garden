@@ -23,6 +23,8 @@ const TEXT = {
   threshold: "How much influence a motion needs to pass.",
   proposers: "Who may table motions.",
   influence: "One resident's voting weight.",
+  influenceBasis:
+    "Voted influence, or influence earned each morning from net giving: carrots deposited, taxed or seized and mind spent on services, less treasury hand-outs.",
   office: "Officers with delegated powers, limits and terms.",
   sanctions: "Penalties for recorded breaches, and where fines go.",
   records:
@@ -54,7 +56,8 @@ const RELATED = {
   exit: ["entry", "office"],
   threshold: ["influence", "proposers"],
   proposers: ["threshold", "office"],
-  influence: ["threshold", "harvestOrder"],
+  influence: ["influenceBasis", "threshold", "harvestOrder"],
+  influenceBasis: ["influence", "proposers", "harvestOrder"],
   office: ["proposers", "recordAccess", "sanctions"],
   sanctions: ["records", "recordAccess", "decision:sanction"],
   records: ["recordAccess", "sanctions", "federation:sharedRecords"],

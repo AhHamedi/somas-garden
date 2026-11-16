@@ -150,6 +150,7 @@ const LAW_META = {
   threshold: ["power", "Passing threshold"],
   proposers: ["power", "Who may propose"],
   influence: ["power", "Influence"],
+  influenceBasis: ["power", "Influence basis"],
   office: ["power", "Officer"],
   sanctions: ["power", "Sanctions"],
   records: ["power", "Records"],
@@ -179,6 +180,7 @@ export const LOCAL_LAW_KEYS = [
   "exit",
   "threshold",
   "proposers",
+  "influenceBasis",
   "sanctions",
   "records",
 ];
@@ -195,6 +197,7 @@ export const DEFAULT_LAW = {
   exit: "Anyone may leave.",
   threshold: "Motions pass with more than half of all influence.",
   proposers: "Any resident may table a motion.",
+  influenceBasis: "Influence is voted resident by resident.",
   sanctions: "No sanctions are permitted.",
   records: "Nothing is recorded.",
   recordAccess: "Any resident may pay to read the records.",
@@ -313,6 +316,14 @@ export function lawSentence(ix, key, rule = {}, settings = ix?.s?.settings || {}
       );
     case "influence":
       return `${who || "This resident"} votes with influence ${fmt(rule.amount || 0)}.`;
+    case "influenceBasis": {
+      if (!String(rule.mode).startsWith("contribution"))
+        return "Influence is voted resident by resident.";
+      const earned = `1 per ${plural(rule.amount || 1, "point")} given in the last ${plural(rule.limit || 1, "day")}, up to ${fmt(settings.maxInfluence ?? 5)}`;
+      return rule.mode === "contributionOnly"
+        ? `Influence each morning: ${earned}. Residents who gave nothing have none.`
+        : `Influence each morning: ${fmt(settings.startingInfluence ?? 1)} plus ${earned}.`;
+    }
     case "office": {
       const powers = (rule.powers || [])
         .filter((p) => !p.startsWith("federation"))
@@ -410,6 +421,12 @@ export function lawValue(ix, key, rule = {}) {
     case "representative":
     case "influence":
       return agentName(ix, target);
+    case "influenceBasis":
+      return rule.mode === "contribution"
+        ? `Earned, 1 per ${fmt(rule.amount)}`
+        : rule.mode === "contributionOnly"
+          ? `Earned only, 1 per ${fmt(rule.amount)}`
+          : "Voted";
     case "inheritance":
       return (
         { delete: "Lost", equal: "Shared", named: "Named heir", government: "Treasury" }[
@@ -609,6 +626,10 @@ export function motionTitle(ix, p) {
         );
       if (base === "influence")
         return `Give ${agentName(ix, i.key.split(":")[1])} influence ${fmt(r.amount)}`;
+      if (base === "influenceBasis")
+        return String(r.mode).startsWith("contribution")
+          ? `Earn influence by contribution${r.mode === "contributionOnly" ? " only" : ""}: 1 per ${fmt(r.amount)} points over ${plural(r.limit || 1, "day")}`
+          : "Vote influence resident by resident";
       if (base === "holding")
         return r.mode === "collect"
           ? `Collect stores above ${fmt(r.amount)}`
@@ -1310,4 +1331,28 @@ export function migrateTeams(teams, defaults) {
       ? { ...t, policy: RETIRED[t.policy][0] }
       : t,
   );
+}
+
+/**
+ * A resident's standing where influence follows contributions: the points
+ * behind today's influence, that influence and its share of the plot's votes.
+ * Null where the plot's influence is voted.
+ */
+export function contributionStanding(ix, a) {
+  const plot = a && a.alive !== false && a.plot >= 0 ? ix.plots.get(a.plot) : null;
+  const rule = plot?.rules?.influenceBasis;
+  if (!plot || !String(rule?.mode || "").startsWith("contribution")) return null;
+  const row = (plot.contributions || []).find((c) => c.agent === a.id) || {
+    agent: a.id,
+    points: 0,
+  };
+  const residents = ix.residents.get(plot.id) || [];
+  const total = residents.reduce((t, r) => t + (r.influence || 0), 0);
+  return {
+    rule,
+    row,
+    points: row.points || 0,
+    influence: a.influence || 0,
+    share: total > 0 ? (a.influence || 0) / total : 0,
+  };
 }

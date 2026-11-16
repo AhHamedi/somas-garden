@@ -83,6 +83,7 @@ func (w *World) policyBoundary() {
 	}
 	w.completeFormations()
 	w.dissolveEmpty()
+	w.recalculateInfluence()
 	w.restorePoliticalContinuity()
 }
 
@@ -168,12 +169,15 @@ func (w *World) applyInstitution(p Pending) error {
 		if base == "representative" {
 			w.removeRepresentative(plot, target)
 		}
-		if base == "influence" {
+		if _, _, contributed := w.contributionBasis(plot); base == "influence" && !contributed {
 			if a := w.govAgent(target); a != nil && a.Alive && a.Plot == plot.ID {
 				a.Influence = w.Settings.StartingInfluence
 			}
 		}
 		delete(plot.Rules, i.Key)
+		if base == "influenceBasis" {
+			w.restoreVotedInfluence(plot)
+		}
 	case "office":
 		r := i.Rule
 		r.Mode = "appoint"
@@ -254,7 +258,11 @@ func (w *World) enactLocal(p *Plot, key string, r Rule) error {
 		if a == nil || !a.Alive || a.Plot != p.ID {
 			return errors.New("influence target left or died")
 		}
-		a.Influence = int(r.Amount)
+		// A grant passed before contributions took over is kept on the books
+		// and applies again if the plot returns to voted influence.
+		if _, _, contributed := w.contributionBasis(p); !contributed {
+			a.Influence = int(r.Amount)
+		}
 		key = fmt.Sprintf("influence:%d", target)
 	case "office":
 		a := w.govAgent(target)
@@ -319,11 +327,17 @@ func (w *World) enactLocal(p *Plot, key string, r Rule) error {
 		p.Rules = map[string]Rule{}
 	}
 	p.Rules[key] = r
+	if base == "influenceBasis" && r.Mode == "voted" {
+		w.restoreVotedInfluence(p)
+	}
 	return nil
 }
 
-func (w *World) restorePoliticalContinuity() {
-	for _, p := range w.Plots {
+func (w *World) restorePoliticalContinuity(plots ...*Plot) {
+	if len(plots) == 0 {
+		plots = w.Plots
+	}
+	for _, p := range plots {
 		if !p.Government {
 			continue
 		}
@@ -337,9 +351,17 @@ func (w *World) restorePoliticalContinuity() {
 		}
 		if len(members) > 0 && (influence == 0 || proposers == 0) {
 			delete(p.Rules, "proposers")
+			// Preserve earned weights when only proposal access failed. Suspended
+			// voted grants survive either contribution-mode safeguard.
+			_, _, contributed := w.contributionBasis(p)
 			for _, a := range members {
+				if contributed && influence > 0 {
+					break
+				}
 				a.Influence = w.Settings.StartingInfluence
-				delete(p.Rules, fmt.Sprintf("influence:%d", a.ID))
+				if !contributed {
+					delete(p.Rules, fmt.Sprintf("influence:%d", a.ID))
+				}
 			}
 			w.politicalEvent("continuity", -1, p.ID, "Proposal access and starting influence restored", 0)
 		}
@@ -550,6 +572,8 @@ func (w *World) distribute(p *Plot, target int, targets []int, amount, actor int
 	sort.Ints(ids)
 	for _, id := range ids {
 		w.politicalEvent("distribution", id, p.ID, fmt.Sprintf("Received %d carrots from government storage", given[id]), float64(given[id]))
+		n := given[id]
+		w.contribute(p.ID, id, func(c *ContributionDay) { c.Received += n })
 	}
 	return sent
 }
@@ -601,6 +625,8 @@ func (w *World) collectGovernment(when string) {
 				w.cancelTaxOffer(a, n)
 				a.Food -= n
 				p.Reserve += n
+				paid := n
+				w.contribute(p.ID, a.ID, func(c *ContributionDay) { c.Tax += paid })
 			}
 			if amount > 0 {
 				w.politicalEvent("tax", a.ID, p.ID, fmt.Sprintf("Storage tax collected %d of %d due; uncollected carrots remain owned", n, amount), float64(n))
@@ -613,6 +639,8 @@ func (w *World) collectGovernment(when string) {
 					a.Food -= n
 					p.Reserve += n
 					w.politicalEvent("holding", a.ID, p.ID, "Excess holdings collected", float64(n))
+					seized := n
+					w.contribute(p.ID, a.ID, func(c *ContributionDay) { c.Holding += seized })
 				}
 				if a.Food > int(limit.Amount) {
 					w.politicalEvent("holding_unenforced", a.ID, p.ID, "Government storage full; remaining excess stays with its owner", float64(a.Food-int(limit.Amount)))
@@ -653,6 +681,15 @@ func (w *World) dissolveGovernment(p *Plot) {
 	deleted := p.Reserve - returned
 	p.Stock += returned
 	p.Reserve = 0
+	if _, _, contributed := w.contributionBasis(p); contributed {
+		for _, a := range w.residents(p.ID) {
+			a.Influence = w.Settings.StartingInfluence
+		}
+	}
+	p.Contributions = nil
+	if w.political != nil && w.political.Ledger != nil {
+		delete(w.political.Ledger, p.ID)
+	}
 	p.Government = false
 	p.Rules = map[string]Rule{}
 	p.Officers = map[int]Office{}
@@ -736,6 +773,7 @@ func (w *World) leaving(a *Agent, oldPlot int) {
 	if a == nil {
 		return
 	}
+	w.forfeitContributions(oldPlot, a.ID)
 	if p := w.govPlot(oldPlot); p != nil {
 		delete(p.Officers, a.ID)
 		for _, key := range []string{"office", "representative", "influence", "quota"} {

@@ -121,6 +121,7 @@ func Catalogue() []PolicyDefinition {
 		{"quota", "Harvest quota", "Unlimited or a daily quota; quota:<agent> sets an individual allowance.", "local", []string{"unlimited", "limited"}, []string{"amount", "target"}, 1},
 		{"enforcement", "Enforcement", "Paid hard limits block excess harvest; unfunded limits become soft.", "local", []string{"soft", "hard"}, nil, 1},
 		{"influence", "Political influence", "Set one resident's voting influence between zero and the configured maximum.", "local", nil, []string{"target", "amount"}, 1},
+		{"influenceBasis", "Influence basis", "Keep influence voted member by member, or recalculate it each morning from recent net contributions.", "local", []string{"voted", "contribution", "contributionOnly"}, []string{"amount", "limit"}, 1},
 		{"threshold", "Passing threshold", "Choose a strict majority or at least two thirds of all influence.", "local", []string{"majority", "twoThirds"}, nil, 1},
 		{"proposers", "Proposal rights", "Choose who may submit local proposals.", "local", []string{"all", "positive", "officers"}, []string{"members"}, 1},
 		{"office", "Officer appointment", "Delegate explicit powers, recipient scope, quantity limits and expiry.", "local", []string{"appoint", "remove"}, []string{"target", "powers", "members", "limit", "expires", "enabled"}, 1},
@@ -164,6 +165,8 @@ type politicalState struct {
 	Evidence       map[int]evidenceRecord
 	SharedEvidence map[int]bool
 	Records        map[int][]Record
+	// Ledger holds each plot's contribution entries for recent days.
+	Ledger map[int][]ContributionDay
 }
 
 type Record struct {

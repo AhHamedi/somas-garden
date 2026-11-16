@@ -38,6 +38,11 @@ func (w *World) rawView(id int) Observation {
 			for _, r := range w.residents(p.ID) {
 				pv.Residents = append(pv.Residents, r.ID)
 			}
+			// The influence basis law makes the plot's accounts public to its
+			// residents; otherwise contributions are known only from records.
+			if _, _, ok := w.contributionBasis(p); ok {
+				pv.Contributions = w.completedContributions(p.ID, MaxContributionWindow)
+			}
 		}
 		v.Plots = append(v.Plots, pv)
 	}
@@ -164,6 +169,8 @@ func field(v Observation, name string) float64 {
 		return float64(v.Self.Plot)
 	case "deaths":
 		return float64(v.Self.Deaths)
+	case "influence":
+		return float64(v.Self.Influence)
 	case "stock":
 		if v.Self.Plot >= 0 && v.Plots[v.Self.Plot].Stock != nil {
 			return float64(*v.Plots[v.Self.Plot].Stock)

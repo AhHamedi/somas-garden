@@ -129,6 +129,7 @@ type Order = society.Order
 type Offer = society.Offer
 type RecordQuery = society.RecordQuery
 type VoteChoice = society.VoteChoice
+type ContributionDay = society.ContributionDay
 func NewRandom(seed int64)*rand.Rand{return rand.New(rand.NewSource(seed))}
 func invoke(v View)(a Action){defer func(){if recover()!=nil{a=Action{Error:"strategy panicked"}}}();return Decide(v)}
 func main(){debug.SetMemoryLimit(64<<20);s:=bufio.NewScanner(os.Stdin);s.Buffer(make([]byte,65536),64<<20);w:=bufio.NewWriter(os.Stdout);for s.Scan(){var v View;if e:=json.Unmarshal(s.Bytes(),&v);e!=nil{fmt.Fprintln(w,"{}");w.Flush();continue};a:=invoke(v);b,e:=json.Marshal(a);if e!=nil{b=[]byte("{\"error\":\"strategy returned an invalid decision: values must be finite and memory valid JSON\"}")} ;fmt.Fprintln(w,string(b));w.Flush()}}

@@ -24,6 +24,12 @@ func Decide(v View) Action {
 	case "pledges":
 		if v.Self.Plot >= 0 {
 			a.Pledge = map[string]float64{"local": 2}
+			// Where influence is earned by contribution, funding the plot's
+			// services buys a say: pledge more until influence is at its top.
+			basis := v.Plots[v.Self.Plot].Rules["influenceBasis"].Mode
+			if (basis == "contribution" || basis == "contributionOnly") && v.Self.Influence < v.Settings.MaxInfluence {
+				a.Pledge["local"] = 4
+			}
 		}
 	case "proposals":
 		if v.Self.Plot >= 0 && !v.Plots[v.Self.Plot].Government && v.Self.Mind >= 3 {

@@ -133,9 +133,12 @@ type Plot struct {
 	HardFunded      bool            `json:"hardFunded"`
 	RecordsFunded   bool            `json:"recordsFunded"`
 	Residents       []int           `json:"residents"`
-	GrowthRemainder float64         `json:"-"`
-	Rotation        []int           `json:"-"`
-	Records         []Event         `json:"-"`
+	// Contributions is each resident's standing while the plot's influence
+	// follows net contributions; empty otherwise.
+	Contributions   []ContributionTotal `json:"contributions,omitempty"`
+	GrowthRemainder float64             `json:"-"`
+	Rotation        []int               `json:"-"`
+	Records         []Event             `json:"-"`
 }
 type Event struct {
 	ID          int     `json:"id"`
@@ -231,6 +234,9 @@ type PlotView struct {
 	Officers      map[int]Office  `json:"officers,omitempty"`
 	HardFunded    bool            `json:"hardFunded"`
 	RecordsFunded bool            `json:"recordsFunded"`
+	// Contributions are the plot's public accounts while its influence follows
+	// net contributions: every resident's entries for the last completed days.
+	Contributions []ContributionDay `json:"contributions,omitempty"`
 }
 type MonthlyResult struct {
 	Month  int          `json:"month"`

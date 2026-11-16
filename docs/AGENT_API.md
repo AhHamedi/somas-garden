@@ -10,7 +10,7 @@ The legacy API returning `Action{Food, Energy}` belongs to the old game at `/leg
 
 ## Write a Go strategy
 
-Import [society-example.go](../public/society-example.go) through the strategy editor. Supply `package main` and `func Decide(v View) Action`. The runtime supplies `main` and aliases for `View`, `Action`, `Rule`, `Proposal`, `Order`, `Offer`, `RecordQuery` and `VoteChoice`.
+Import [society-example.go](../public/society-example.go) through the strategy editor. Supply `package main` and `func Decide(v View) Action`. The runtime supplies `main` and aliases for `View`, `Action`, `Rule`, `Proposal`, `Order`, `Offer`, `RecordQuery`, `VoteChoice` and `ContributionDay`.
 
 ```go
 package main
@@ -139,6 +139,36 @@ There is no gameplay cap on valid proposal count. Each accepted proposal costs m
 Supported proposal kinds include `found`, `policy`, `repeal`, `office`, `removeOffice`, `sanction`, `distribution`, `permitEntry`, `permitExit`, `donation`, `dissolve`, `federationFound`, `federationJoin`, `federationLeave`, `ratify`, `federationPolicy`, `federationRepeal`, `federationAdmit`, `federationDissolve` and `dispute`.
 
 Use the catalogue returned by `/api/society/config` to inspect policy keys, allowed modes and required fields. The catalogue and engine validators are the authority for parameter spelling. The approved specification explains their meaning. Repeals and conflicting values compete under the same policy key; duplicate submissions do not accumulate support or repeat the same transfer.
+
+## Earn influence by contribution
+
+Influence is voted member by member unless a plot passes the `influenceBasis` law. Its `contribution` and `contributionOnly` modes recalculate every resident's influence each morning, after the day's rule changes and before that day's ballots, from their net giving over recent completed days:
+
+```go
+a.Proposals = []Proposal{{
+    Kind: "policy",
+    Key: "influenceBasis",
+    Rule: Rule{Mode: "contribution", Amount: 5, Limit: 5}, // 1 level per 5 points, last 5 days
+}}
+```
+
+A point is one carrot deposited into the treasury, taken as storage tax or seized under a holding limit, or one unit of pledged mind actually spent on the plot's services (including the founding cost), less one per carrot received from the treasury. Field collections, fines and gifts do not count. Points are the window's net total, never below zero. Influence is the floor plus one level per `Amount` points, capped at `Settings.MaxInfluence`. The floor is `Settings.StartingInfluence` under `contribution` and zero under `contributionOnly`. `Limit` is the window, 1 to 10 days; `Amount` is a whole number of at least 1. Today's giving counts from tomorrow.
+
+While the law is in force, individual `influence` motions are refused; grants already passed are suspended and return if the plot goes back to `voted`. Newcomers start at the floor and forfeit their points when they leave; dissolution and the meteor clear them. If nobody has earned a level under `contributionOnly`, everyone keeps the starting influence. Under `contributionOnly`, zero influence also removes proposal rights where `proposers` is `positive`, and `harvestOrder` `highestInfluence` lets contributors harvest first.
+
+The law makes the plot's accounts public to its residents: `v.Plots[v.Self.Plot].Contributions` lists every resident's `ContributionDay` entries (`Agent`, `Day`, `Deposits`, `Tax`, `Holding`, `Services`, `Received`) for the last 10 completed days. Without the law, contributions are known only through paid records. Any window and rate can be evaluated from the entries:
+
+```go
+func points(v View, agent, window int) float64 {
+    total := 0.0
+    for _, c := range v.Plots[v.Self.Plot].Contributions {
+        if c.Agent == agent && c.Day >= v.AbsoluteDay-window {
+            total += float64(c.Deposits+c.Tax+c.Holding-c.Received) + c.Services
+        }
+    }
+    return max(0, total)
+}
+```
 
 ## Officers and federations
 

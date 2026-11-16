@@ -271,6 +271,33 @@ export const STATUTES = [
     params: { target: RESIDENT, influence: ["Value", "0–{maxInfluence}"] },
   },
   {
+    key: "influenceBasis",
+    scope: "local",
+    group: "power",
+    icon: "influence",
+    name: "Influence basis",
+    defaultValue: "Voted",
+    options: [
+      { mode: "voted", label: "Voted", short: "resident by resident" },
+      {
+        mode: "contribution",
+        label: "By contribution",
+        short: "{startingInfluence} + 1 per N points",
+        params: ["amount", "limit"],
+      },
+      {
+        mode: "contributionOnly",
+        label: "Contribution only",
+        short: "1 per N points",
+        params: ["amount", "limit"],
+      },
+    ],
+    params: {
+      amount: ["Points per level", "1 or more"],
+      limit: ["Window", "1–10 days"],
+    },
+  },
+  {
     key: "office",
     scope: "local",
     group: "power",

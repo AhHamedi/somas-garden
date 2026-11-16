@@ -60,7 +60,7 @@ The plot's **Assembly** tab shows its laws and motions, **Council** shows the vo
 
 [The approved specification](docs/AMOEBOIDS_SPECIFICATION.md) defines the physical rules, political powers, timing, worked examples, information boundaries and monthly resets. [The agent API](docs/AGENT_API.md) defines the corresponding programming interface.
 
-Core features include zero-rule founding, unlimited mind-funded proposals, competing policy votes, delegated officers, storage taxes and inheritance, proportional mind pledges, funded records and enforcement, evidence-based sanctions, federations, representative voting, donations, shared records and immigration checks.
+Core features include zero-rule founding, unlimited mind-funded proposals, competing policy votes, influence voted or earned by contribution, delegated officers, storage taxes and inheritance, proportional mind pledges, funded records and enforcement, evidence-based sanctions, federations, representative voting, donations, shared records and immigration checks.
 
 ## Reproducible experiments
 

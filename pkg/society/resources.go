@@ -34,11 +34,33 @@ func (w *World) movement(ds map[int]Decision) {
 		a.NoticeAt = 0
 		a.Influence = 0
 		if dest >= 0 {
+			// Newcomers start at the floor where influence follows
+			// contributions, since they have given nothing here yet.
 			a.Influence = w.Settings.StartingInfluence
+			if _, floor, ok := w.contributionBasis(w.Plots[dest]); ok {
+				a.Influence = floor
+			}
 		}
 		w.event("move", id, dest, fmt.Sprintf("Moved from %s to %s", plotName(old), plotName(dest)), 0)
 	}
 	w.dissolveEmpty()
+	// A plot can lose its last positive vote after the morning calculation.
+	// Restore its voice before proposals, without recalculating anybody's points.
+	for _, p := range w.Plots {
+		if _, floor, contributed := w.contributionBasis(p); !contributed || floor != 0 {
+			continue
+		}
+		hasInfluence := false
+		for _, a := range w.residents(p.ID) {
+			if a.Influence > 0 {
+				hasInfluence = true
+				break
+			}
+		}
+		if !hasInfluence {
+			w.restorePoliticalContinuity(p)
+		}
+	}
 }
 func plotName(id int) string {
 	if id < 0 {
@@ -204,6 +226,7 @@ func (w *World) transfers() {
 				p.Reserve += n
 				if n > 0 {
 					w.event("deposit", a.ID, a.Plot, fmt.Sprintf("Deposited %d carrots into public storage", n), float64(n))
+					w.contribute(a.Plot, a.ID, func(c *ContributionDay) { c.Deposits += n })
 				}
 			}
 		}

@@ -226,7 +226,7 @@ try {
   // Rulebook: every law, charter rule and decision, searchable.
   await page.click('[data-view="rulebook"]');
   await page.waitForSelector("#rb-index .rb-item");
-  assert.equal(await page.locator("#rb-index .rb-item").count(), 1 + 20 + 8 + 16);
+  assert.equal(await page.locator("#rb-index .rb-item").count(), 1 + 21 + 8 + 16);
   await page.fill("#rb-q", "quota");
   await page.waitForFunction(
     () => document.querySelectorAll("#rb-index .rb-item").length < 10,

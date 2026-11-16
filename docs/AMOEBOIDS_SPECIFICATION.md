@@ -222,33 +222,40 @@ Only one government can exist per plot. Identical successful founding proposals 
 
 Governments can amend or repeal any permitted local rule, appoint or remove officers, or dissolve. If every resident has zero influence, or nobody living is allowed to propose, restore proposal access to all residents and reset everyone to starting influence. These retained safeguards prevent irreversible political deadlock and do not select substantive policies.
 
+### 6.5 Influence earned by contribution
+
+A government may replace voted influence with influence earned from net contribution. Each morning, after rule changes apply and before that day's ballots, every resident's influence becomes the floor plus one level per chosen number of points, capped at the maximum influence. The floor is the starting influence, or zero under the contribution-only mode. Points are the net total over the chosen window of completed days, never below zero: one per carrot deposited into the treasury, taken as storage tax or seized under a holding limit, and one per unit of pledged mind spent on the plot's services, less one per carrot received from the treasury. Field collections, fines and gifts do not count. The law makes these accounts public to the plot's residents.
+
+While the law is in force, individual influence grants cannot be proposed; grants already passed are suspended and return if influence becomes voted again. Newcomers start at the floor, leaving forfeits a resident's points, and dissolution or the meteor clears them. If nobody has earned a level and the floor is zero, everyone keeps the starting influence. Founding remains one person, one vote, and changing the basis is decided under the influence in force before the change.
+
 A plot with no living residents loses its government. Proposed dissolution handling: return government reserves to field stock up to field capacity, delete overflow, cancel offices and pending decisions, release mind pledges, and end federation membership. The field remains. This is a disclosed default distinct from inheritance of a dead person's private store.
 
 ## 7 Policy catalogue and delegated powers
 
 The interface exposes valid proposal types and mind costs, not a purchasable list of automatic outcomes. Spending proposal mind buys deliberation; a successful vote is still required. A proposal can be refused by the electorate. There is no separate unlock currency or permanent upgrade tree.
 
-| Local policy family         | Available choices and parameters                                                                                        |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Harvest order               | Random, rotating, lowest body, highest influence.                                                                       |
-| Entry                       | Open, closed, vote, officer approval; optional population cap.                                                          |
-| Exit                        | Free, notice, vote, officer approval.                                                                                   |
-| Harvest ration              | Unlimited, common daily quota, or per-member quota.                                                                     |
-| Ration enforcement          | Soft, or paid hard enforcement.                                                                                         |
-| Influence                   | Integer 0–5 per member; majority or two-thirds passing threshold.                                                       |
-| Proposal eligibility        | All members, members with positive influence, or named officers.                                                        |
-| Offices                     | Named members, explicit capabilities, target scope, quantity limits and expiry.                                         |
-| Records                     | On/off; member, officer or named-person access.                                                                         |
-| Sanctions                   | Enable warning, food fine, last-place penalty and/or expulsion; select field or government reserve as fine destination. |
-| Government field collection | Fixed carrots per day or percentage of opening harvest-phase field stock; execution before or after personal harvests.  |
-| Personal storage tax        | Fixed carrots or a percentage above an exempt balance; recipient is government storage.                                 |
-| Personal holding limit      | A maximum at or below physical capacity; advisory or automatically collect excess into the government store.            |
-| Reserve distribution        | Named or equal distributions, entitlement amounts, or delegated allocation under limits.                                |
-| Inheritance                 | Delete, share equally among eligible surviving plot residents, a named beneficiary, or government storage.              |
-| Treasury authority          | Who may order withdrawals, collection, transfers and distributions, within explicit bounds.                             |
-| Federation representation   | Appoint/remove representatives; grant federation proposal or voting powers.                                             |
-| Federation mandates         | Retain local membership/charter votes or delegate specified decisions to named officers.                                |
-| Reform                      | Repeal policies, revoke delegations or dissolve.                                                                        |
+| Local policy family         | Available choices and parameters                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Harvest order               | Random, rotating, lowest body, highest influence.                                                                           |
+| Entry                       | Open, closed, vote, officer approval; optional population cap.                                                              |
+| Exit                        | Free, notice, vote, officer approval.                                                                                       |
+| Harvest ration              | Unlimited, common daily quota, or per-member quota.                                                                         |
+| Ration enforcement          | Soft, or paid hard enforcement.                                                                                             |
+| Influence                   | Integer 0–5 per member; majority or two-thirds passing threshold.                                                           |
+| Influence basis             | Voted per member, or earned from net contribution with or without a starting floor; points per level and a 1–10 day window. |
+| Proposal eligibility        | All members, members with positive influence, or named officers.                                                            |
+| Offices                     | Named members, explicit capabilities, target scope, quantity limits and expiry.                                             |
+| Records                     | On/off; member, officer or named-person access.                                                                             |
+| Sanctions                   | Enable warning, food fine, last-place penalty and/or expulsion; select field or government reserve as fine destination.     |
+| Government field collection | Fixed carrots per day or percentage of opening harvest-phase field stock; execution before or after personal harvests.      |
+| Personal storage tax        | Fixed carrots or a percentage above an exempt balance; recipient is government storage.                                     |
+| Personal holding limit      | A maximum at or below physical capacity; advisory or automatically collect excess into the government store.                |
+| Reserve distribution        | Named or equal distributions, entitlement amounts, or delegated allocation under limits.                                    |
+| Inheritance                 | Delete, share equally among eligible surviving plot residents, a named beneficiary, or government storage.                  |
+| Treasury authority          | Who may order withdrawals, collection, transfers and distributions, within explicit bounds.                                 |
+| Federation representation   | Appoint/remove representatives; grant federation proposal or voting powers.                                                 |
+| Federation mandates         | Retain local membership/charter votes or delegate specified decisions to named officers.                                    |
+| Reform                      | Repeal policies, revoke delegations or dissolve.                                                                            |
 
 **Proposed numeric policy domain:** percentages are 0–100, fixed amounts are nonnegative whole carrots, limits cannot exceed physical capacities, and officer terms are whole cycles or until revoked. For an inheritance beneficiary, the government's vote names the person; individual wills are not included in this draft.
 

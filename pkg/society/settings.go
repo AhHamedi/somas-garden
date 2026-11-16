@@ -87,7 +87,7 @@ func (s Settings) validateTeam(t Team) error {
 		if !has([]string{"always", "eq", "neq", "lt", "lte", "gt", "gte"}, r.Op) {
 			return fmt.Errorf("unknown builder comparison %q", r.Op)
 		}
-		if r.Op != "always" && !has([]string{"food", "mind", "body", "score", "day", "month", "plot", "deaths", "stock", "population", "government"}, r.Field) {
+		if r.Op != "always" && !has([]string{"food", "mind", "body", "score", "day", "month", "plot", "deaths", "stock", "population", "government", "influence"}, r.Field) {
 			return fmt.Errorf("unknown builder observation %q", r.Field)
 		}
 		if !finite(r.Value) || r.Action.Harvest < 0 || r.Action.Eat < 0 || !finite(r.Action.Think) || r.Action.Think < -1 || r.Action.Deposit < 0 {

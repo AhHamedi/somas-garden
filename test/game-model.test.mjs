@@ -16,6 +16,7 @@ import {
   hemicycleSeats,
   statusOf,
   STATUS,
+  contributionStanding,
 } from "../public/game/model.js";
 
 const settings = {
@@ -409,5 +410,45 @@ test("saved team lists move to the current presets", async () => {
     migrateTeams(custom, current),
     [{ name: "Red", policy: "locust" }, custom[1]],
     "custom teams keep their names",
+  );
+});
+
+test("earned influence reads as points, influence and share of the vote", () => {
+  const basis = { mode: "contribution", amount: 2, limit: 5 };
+  const s = world();
+  s.settings = { ...settings, startingInfluence: 1 };
+  s.plots[0].rules.influenceBasis = basis;
+  s.plots[0].contributions = [
+    { agent: 0, deposits: 6, services: 4, points: 10 },
+    { agent: 1, points: 0 },
+  ];
+  s.agents[0].influence = 5;
+  const ix = indexSnapshot(s);
+  const ada = contributionStanding(ix, ix.agents.get(0));
+  assert.equal(ada.points, 10);
+  assert.equal(ada.influence, 5);
+  assert.equal(ada.share, 5 / 7, "share of the living residents' influence");
+  assert.equal(contributionStanding(ix, ix.agents.get(2)).points, 0, "no entry is zero");
+  assert.equal(contributionStanding(ix, ix.agents.get(3)), null, "voted plots have none");
+  assert.equal(
+    lawSentence(ix, "influenceBasis", basis),
+    "Influence each morning: 1 plus 1 per 2 points given in the last 5 days, up to 5.",
+  );
+  assert.match(
+    lawSentence(ix, "influenceBasis", { ...basis, mode: "contributionOnly" }),
+    /gave nothing have none/,
+  );
+  assert.equal(lawValue(ix, "influenceBasis", basis), "Earned, 1 per 2");
+  assert.equal(
+    motionTitle(ix, { input: { kind: "policy", key: "influenceBasis", rule: basis } }),
+    "Earn influence by contribution: 1 per 2 points over 5 days",
+  );
+  assert.equal(
+    motionChange(ix, {
+      plot: 1,
+      federation: -1,
+      input: { kind: "policy", key: "influenceBasis", rule: basis },
+    }).before,
+    "Influence is voted resident by resident.",
   );
 });

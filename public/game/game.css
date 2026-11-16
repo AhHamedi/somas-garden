@@ -1423,6 +1423,37 @@ body.inspecting .ticker {
   color: var(--ink-3);
   font-weight: 500;
 }
+.earned {
+  margin: -4px 0 0 106px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.earned summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.earned dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 2px;
+}
+.earned dl div {
+  display: flex;
+  gap: 5px;
+}
+.earned dt {
+  color: var(--ink-3);
+}
+.earned dd {
+  margin: 0;
+  font-weight: 650;
+  color: var(--ink);
+}
+.earned p {
+  margin: 0;
+  color: var(--ink-3);
+}
 .kv {
   display: grid;
   grid-template-columns: 1fr 1fr;

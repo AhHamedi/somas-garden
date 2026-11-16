@@ -565,7 +565,7 @@ export class Setup {
             i,
           ) => `<div class="rule-card" data-rule="${i}"><header>Rule ${i + 1}<button type="button" class="icon-button" data-del="${i}" aria-label="Delete rule ${i + 1}">${icon("close")}</button></header><div class="field-grid">
           <label class="field"><span>During</span><select data-r="phase">${[...PHASES.map((p) => [p.id, p.name]), ["pledges", "Mind pledges"], ["records", "Read records"], ["accept", "Accept food"], ["month_end", "Month ends"]].map(([k, n]) => `<option value="${k}" ${r.phase === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-          <label class="field"><span>When</span><select data-r="field">${["food", "body", "mind", "score", "day", "month", "stock", "population", "government", "plot", "deaths"].map((k) => `<option ${r.field === k ? "selected" : ""}>${k}</option>`).join("")}</select></label>
+          <label class="field"><span>When</span><select data-r="field">${["food", "body", "mind", "score", "influence", "day", "month", "stock", "population", "government", "plot", "deaths"].map((k) => `<option ${r.field === k ? "selected" : ""}>${k}</option>`).join("")}</select></label>
           <label class="field"><span>Is</span><select data-r="op">${[
             ["lt", "below"],
             ["lte", "at most"],

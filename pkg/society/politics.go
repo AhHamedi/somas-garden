@@ -175,6 +175,9 @@ func (w *World) chargePledges(plots []int, bucket string, amount float64) bool {
 		s.a.Mind = rounded(s.a.Mind - v)
 		s.a.PoliticalMind = rounded(s.a.PoliticalMind + v)
 		w.politicalEvent("funding", s.a.ID, s.a.Plot, "Paid pledged mind for "+bucket, v)
+		if bucket == "local" {
+			w.contribute(s.a.Plot, s.a.ID, func(c *ContributionDay) { c.Services = rounded(c.Services + v) })
+		}
 	}
 	return true
 }
@@ -244,6 +247,14 @@ func (w *World) validateRule(key string, r Rule, federal bool) error {
 	}
 	if base == "influence" && (r.Amount > float64(w.Settings.MaxInfluence) || r.Amount != math.Trunc(r.Amount)) {
 		return errors.New("influence is outside its integer range")
+	}
+	if base == "influenceBasis" && r.Mode != "voted" {
+		if r.Limit < 1 || r.Limit > MaxContributionWindow {
+			return fmt.Errorf("the contribution window must be 1 to %d days", MaxContributionWindow)
+		}
+		if r.Amount < 1 {
+			return errors.New("set at least one point per influence level")
+		}
 	}
 	if base == "holding" && r.Amount > float64(w.Settings.PersonalCapacity) {
 		return errors.New("holding limit exceeds physical capacity")
@@ -321,6 +332,9 @@ func (w *World) validateProposal(a *Agent, in ProposalInput, officer bool) error
 			return err
 		}
 		base := policyBase(in.Key)
+		if _, _, ok := w.contributionBasis(p); ok && base == "influence" && !federal {
+			return errors.New("influence follows contributions while the influence basis law is in force")
+		}
 		if base == "influence" || base == "office" || base == "representative" {
 			target := w.govAgent(policyTarget(in.Key, in.Rule.Target))
 			if target == nil || !target.Alive || target.Plot != a.Plot {

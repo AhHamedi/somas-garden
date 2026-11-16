@@ -30,6 +30,7 @@ export const DEFAULT_MODE = {
   exit: "free",
   threshold: "majority",
   proposers: "all",
+  influenceBasis: "voted",
   records: "off",
   recordAccess: "all",
   inheritance: "delete",
@@ -64,6 +65,11 @@ export function statuteStatus(ix, plot, st) {
     if (!fed) locked = "Needs a federation";
   } else if (!plot.government) locked = "Needs a government";
   else if (st.requires === "federation" && !fed) locked = "Needs a federation";
+  else if (
+    st.key === "influence" &&
+    String(plot.rules?.influenceBasis?.mode || "").startsWith("contribution")
+  )
+    locked = "Earned by contribution";
   const general = rules[st.key];
   const instances = Object.entries(rules)
     .filter(([k]) => k.startsWith(`${st.key}:`))
@@ -78,7 +84,8 @@ export function statuteStatus(ix, plot, st) {
     .filter((q) => q.status === "activated" && q.input?.key === st.key)
     .sort((a, b) => b.activate - a.activate)[0];
   let value;
-  if (st.perResident && st.key !== "quota")
+  if (locked === "Earned by contribution") value = "Earned";
+  else if (st.perResident && st.key !== "quota")
     value = instances.length
       ? plural(instances.length, NOUN[st.key], NOUN[st.key] === "set" ? "set" : undefined)
       : null;

@@ -25,6 +25,7 @@ import {
   SCORE_HELP,
   agentDay,
   eventText,
+  contributionStanding,
 } from "/game/model.js";
 import { $, icon, setHTML, avatar, meter, chip } from "/game/dom.js";
 import { statuteBook } from "/game/statute-book.js";
@@ -642,13 +643,20 @@ function residentsView(app, residents) {
   const teams = new Map();
   for (const a of residents) teams.set(a.team, (teams.get(a.team) || 0) + 1);
   const filt = app.res.team;
+  const plot = residents.length ? ix.plots.get(residents[0].plot) : null;
+  const earned = String(plot?.rules?.influenceBasis?.mode || "").startsWith(
+    "contribution",
+  );
+  const points = new Map((plot?.contributions || []).map((c) => [c.agent, c.points]));
+  if (earned) residents = residents.map((a) => ({ ...a, points: points.get(a.id) || 0 }));
   let list = filt === null ? residents : residents.filter((a) => a.team === filt);
   const key = app.res.sort,
     dir = app.res.dir;
   list = [...list].sort(
     (a, b) =>
-      (key === "name" ? a.name.localeCompare(b.name) : a[key] - b[key] || a.id - b.id) *
-      dir,
+      (key === "name"
+        ? a.name.localeCompare(b.name)
+        : (a[key] ?? 0) - (b[key] ?? 0) || a.id - b.id) * dir,
   );
   const th = (k, label, cls = "") =>
     `<th class="sortable ${cls} ${key === k ? "active" : ""}" data-sort="${k}" aria-sort="${key === k ? (dir > 0 ? "ascending" : "descending") : "none"}">${label}${key === k ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
@@ -660,7 +668,7 @@ function residentsView(app, residents) {
         { length: Math.min(maxI, 5) },
         (_, i) => `<i class="${i < a.influence ? "on" : ""}"></i>`,
       ).join("");
-      return `<tr data-row="${a.id}"><td><span class="res-name">${avatar(a, roles)}<strong>${esc(a.name)}</strong></span></td><td><span class="pips" title="Influence ${a.influence}">${pips}</span></td><td><span class="minibar" title="Body ${fmt(a.body, 1)}"><i style="width:${(a.body / (s.settings.bodyCapacity || 2)) * 100}%;background:var(--body)"></i></span></td><td><span class="minibar" title="Mind ${fmt(a.mind, 1)}"><i style="width:${(a.mind / (s.settings.mindCapacity || 12)) * 100}%;background:var(--mind)"></i></span></td><td>${fmt(a.food)}</td><td class="w">${fmt(a.totalHarvested)}</td><td class="w">${fmt(a.totalEaten)}</td><td class="w">${fmt(a.thought, 1)}</td><td class="w">${fmt(a.politicalMind, 1)}</td><td class="w">${fmt(a.deaths)}</td><td>${fmt(a.score, 1)}</td></tr>`;
+      return `<tr data-row="${a.id}"><td><span class="res-name">${avatar(a, roles)}<strong>${esc(a.name)}</strong></span></td><td><span class="pips" title="Influence ${a.influence}">${pips}</span></td>${earned ? `<td>${fmt(a.points, 1)}</td>` : ""}<td><span class="minibar" title="Body ${fmt(a.body, 1)}"><i style="width:${(a.body / (s.settings.bodyCapacity || 2)) * 100}%;background:var(--body)"></i></span></td><td><span class="minibar" title="Mind ${fmt(a.mind, 1)}"><i style="width:${(a.mind / (s.settings.mindCapacity || 12)) * 100}%;background:var(--mind)"></i></span></td><td>${fmt(a.food)}</td><td class="w">${fmt(a.totalHarvested)}</td><td class="w">${fmt(a.totalEaten)}</td><td class="w">${fmt(a.thought, 1)}</td><td class="w">${fmt(a.politicalMind, 1)}</td><td class="w">${fmt(a.deaths)}</td><td>${fmt(a.score, 1)}</td></tr>`;
     })
     .join("");
   return `<div class="team-chips" aria-label="Filter by team">${[...teams.entries()]
@@ -670,7 +678,7 @@ function residentsView(app, residents) {
         `<button class="team-chip ${filt !== null && filt !== t ? "dim" : ""}" data-team="${t}" aria-pressed="${filt === t}"><i style="background:${teamColor(t)}"></i>${esc(s.teams[t]?.name || `Team ${t + 1}`)} ${n}</button>`,
     )
     .join("")}</div>
-    ${list.length ? `<table class="res-table"><thead><tr>${th("name", "Resident")}${th("influence", "Infl.")}${th("body", "Body")}${th("mind", "Mind")}${th("food", "Food")}${th("totalHarvested", "Harvested", "w")}${th("totalEaten", "Eaten", "w")}${th("thought", "Thought", "w")}${th("politicalMind", "Politics", "w")}${th("deaths", "Deaths", "w")}${th("score", "Satisf.")}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="note" style="margin-top:12px">Empty</p>`}`;
+    ${list.length ? `<table class="res-table"><thead><tr>${th("name", "Resident")}${th("influence", "Infl.")}${earned ? th("points", "Points") : ""}${th("body", "Body")}${th("mind", "Mind")}${th("food", "Food")}${th("totalHarvested", "Harvested", "w")}${th("totalEaten", "Eaten", "w")}${th("thought", "Thought", "w")}${th("politicalMind", "Politics", "w")}${th("deaths", "Deaths", "w")}${th("score", "Satisf.")}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="note" style="margin-top:12px">Empty</p>`}`;
 }
 
 function renderWilds(app, el) {
@@ -694,6 +702,23 @@ function renderWilds(app, el) {
       ? residentsView(app, people)
       : `<div class="vit-grid"><div class="vit people"><span class="vit-label">${icon("people")}In the wilds</span><span class="vit-value">${fmt(people.length)}</span></div><div class="vit"><span class="vit-label">${icon("spark")}Awaiting return</span><span class="vit-value">${fmt(waiting.length)}</span><span class="vit-foot">${nextBack && isFinite(nextBack) ? `Next ${dayLabel(s, nextBack)}` : waiting.length ? "At the meteor" : ""}</span></div></div>`;
   inspectorShell(app, el, head, tabs, body);
+}
+
+// Where influence follows contributions: the points behind it, its share of
+// the plot's votes, and what was given and received over the window.
+function earnedLine(ix, a) {
+  const st = contributionStanding(ix, a);
+  if (!st) return "";
+  const r = st.row;
+  const parts = [
+    ["Deposited", fmt(r.deposits || 0)],
+    ["Taxed", fmt(r.tax || 0)],
+    ["Seized", fmt(r.holding || 0)],
+    ["Services", `${fmt(r.services || 0, 1)} mind`],
+    ["Received", fmt(r.received || 0)],
+  ];
+  const pts = `${fmt(st.points, Number.isInteger(st.points) ? 0 : 1)} ${st.points === 1 ? "point" : "points"}`;
+  return `<details class="earned"><summary>${pts} · ${fmt(st.influence)} influence · ${fmt(st.share * 100)}% of votes</summary><dl>${parts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl><p>Last ${plural(st.rule.limit || 1, "completed day")}</p></details>`;
 }
 
 function renderAgent(app, el) {
@@ -746,6 +771,7 @@ function renderAgent(app, el) {
       <div class="stat-row"><span class="lbl">${icon("mind")}Mind</span>${meter(a.mind / (set.mindCapacity || 12), "mind", pledged ? `<i class="pledged" style="left:${((a.mind - pledged) / (set.mindCapacity || 12)) * 100}%;width:${(pledged / (set.mindCapacity || 12)) * 100}%"></i>` : "")}<span class="val" title="${pledged ? `${fmt(pledged, 2)} pledged` : ""}">${fmt(a.mind, 1)} <small>/ ${fmt(set.mindCapacity)}</small></span></div>
       <div class="stat-row"><span class="lbl">${icon("carrot")}Carrots</span>${meter(a.food / (set.personalCapacity || 12))}<span class="val">${fmt(a.food)} <small>/ ${fmt(set.personalCapacity)}</small></span></div>
       <div class="stat-row"><span class="lbl">${icon("influence")}Influence</span><span class="pips">${pips}</span><span class="val">${fmt(a.influence)}</span></div>
+      ${earnedLine(ix, a)}
       <div class="stat-row" title="${esc(SCORE_HELP)}"><span class="lbl">${icon("joy")}Satisfaction</span><span></span><span class="val" style="color:var(--joy)">${fmt(a.score, 1)}</span></div>
     </div>
     ${powers.length ? `<div class="section"><div class="section-head"><h3>Powers</h3></div><div class="chips">${powers.map((x) => chip(x)).join("")}</div></div>` : ""}
