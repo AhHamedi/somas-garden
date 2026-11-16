@@ -11,7 +11,6 @@ import {
   phaseIndex,
   esc,
   fmt,
-  migrateTeams,
 } from "/game/model.js";
 import * as UI from "/game/ui.js";
 import { Council } from "/game/council.js";
@@ -701,24 +700,11 @@ async function init() {
         if (error.status !== 404) throw error;
       }
     }
-    let input = { settings: app.config.settings, teams: app.config.teams, seed: 42 };
-    try {
-      const saved = JSON.parse(
-        storage.get("amoeboids.setup.v2") || storage.get("amoeboids.society.setup.v1"),
-      );
-      if (saved?.settings && Array.isArray(saved.teams) && saved.teams.length) {
-        const settings = { ...input.settings, ...saved.settings };
-        // Older drafts kept the former one-day respawn default.
-        if (!saved.version && settings.respawnDelay === 1)
-          settings.respawnDelay = input.settings.respawnDelay;
-        input = {
-          settings,
-          teams: migrateTeams(saved.teams, input.teams),
-          seed: saved.seed ?? 42,
-        };
-      }
-    } catch {}
-    await app.actions.createWorld(input);
+    // A passive page visit must not reserve a persistent server and Drive.
+    $("loading").innerHTML =
+      `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><p>Create a world to begin.</p><button class="btn primary" id="start-world">New world</button>`;
+    $("start-world").onclick = () => setup.open("world");
+    setup.open("world");
   } catch (error) {
     $("loading").innerHTML =
       `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><p>The world could not start: ${esc(error.message)}</p><button class="btn" id="retry">Try again</button>`;

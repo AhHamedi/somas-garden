@@ -234,7 +234,10 @@ export class Setup {
     const s = this.app.ix?.s;
     let saved = null;
     try {
-      saved = JSON.parse(localStorage.getItem("amoeboids.setup.v2"));
+      saved = JSON.parse(
+        localStorage.getItem("amoeboids.setup.v2") ||
+          localStorage.getItem("amoeboids.society.setup.v1"),
+      );
     } catch {}
     const defaults = this.app.config.settings;
     this.draft = saved?.settings

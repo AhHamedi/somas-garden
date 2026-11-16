@@ -60,7 +60,18 @@ try {
     storageState,
   });
   page.on("pageerror", (e) => failures.push(e.message));
+  const startupRequests = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/society")) startupRequests.push(new URL(r.url()).pathname);
+  });
   await page.goto(origin);
+  await page.waitForSelector("#setup-dialog[open]");
+  assert.deepEqual(
+    startupRequests,
+    ["/api/society/config"],
+    "a passive first visit allocates no world",
+  );
+  await page.click('#setup-dialog button[type="submit"]');
   await page.waitForFunction(() => window.amoeboids?.ix, null, { timeout: 30000 });
   const initialRunId = await page.evaluate(() => amoeboids.pb.id);
 
