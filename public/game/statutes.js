@@ -296,6 +296,23 @@ export const STATUTES = [
       amount: ["Points per level", "1 or more"],
       limit: ["Window", "1–10 days"],
     },
+    // What earns a point, with the engine's ledger field each row reads.
+    points: {
+      earn: [
+        ["Carrots deposited in the treasury", "+1 each", "deposits"],
+        ["Storage tax paid", "+1 per carrot", "tax"],
+        ["Stores seized over a holding limit", "+1 per carrot", "holding"],
+        ["Pledged mind spent on services", "+1 per unit, founding included", "services"],
+        ["Treasury hand-outs received", "−1 per carrot", "received"],
+        ["Field collections, fines, gifts", "Not counted"],
+      ],
+      influence: [
+        ["Points", "Net over the window, never below zero"],
+        ["Influence", "Floor + 1 per N points, up to {maxInfluence}"],
+        ["Floor", "{startingInfluence} by contribution, 0 contribution only"],
+        ["Counts from", "The next dawn; leaving forfeits a resident's points"],
+      ],
+    },
   },
   {
     key: "office",

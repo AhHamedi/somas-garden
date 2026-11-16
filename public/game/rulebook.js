@@ -196,6 +196,7 @@ function matches(e, q) {
     e.name,
     e.group,
     textOf(e),
+    ...(e.st?.points?.earn || []).map((r) => r[0]),
     ...(e.st?.options || []).map((o) => `${o.label} ${o.short || ""}`),
     e.d?.short || "",
   ]
@@ -323,6 +324,9 @@ function lawPage(app, e) {
         set,
       )}</section>`
     : "";
+  const pointsTable = st.points
+    ? `<section class="rb-sec"><h3>What earns a point</h3>${facts(st.points.earn, set)}</section><section class="rb-sec"><h3>From points to influence</h3>${facts(st.points.influence, set)}</section>`
+    : "";
   const decided = fed
     ? [
         ["Tabled by", "A representative with proposal power"],
@@ -422,7 +426,7 @@ function lawPage(app, e) {
   ].filter(Boolean);
   return `<header class="rb-head"><span class="rb-icon">${icon(st.icon)}</span><div><h2>${esc(e.name)}</h2><div class="rb-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div><p>${esc(textOf(e))}</p></div></header>
     <section class="rb-sec"><h3>On the ballot</h3><ol class="rb-opts">${opts}</ol></section>
-    ${paramTable}
+    ${paramTable}${pointsTable}
     <section class="rb-sec"><h3>Decided</h3>${facts(decided, set)}</section>
     <section class="rb-sec"><h3>${fed ? "In each federation now" : "In each plot now"}</h3><div class="rb-plots">${now}</div></section>
     ${history}${related}`;

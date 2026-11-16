@@ -78,3 +78,20 @@ test("settings fill placeholders and motions map to their law", () => {
   );
   assert.equal(statuteOfMotion({ input: { kind: "found" } }), null);
 });
+
+test("the influence basis lists every source the engine counts", async () => {
+  const go = await readFile(
+    new URL("../pkg/society/contributions.go", import.meta.url),
+    "utf8",
+  );
+  const struct = go.match(/type ContributionDay struct \{([^}]*)\}/)[1];
+  const fields = [...struct.matchAll(/json:"(\w+)/g)]
+    .map((m) => m[1])
+    .filter((f) => f !== "agent" && f !== "day");
+  const rows = statute("influenceBasis").points.earn;
+  assert.deepEqual(
+    rows.map((r) => r[2]).filter(Boolean),
+    fields,
+    "one row per ledger field, in the engine's order",
+  );
+});
