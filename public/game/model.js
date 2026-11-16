@@ -1275,3 +1275,39 @@ export function hemicycleSeats(n, width = 600, height = 300) {
   const radius = Math.min(16, s * 0.36);
   return seats.map((p) => ({ ...p, r: radius }));
 }
+
+// The presets before November 2026, by behaviour: their nearest current
+// preset and their default team name.
+const RETIRED = {
+  steward: ["warden", "Stewards"],
+  thinker: ["sunchaser", "Thinkers"],
+  gatherer: ["locust", "Gatherers"],
+  diplomat: ["envoy", "Diplomats"],
+  wanderer: ["sunchaser", "Wanderers"],
+  learner: ["tinkerer", "Learners"],
+};
+
+/**
+ * Updates a saved team list. The untouched old default line-up becomes the
+ * current one; otherwise a retired behaviour maps to its nearest preset and
+ * the team keeps its name.
+ */
+export function migrateTeams(teams, defaults) {
+  if (!Array.isArray(teams)) return teams;
+  const oldDefaults = Object.entries(RETIRED);
+  const untouched =
+    teams.length === oldDefaults.length &&
+    teams.every(
+      (t, i) =>
+        !t.builder &&
+        !t.strategyId &&
+        t.policy === oldDefaults[i][0] &&
+        t.name === oldDefaults[i][1][1],
+    );
+  if (untouched) return structuredClone(defaults);
+  return teams.map((t) =>
+    RETIRED[t.policy] && !t.builder && !t.strategyId
+      ? { ...t, policy: RETIRED[t.policy][0] }
+      : t,
+  );
+}

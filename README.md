@@ -33,6 +33,21 @@ The legacy one-field prototype remains at **/legacy**. Its strategies and old re
 
 Worlds and saved replays survive server restarts. New runs recover at their last saved phase, including private agent memory and uploaded behaviours. Older replay-only saves remain read-only archives. Browser settings and strategy drafts are also retained locally.
 
+## The six built-in teams
+
+Each is a complete style of play using only what an Amoeboid can observe. They are in `pkg/society/presets.go` and are meant as examples to read, beat and copy.
+
+| Team           | Style                                                                                                                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wardens**    | Guard the commons. Compute the harvest that keeps the field steady from the growth rule, table a quota at that share with hard enforcement, cap entry at what the field can feed, and repeal a granary levy that eats into the field.                |
+| **Tinkerers**  | Learn. Each tries four styles (frugal, civic, feast, roam) in its first months, staggered so the team explores them all at once, then keeps the best by an upper confidence bound on its monthly satisfaction. Shortages deepen the larder it keeps. |
+| **Locusts**    | Free-ride. Harvest to the limit while a field has surplus, vote down every limit, never pay for institutions, leave a thinned field, and drift away from plots that enforce quotas.                                                                  |
+| **Envoys**     | Federate. Found governments, form a federation of every governed plot, take council seats, ratify and enact data sharing, gifts and donations, and send carrots from a healthy field to a failing member.                                            |
+| **Barons**     | Seek power. Win a treasury office worded so cautious neighbours accept it, levy the field's surplus into the treasury and pay it out to barons only; also try for influence, harvest order, the gate and the agenda, dropping what fails twice.      |
+| **Sunchasers** | Think. Follow tomorrow's expected sunshine between plots with room to feed them, carry a two-day larder, and never spend mind on politics.                                                                                                           |
+
+All six eat to restore their bodies, think with every unpledged unit of mind, leave crowded plots in proportion to the excess, and remember fields they have seen and plots that refused them. In a default run the commons usually holds all year; Locusts tend to out-score the teams that pay for order, and Envoys pay most.
+
 ## Design an agent
 
 Use the visual strategy editor for simple decisions and phase-specific rules. For more control, import a Go file through the editor. Start with [the downloadable example](public/society-example.go) and [the agent guide](docs/AGENT_API.md).

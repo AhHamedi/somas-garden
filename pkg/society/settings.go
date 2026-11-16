@@ -51,12 +51,14 @@ func (s Settings) Validate(teams int) error {
 	return nil
 }
 func DefaultTeams() []Team {
-	return []Team{{Name: "Stewards", Policy: "steward", Color: "#547b61"}, {Name: "Thinkers", Policy: "thinker", Color: "#7e79b2"}, {Name: "Gatherers", Policy: "gatherer", Color: "#c28b4c"}, {Name: "Diplomats", Policy: "diplomat", Color: "#5b9da6"}, {Name: "Wanderers", Policy: "wanderer", Color: "#b47072"}, {Name: "Learners", Policy: "learner", Color: "#87a34b"}}
+	colors := []string{"#547b61", "#7e79b2", "#c28b4c", "#5b9da6", "#b47072", "#a39a3b"}
+	teams := []Team{}
+	for i, p := range Presets() {
+		teams = append(teams, Team{Name: p.Name, Policy: p.Policy, Color: colors[i%len(colors)]})
+	}
+	return teams
 }
 
-func knownPolicy(p string) bool {
-	return p == "steward" || p == "thinker" || p == "gatherer" || p == "diplomat" || p == "wanderer" || p == "learner"
-}
 func (s Settings) validateTeam(t Team) error {
 	b := t.Builder
 	if t.Policy == "builder" && b == nil {

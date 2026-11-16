@@ -14,7 +14,7 @@ func smallWorld(t *testing.T, n int) *World {
 	s.Plots = 1
 	s.Months = 2
 	s.Days = 3
-	w, e := New(s, []Team{{Name: "Test", Policy: "thinker"}}, 7)
+	w, e := New(s, []Team{{Name: "Test", Policy: "sunchaser"}}, 7)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -300,15 +300,15 @@ func TestUnknownStrategyAndInvalidBuilderFailClearly(t *testing.T) {
 	if _, e := New(s, []Team{{Policy: "typo"}}, 1); e == nil {
 		t.Fatal("unknown strategy silently replaced")
 	}
-	if _, e := New(s, []Team{{Policy: "steward", Builder: &Builder{Eat: -2}}}, 1); e == nil {
+	if _, e := New(s, []Team{{Policy: "warden", Builder: &Builder{Eat: -2}}}, 1); e == nil {
 		t.Fatal("negative builder amount accepted")
 	}
-	if _, e := New(s, []Team{{Policy: "steward", Builder: &Builder{Rules: []BehaviorRule{{Phase: "unknown", Op: "always"}}}}}, 1); e == nil {
+	if _, e := New(s, []Team{{Policy: "warden", Builder: &Builder{Rules: []BehaviorRule{{Phase: "unknown", Op: "always"}}}}}, 1); e == nil {
 		t.Fatal("unknown phase accepted")
 	}
 }
 func TestBuilderPolicyRunsConfiguredFirstDay(t *testing.T) {
-	for _, policy := range []string{"builder", "thinker"} {
+	for _, policy := range []string{"builder", "sunchaser"} {
 		t.Run(policy, func(t *testing.T) {
 			s := DefaultSettings()
 			s.Copies, s.Plots, s.Months, s.Days = 1, 1, 1, 3
@@ -391,7 +391,7 @@ func TestPendingObservationIsRelevantAndDetached(t *testing.T) {
 	s := DefaultSettings()
 	s.Copies = 4
 	s.Plots = 3
-	w, e := New(s, []Team{{Name: "Review", Policy: "steward"}}, 9)
+	w, e := New(s, []Team{{Name: "Review", Policy: "warden"}}, 9)
 	if e != nil {
 		t.Fatal(e)
 	}

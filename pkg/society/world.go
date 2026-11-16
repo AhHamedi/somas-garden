@@ -24,7 +24,11 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 			return nil, fmt.Errorf("team names must be short")
 		}
 		if teams[i].Policy == "" {
-			teams[i].Policy = "steward"
+			teams[i].Policy = "warden"
+		}
+		teams[i].Policy = canonicalPolicy(teams[i].Policy)
+		if b := teams[i].Builder; b != nil && b.Fallback != "" {
+			b.Fallback = canonicalPolicy(b.Fallback)
 		}
 		if err := settings.validateTeam(teams[i]); err != nil {
 			return nil, err

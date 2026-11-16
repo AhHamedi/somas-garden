@@ -12,7 +12,7 @@ func politicalWorld(t *testing.T, n, plots int) *World {
 	s.Plots = plots
 	s.Months = 1
 	s.Days = 30
-	w, err := New(s, []Team{{Name: "Test", Policy: "thinker"}}, 41)
+	w, err := New(s, []Team{{Name: "Test", Policy: "sunchaser"}}, 41)
 	if err != nil {
 		t.Fatal(err)
 	}

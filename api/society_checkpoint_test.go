@@ -38,7 +38,7 @@ func Decide(v View) Action {var n int;_ = json.Unmarshal(v.Memory,&n); b,_ := js
 	}
 	body, _ := json.Marshal(map[string]any{
 		"settings": map[string]int{"copies": 2, "plots": 1, "days": 2, "months": 2},
-		"teams":    []society.Team{{Name: "Rememberers", Policy: "thinker", StrategyID: rec.ID}},
+		"teams":    []society.Team{{Name: "Rememberers", Policy: "sunchaser", StrategyID: rec.ID}},
 	})
 	code, result := societyRequest(t, "POST", "runs", string(body))
 	if code != 201 {

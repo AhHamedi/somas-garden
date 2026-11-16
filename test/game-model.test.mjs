@@ -361,3 +361,53 @@ test("the hemicycle seats every voter inside the chamber, ordered left to right"
   }
   assert.deepEqual(hemicycleSeats(0), []);
 });
+
+test("saved team lists move to the current presets", async () => {
+  const { migrateTeams } = await import("../public/game/model.js");
+  const current = [{ name: "Wardens", policy: "warden" }];
+  const old = [
+    "Stewards:steward",
+    "Thinkers:thinker",
+    "Gatherers:gatherer",
+    "Diplomats:diplomat",
+    "Wanderers:wanderer",
+    "Learners:learner",
+  ].map((x) => {
+    const [name, policy] = x.split(":");
+    return { name, policy };
+  });
+  assert.deepEqual(
+    migrateTeams(old, current),
+    current,
+    "the untouched old line-up becomes the new one",
+  );
+  const migratedOld = [
+    { name: "Stewards", policy: "warden" },
+    { name: "Thinkers", policy: "sunchaser" },
+    { name: "Gatherers", policy: "locust" },
+    { name: "Diplomats", policy: "envoy" },
+    { name: "Wanderers", policy: "sunchaser" },
+    { name: "Learners", policy: "tinkerer" },
+  ];
+  const edited = structuredClone(old);
+  edited[0].policy = "gatherer";
+  assert.deepEqual(
+    migrateTeams(edited, current),
+    [{ name: "Stewards", policy: "locust" }, ...migratedOld.slice(1)],
+    "changing only a behaviour preserves the saved line-up",
+  );
+  assert.deepEqual(
+    migrateTeams([...old].reverse(), current),
+    [...migratedOld].reverse(),
+    "reordering the earlier defaults preserves the saved team order",
+  );
+  const custom = [
+    { name: "Red", policy: "gatherer" },
+    { name: "Blue", policy: "builder", builder: { harvest: 2 } },
+  ];
+  assert.deepEqual(
+    migrateTeams(custom, current),
+    [{ name: "Red", policy: "locust" }, custom[1]],
+    "custom teams keep their names",
+  );
+});

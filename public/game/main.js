@@ -11,6 +11,7 @@ import {
   phaseIndex,
   esc,
   fmt,
+  migrateTeams,
 } from "/game/model.js";
 import * as UI from "/game/ui.js";
 import { Council } from "/game/council.js";
@@ -710,7 +711,11 @@ async function init() {
         // Older drafts kept the former one-day respawn default.
         if (!saved.version && settings.respawnDelay === 1)
           settings.respawnDelay = input.settings.respawnDelay;
-        input = { settings, teams: saved.teams, seed: saved.seed ?? 42 };
+        input = {
+          settings,
+          teams: migrateTeams(saved.teams, input.teams),
+          seed: saved.seed ?? 42,
+        };
       }
     } catch {}
     await app.actions.createWorld(input);

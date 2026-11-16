@@ -4,7 +4,7 @@ The society engine uses API version 5. Every individual chooses its own decision
 
 ## Choose an authoring route
 
-The visual editor supplies basic harvest, meal, thinking, pledge and voting choices, plus phase-specific conditional actions. The advanced action editor accepts the same structured decisions as Go. Uploaded Go supports richer branching and private-memory adaptation. The shipped Stewards, Thinkers, Gatherers, Diplomats, Wanderers and Learners are explicit programmed example behaviours; their names do not imply measured intelligence or guaranteed cooperation.
+The visual editor supplies basic harvest, meal, thinking, pledge and voting choices, plus phase-specific conditional actions. The advanced action editor accepts the same structured decisions as Go. Uploaded Go supports richer branching and private-memory adaptation. The shipped Wardens, Tinkerers, Locusts, Envoys, Barons and Sunchasers (policies `warden`, `tinkerer`, `locust`, `envoy`, `baron`, `sunchaser`) are explicit programmed example behaviours in `pkg/society/presets.go`; the README describes each style. A builder may name any of them as its fallback. Setups saved with the earlier policy names load as the nearest current preset.
 
 The legacy API returning `Action{Food, Energy}` belongs to the old game at `/legacy`. It is not automatically converted into this interface.
 

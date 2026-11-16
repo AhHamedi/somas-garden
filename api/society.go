@@ -309,7 +309,7 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/society"), "/")
 	parts := strings.Split(path, "/")
 	if path == "config" && r.Method == "GET" {
-		jsonReply(w, 200, map[string]any{"settings": society.DefaultSettings(), "teams": society.DefaultTeams(), "catalogue": society.Catalogue(), "phases": []string{"environment", "movement", "harvest", "proposals", "voting", "transfers", "eating", "close"}, "goUploads": true})
+		jsonReply(w, 200, map[string]any{"settings": society.DefaultSettings(), "teams": society.DefaultTeams(), "presets": society.Presets(), "catalogue": society.Catalogue(), "phases": []string{"environment", "movement", "harvest", "proposals", "voting", "transfers", "eating", "close"}, "goUploads": true})
 		return
 	}
 	if parts[0] == "strategies" {

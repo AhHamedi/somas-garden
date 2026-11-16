@@ -1,6 +1,6 @@
 // New world, team behaviours, saved worlds and the guide.
 
-import { esc, fmt, plural, teamColor, PHASES } from "/game/model.js";
+import { esc, fmt, plural, teamColor, PHASES, migrateTeams } from "/game/model.js";
 import { $, icon, toast } from "/game/dom.js";
 
 const copy = (v) => structuredClone(v);
@@ -61,15 +61,6 @@ const SECTIONS = [
   ["politics", "Politics", "hall"],
   ["agents", "Agents", "mind"],
 ];
-
-const POLICY_TEXT = {
-  steward: "Conserves the field, organises",
-  thinker: "Eats enough, thinks",
-  gatherer: "Hoards food",
-  diplomat: "Builds institutions",
-  wanderer: "Follows weather and food",
-  learner: "Adapts from memory",
-};
 
 /** Field capacities exactly as the engine assigns them. */
 export function plotCapacities(plots, total) {
@@ -249,12 +240,15 @@ export class Setup {
     this.draft = saved?.settings
       ? {
           settings: { ...defaults, ...saved.settings },
-          teams: saved.teams,
+          teams: migrateTeams(saved.teams, this.app.config.teams),
           seed: saved.seed ?? 42,
         }
       : {
           settings: copy(s?.settings || defaults),
-          teams: copy(s?.teams || this.app.config.teams),
+          teams: migrateTeams(
+            copy(s?.teams || this.app.config.teams),
+            this.app.config.teams,
+          ),
           seed: s?.seed ?? 42,
         };
     // Drafts saved before death lasted until the meteor kept the old one-day default.
@@ -329,7 +323,7 @@ export class Setup {
         return `<div class="team-list">${this.draft.teams
           .map(
             (t, i) =>
-              `<div class="team-edit"><span class="avatar" style="background:${teamColor(i)}"></span><label><input data-team-name="${i}" value="${esc(t.name)}" maxlength="40" aria-label="Team ${i + 1} name"/><small>${t.strategyId ? "Imported Go" : t.builder ? "Custom" : esc(POLICY_TEXT[t.policy] || "")}</small></label><select data-team-policy="${i}" aria-label="Team ${i + 1} behaviour">${this.app.config.teams.map((p) => `<option value="${esc(p.policy)}" ${t.policy === p.policy && !t.builder && !t.strategyId ? "selected" : ""}>${esc(p.name)}</option>`).join("")}${t.builder ? '<option value="custom" selected>Custom</option>' : ""}${t.strategyId ? '<option value="imported" selected>Imported Go</option>' : ""}</select><button type="button" class="btn" data-edit-team="${i}">Edit</button><button type="button" class="icon-button" data-remove-team="${i}" aria-label="Remove ${esc(t.name)}" ${this.draft.teams.length < 2 ? "disabled" : ""}>${icon("close")}</button></div>`,
+              `<div class="team-edit"><span class="avatar" style="background:${teamColor(i)}"></span><label><input data-team-name="${i}" value="${esc(t.name)}" maxlength="40" aria-label="Team ${i + 1} name"/><small>${t.strategyId ? "Imported Go" : t.builder ? "Custom" : esc(this.app.config.presets?.find((x) => x.policy === t.policy)?.summary || "")}</small></label><select data-team-policy="${i}" aria-label="Team ${i + 1} behaviour">${this.app.config.teams.map((p) => `<option value="${esc(p.policy)}" ${t.policy === p.policy && !t.builder && !t.strategyId ? "selected" : ""}>${esc(p.name)}</option>`).join("")}${t.builder ? '<option value="custom" selected>Custom</option>' : ""}${t.strategyId ? '<option value="imported" selected>Imported Go</option>' : ""}</select><button type="button" class="btn" data-edit-team="${i}">Edit</button><button type="button" class="icon-button" data-remove-team="${i}" aria-label="Remove ${esc(t.name)}" ${this.draft.teams.length < 2 ? "disabled" : ""}>${icon("close")}</button></div>`,
           )
           .join(
             "",
