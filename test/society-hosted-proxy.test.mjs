@@ -21,7 +21,10 @@ async function listen(t, handler) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function fixture(t, { claim, upstream, sandboxError, scope = "production" } = {}) {
+async function fixture(
+  t,
+  { claim, upstream, sandboxError, missingWorkspace, scope = "production" } = {},
+) {
   const requests = [],
     identities = [],
     allocations = [];
@@ -49,7 +52,8 @@ async function fixture(t, { claim, upstream, sandboxError, scope = "production" 
       allocations.push(value);
       return claim ? claim(value) : { allowed: true };
     },
-    async getSandbox(identity) {
+    async getSandbox(identity, { allowCreate }) {
+      if (missingWorkspace && !allowCreate) return null;
       identities.push(identity);
       if (sandboxError) throw sandboxError;
       return { origin: target, token: identity.token };
@@ -286,4 +290,13 @@ test("storage exhaustion is not described as a server waking up", async (t) => {
   const data = await response.json();
   assert.match(data.error, /storage capacity/);
   assert.doesNotMatch(data.error, /waking up/);
+});
+
+test("opening a private link from a different browser does not allocate a drive", async (t) => {
+  const f = await fixture(t, { missingWorkspace: true });
+  const list = await fetch(f.origin + "/api/society/runs");
+  assert.deepEqual(await list.json(), { runs: [] });
+  const response = await fetch(f.origin + "/api/society/runs/" + run);
+  assert.equal(response.status, 404);
+  assert.equal(f.identities.length, 0);
 });

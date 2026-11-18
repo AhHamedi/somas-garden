@@ -8,13 +8,13 @@ The static game calls `api/society-hosted.mjs`. Its signed HttpOnly cookie selec
 
 Every phase commits an observer replay and a private checkpoint before publishing the new history index. Checkpoints retain private memory, political state and exact random streams. A sleeping/restarted workspace resumes at the last committed phase; older saves without checkpoints remain archives. Failed persistence returns committed state and rejects further changes, avoiding gaps in history.
 
-The browser cookie is the workspace key: different browsers get separate worlds. Clearing it loses access to that workspace. Run URLs are not cross-browser sharing links; use the game's exports to share results. A new workspace is not created for each new world. Hosted allocation is currently capped at 30 new workspaces per environment/day and 4 per connection/day; returning workspaces are admitted without counting again. Idle runtimes stop after their timeout, renewed by activity. Drives retain data independently of runtime shutdown.
+The browser cookie is the workspace key: different browsers get separate worlds. Clearing it loses access to that workspace. Run URLs are not cross-browser sharing links; use the game's exports to share results. A new workspace is not created for each new world. Hosted allocation is currently capped at 30 new workspaces per environment/day and 4 per connection/day; returning workspaces are admitted without counting again. Idle runtimes stop after their timeout, renewed by activity. Under storage pressure, the proxy moves a stopped, inactive workspace to the private `selforg-society-archives` bucket. It reads the uploaded archive back and verifies its SHA-256 checksum before releasing the Drive. The same browser restores its files, including replay history, checkpoints and compiled Go strategies, before the engine starts. Active workspaces still need a Drive and an available Sandbox. The archive registry and short database leases coordinate requests across server instances.
 
 ### Release the current game
 
 Use Node 20.18.1+ and Go 1.23+, with this checkout linked to the existing `mooni-selforg` Vercel project. The project needs the existing `SELFORG_ENGINE_SECRET`, `SELFORG_GO_SNAPSHOT`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings. The Go snapshot supplies `/vercel/go/bin/go` and writable Go caches. Vercel's OIDC credentials authorize the proxy's Sandbox and Drive calls; keep them out of the browser and engine.
 
-Apply `supabase/migrations/20261116124303_society_hosted_session_limits.sql` once to the configured database. It adds only the society allocation table and service-role-only RPC, without changing legacy data.
+Apply the society session and workspace archive migrations in `supabase/migrations/` to the configured database. Only the server can access the archive bucket and workspace registry.
 
 ```sh
 npm ci

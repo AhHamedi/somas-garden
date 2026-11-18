@@ -110,7 +110,20 @@ export function createSocietyProxy({
           { status: 429 },
         );
       }
-      const host = await getSandbox(identity);
+      const mayCreate = req.method === "POST" && ["runs", "strategies"].includes(path);
+      const host = await getSandbox(identity, { allowCreate: mayCreate });
+      if (!host) {
+        if (req.method === "GET" && ["runs", "strategies"].includes(path)) {
+          res.setHeader("Content-Type", "application/json");
+          res.statusCode = 200;
+          res.end(JSON.stringify({ [path]: [] }));
+          return;
+        }
+        throw Object.assign(
+          new Error("This item is not in this browser’s saved workspace."),
+          { status: 404 },
+        );
+      }
       url.searchParams.delete("path");
       const upstream = await fetch(`${host.origin}/api/society/${path}${url.search}`, {
         method: req.method,
