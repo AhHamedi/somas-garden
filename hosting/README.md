@@ -33,7 +33,7 @@ Verify the staged production URL, including creating/playing a world, Results, s
 vercel promote <verified-production-deployment>
 ```
 
-Verify the Mooni address after promotion. Roll back by promoting the preceding verified production deployment. Local development remains `npm run dev` and does not require cloud credentials. Use a separate browser workspace for hosted checks; never test against a user's existing world.
+Verify the Mooni address after promotion. For a rollback, select a verified release that reads the workspace archive registry. Builds before commit `16b330a` create an empty Drive when an archived browser returns. Local development remains `npm run dev` and does not require cloud credentials. Use a separate browser workspace for hosted checks; never test against a user's existing world.
 
 ## Legacy one-field prototype
 
