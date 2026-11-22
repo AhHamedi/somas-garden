@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	handler "selforg-garden/api"
+	handler "selforg-garden/internal/societyapi"
 )
 
 func main() {

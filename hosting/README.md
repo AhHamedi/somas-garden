@@ -25,7 +25,7 @@ npm run build:hosted
 vercel deploy --prod --skip-domain
 ```
 
-Vercel now runs `scripts/build-vercel.mjs` for both Git and CLI deployments. It downloads a checksum-verified Go toolchain and builds the Linux engine, contract sources and game configuration from the release's source before preparing the static pages. These private assets stay under `runner/` and are included in the hosted proxy function, never in `public/`. A Git deployment no longer depends on locally generated files. `.vercelignore` retains the build sources and excludes local Go API helpers from serverless function discovery.
+Vercel now runs `scripts/build-vercel.mjs` for both Git and CLI deployments. It downloads a checksum-verified Go toolchain and builds the Linux engine, contract sources and game configuration from the release's source before preparing the static pages. These private assets stay under `runner/` and are included in the hosted proxy function, never in `public/`. A Git deployment no longer depends on locally generated files. The engine HTTP handlers live under `internal/societyapi/`, outside Vercel’s `api/` function discovery. `.vercelignore` retains the engine build sources.
 
 Verify the staged production URL, including creating/playing a world, Results, saved-world reload and an imported Go strategy. Then promote that exact deployment:
 

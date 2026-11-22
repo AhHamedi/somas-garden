@@ -72,15 +72,15 @@ npm run test:browser:society
 npm run check
 ```
 
-| Area                                             | Files                                                           |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| Daily phases, resources, observations and agents | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go` |
-| Rules, votes and departments                     | `pkg/society/politics*.go`                                      |
-| World settings                                   | `pkg/society/settings.go`                                       |
-| Local runs, history, imports and Go workers      | `api/society.go`, `api/society_strategy.go`                     |
-| Observer interface                               | `public/society.html`, `public/game/`                           |
-| Headless experiments                             | `cmd/society/main.go`                                           |
-| Original one-field experiment                    | `pkg/garden/`, `public/index.html`                              |
+| Area                                             | Files                                                                       |
+| ------------------------------------------------ | --------------------------------------------------------------------------- |
+| Daily phases, resources, observations and agents | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go`             |
+| Rules, votes and departments                     | `pkg/society/politics*.go`                                                  |
+| World settings                                   | `pkg/society/settings.go`                                                   |
+| Local runs, history, imports and Go workers      | `internal/societyapi/society.go`, `internal/societyapi/society_strategy.go` |
+| Observer interface                               | `public/society.html`, `public/game/`                                       |
+| Headless experiments                             | `cmd/society/main.go`                                                       |
+| Original one-field experiment                    | `pkg/garden/`, `public/index.html`                                          |
 
 ## Hosting
 

@@ -14,5 +14,4 @@ test
 
 .github
 hosting
-api/society*.go
 hosted-public

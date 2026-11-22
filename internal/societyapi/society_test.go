@@ -171,7 +171,7 @@ func TestDownloadableStrategyRunsThroughWorker(t *testing.T) {
 		binary = "go.exe"
 	}
 	t.Setenv("GO_BINARY", filepath.Join(runtime.GOROOT(), "bin", binary))
-	source, err := os.ReadFile(filepath.Join("..", "public", "society-example.go"))
+	source, err := os.ReadFile(filepath.Join("..", "..", "public", "society-example.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
