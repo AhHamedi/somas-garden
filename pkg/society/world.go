@@ -192,8 +192,14 @@ func (w *World) environment() {
 			w.cropEvent(p)
 			continue
 		}
-		growth := w.Settings.Growth * math.Min(float64(n), float64(p.Capacity)/w.Settings.ProductiveCapacity) * float64(p.Stock) / float64(p.Capacity)
-		p.GrowthRemainder += growth
+		if w.Settings.ProductiveCapacity > 0 {
+			// Retain the exact arithmetic order used by older checkpoints.
+			p.GrowthRemainder += w.Settings.Growth * math.Min(float64(n), float64(p.Capacity)/w.Settings.ProductiveCapacity) * float64(p.Stock) / float64(p.Capacity)
+		} else {
+			// Use hundredths so repeated fractional days never lose a whole carrot to rounding.
+			hundredths := p.Stock*w.Settings.DailyGrowthPercent + int(math.Round(p.GrowthRemainder*100))
+			p.GrowthRemainder = float64(hundredths) / 100
+		}
 		grown := min(p.Capacity-p.Stock, int(p.GrowthRemainder))
 		p.Stock += grown
 		p.GrowthRemainder -= float64(grown)

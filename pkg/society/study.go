@@ -178,7 +178,7 @@ func SummariseDay(s *Snapshot, frame int, prev *StudyDay) StudyDay {
 		d.plots[i] = a.Plot
 		d.exclusions[i] = a.Exclusions
 		t.Score += a.Score
-		t.Thought += a.Thought
+		t.Thought += a.Thought * s.Settings.ThinkingReward
 		t.Politics += a.PoliticalMind
 		t.Harvested += float64(a.Harvested)
 		t.Eaten += float64(a.Eaten)
@@ -290,7 +290,7 @@ func SummariseAgents(s *Snapshot, frame int) StudyAgents {
 	}
 	for i, a := range s.Agents {
 		out.Score[i] = round(a.Score, 4)
-		out.Thought[i] = round(a.Thought, 4)
+		out.Thought[i] = round(a.Thought*s.Settings.ThinkingReward, 4)
 		out.Politics[i] = round(a.PoliticalMind, 4)
 		out.Eaten[i] = a.TotalEaten
 		out.Harvested[i] = a.TotalHarvested

@@ -17,7 +17,7 @@ func Presets() []PresetInfo {
 	return []PresetInfo{
 		{"warden", "Wardens", "Propose fair harvest queues and investigate breaches of the agreed quota"},
 		{"tinkerer", "Tinkerers", "Try four strategies across months and use their own scores to choose again"},
-		{"locust", "Locusts", "Take extra carrots from bumper crops and rank themselves first at harvest"},
+		{"locust", "Locusts", "Collect bonus carrots and rank themselves first at harvest"},
 		{"envoy", "Envoys", "Elect Trade representatives and give spare carrots for blight relief"},
 		{"baron", "Barons", "Back voting tokens for productivity and spend spare carrots on satisfaction"},
 		{"sunchaser", "Sunchasers", "Choose a sunny plot at reset and spend their mind on thinking"},
@@ -135,14 +135,19 @@ func presetAction(v Observation, policy string) Decision {
 }
 
 // Estimate how many carrots can be taken while overnight growth returns the field
-// to its current size. Strategies can still take more, especially after a bumper crop.
+// to its current size. Strategies can still take more, especially when bonus carrots appear.
 func presetHarvest(v Observation, p PlotView, policy string) int {
 	need, n := v.Settings.DailyFood, len(p.Residents)
 	if n == 0 || p.Stock == nil || p.Capacity == 0 {
 		return 0
 	}
-	k := v.Settings.Growth * min(float64(n), float64(p.Capacity)/v.Settings.ProductiveCapacity)
-	regrowingShare := k * float64(*p.Stock) / (float64(p.Capacity) + k) / float64(n)
+	rate := float64(v.Settings.DailyGrowthPercent) / 100
+	regrowingShare := float64(*p.Stock) * rate / (1 + rate) / float64(n)
+	if v.Settings.ProductiveCapacity > 0 {
+		// Preserve harvest decisions when resuming a world with the old growth law.
+		k := v.Settings.Growth * min(float64(n), float64(p.Capacity)/v.Settings.ProductiveCapacity)
+		regrowingShare = k * float64(*p.Stock) / (float64(p.Capacity) + k) / float64(n)
+	}
 	share := int(regrowingShare)
 	// Spread fractional shares across different individuals on different days.
 	if float64(v.RandomSeed%10000)/10000 < regrowingShare-math.Floor(regrowingShare) {

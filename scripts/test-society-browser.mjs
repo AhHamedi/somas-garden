@@ -71,8 +71,23 @@ try {
     ["/api/society/config"],
     "a passive first visit allocates no world",
   );
+  const setup = page.locator("#setup-dialog");
+  await setup.getByRole("spinbutton", { name: "First extra carrot" }).fill("1.5");
+  await setup.getByRole("spinbutton", { name: "Each mind spent thinking" }).fill("0");
+  assert.match(
+    await setup.locator('[data-chart="rewards"]').innerText(),
+    /earns 3 points.*earns 0/s,
+  );
+  await setup.getByRole("button", { name: "Food", exact: true }).click();
+  await setup.getByRole("spinbutton", { name: "Daily growth", exact: true }).fill("45");
+  assert.match(await setup.locator('[data-chart="growth"]').innerText(), /grow 4.5 more/);
   await page.click('#setup-dialog button[type="submit"]');
   await page.waitForFunction(() => window.amoeboids?.ix, null, { timeout: 30000 });
+  const settings = await page.evaluate(() => amoeboids.ix.s.settings);
+  assert.deepEqual(
+    [settings.overeatingReward, settings.thinkingReward, settings.dailyGrowthPercent],
+    [1.5, 0, 45],
+  );
   const initialRunId = await page.evaluate(() => amoeboids.pb.id);
 
   // Every inhabited field is selectable.

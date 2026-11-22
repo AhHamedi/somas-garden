@@ -21,11 +21,12 @@ const CTL = {
   personalCapacity: ["Private store", 1, 60, 1, 10000, "carrots"],
   capacityPerAgent: ["Field per Amoeboid", 1, 50, 1, 1000, "carrots"],
   startingStock: ["Starting stock", 0, 1, 0.05, 1, "%", 100],
-  growth: ["Growth coefficient", 0, 20, 0.1, 100],
-  productiveCapacity: ["Carrots per worker", 1, 50, 1, 1000],
+  dailyGrowthPercent: ["Daily growth", 0, 100, 1, 100, "%"],
+  overeatingReward: ["First extra carrot", 0, 10, 0.1, 100, "points"],
+  thinkingReward: ["Each mind spent thinking", 0, 10, 0.1, 100, "points"],
   representativeCapacity: ["Trade representative’s store", 2, 150, 1, 100000, "carrots"],
   blightChance: ["Blight chance", 0, 1, 0.01, 1, "%", 100],
-  bumperChance: ["Bumper crop chance", 0, 1, 0.01, 1, "%", 100],
+  bumperChance: ["Chance of extra carrots", 0, 1, 0.01, 1, "%", 100],
   votingTokens: ["Daily tokens per resident", 1, 50, 1, 10000],
   ruleFraction: ["Required share", 0.01, 1, 0.01, 1, "%", 100],
   mindCapacity: ["Mind capacity", 1, 40, 1, 100],
@@ -77,7 +78,7 @@ function mealChart(set, W) {
     L = 8,
     step = (W - L - 8) / (max + 1),
     bw = Math.min(30, step - 6);
-  const top = Math.log2(1 + Math.max(1, max - need));
+  const top = set.overeatingReward * Math.log2(1 + Math.max(1, max - need)) || 1;
   const bars = [];
   for (let e = 0; e <= max; e++) {
     const x = L + e * step + (step - bw) / 2;
@@ -94,7 +95,7 @@ function mealChart(set, W) {
         `<rect x="${x}" y="${base}" width="${bw}" height="${h}" rx="3" fill="var(--body)" opacity="${excluded ? 1 : 0.55}"/>${label ? `<text x="${x + bw / 2}" y="${base + h + 13}" text-anchor="middle" class="cv">${label}</text>` : ""}`,
       );
     } else {
-      const v = Math.log2(1 + e - need);
+      const v = set.overeatingReward * Math.log2(1 + e - need);
       const h = (v / top) * 92;
       bars.push(
         `<rect x="${x}" y="${base - Math.max(2, h)}" width="${bw}" height="${Math.max(2, h)}" rx="3" fill="var(--joy)" opacity="${v ? 1 : 0.4}"/>${v ? `<text x="${x + bw / 2}" y="${base - h - 5}" text-anchor="middle" class="cv">${fmt(v, 1)}</text>` : ""}`,
@@ -113,41 +114,15 @@ function mealChart(set, W) {
   );
 }
 
-/** Daily regrowth of an average plot by stock, against what its residents need. */
-function growthChart(set, population, W) {
-  const plots = Math.max(1, set.plots);
-  const K = (set.capacityPerAgent * population) / plots;
-  const n = population / plots;
-  const g = set.growth * Math.min(n, K / Math.max(1e-9, set.productiveCapacity));
-  const need = n * set.dailyFood;
-  const grow = (f) => Math.max(0, Math.min(g * f, K * (1 - f)));
-  const peakAt = g + K > 0 ? K / (g + K) : 0;
-  const peak = grow(peakAt);
-  const H = 190,
-    L = 8,
-    B = 160,
-    T = 22;
-  const ymax = Math.max(peak, need) * 1.12 || 1;
-  const x = (f) => L + f * (W - L - 12);
-  const y = (v) => B - (v / ymax) * (B - T);
-  const pts = [];
-  for (let i = 0; i <= 80; i++)
-    pts.push(`${x(i / 80).toFixed(1)},${y(grow(i / 80)).toFixed(1)}`);
-  const start = set.startingStock;
-  return svgFrame(
-    W,
-    H,
-    `<polygon points="${x(0)},${B} ${pts.join(" ")} ${x(1)},${B}" fill="var(--carrot)" opacity="0.16"/>
-     <polyline points="${pts.join(" ")}" fill="none" stroke="var(--carrot)" stroke-width="3" stroke-linejoin="round"/>
-     <line x1="${L}" x2="${x(1)}" y1="${B}" y2="${B}" class="axis"/>
-     <line x1="${L}" x2="${x(1)}" y1="${y(need)}" y2="${y(need)}" class="need"/>
-     <text x="${L}" y="${y(need) - 6}" class="cl"${peak < need ? ' style="fill:var(--body)"' : ""}>residents eat ${fmt(need, need < 10 ? 1 : 0)} a day</text>
-     <text x="${x(peakAt)}" y="${y(peak) - 8 > y(need) + 4 || y(peak) - 8 < y(need) - 16 ? y(peak) - 8 : y(peak) + 20}" text-anchor="middle" class="cl" style="fill:var(--carrot)">grows up to ${fmt(peak, peak < 10 ? 1 : 0)} a day</text>
-     <circle cx="${x(start)}" cy="${y(grow(start))}" r="5" fill="var(--carrot)" stroke="var(--panel-solid)" stroke-width="2"/>
-     <text x="${x(start)}" y="${B + 14}" text-anchor="middle" class="cv">start ${Math.round(start * 100)}%</text>
-     ${start > 0.08 ? `<text x="${L}" y="${B + 14}" class="cx">empty</text>` : ""}${start < 0.9 ? `<text x="${x(1)}" y="${B + 14}" text-anchor="end" class="cx">full ${fmt(Math.round(K))}</text>` : ""}`,
-    "Daily regrowth by field stock",
-  );
+function growthExample(set) {
+  const extra = (10 * set.dailyGrowthPercent) / 100;
+  return `<p class="note">At dawn, 10 carrots left in an occupied field grow ${fmt(extra, 1)} more if there is room. Fractions carry over. Leaving zero carrots means zero ordinary growth.</p>`;
+}
+
+function rewardExample(set) {
+  const food = 2 * set.overeatingReward;
+  const thought = 3 * set.thinkingReward;
+  return `<p class="note">Each extra carrot earns less than the previous one. Eating 3 above the daily need earns ${fmt(food, 2)} points. Thinking with 3 mind earns ${fmt(thought, 2)}.</p>`;
 }
 
 function weatherChart(set, W) {
@@ -282,7 +257,8 @@ export class Setup {
     return {
       plots: () => plotsChart(set, pop, W),
       meal: () => mealChart(set, W),
-      growth: () => growthChart(set, pop, W),
+      growth: () => growthExample(set),
+      rewards: () => rewardExample(set),
       weather: () => weatherChart(set, W),
     };
   }
@@ -302,6 +278,7 @@ export class Setup {
           ${card("Population", `<div class="cfg-big"><b data-live="pop">${fmt(this.population())}</b><span>${plural(this.draft.teams.length, "team")}</span></div>${this.ctl("copies")}`)}
           ${card("Time", `${this.ctl("months")}${this.ctl("days")}`)}
           ${card("Land", this.ctl("plots"), c.plots)}
+          ${card("Satisfaction", `${this.ctl("overeatingReward")}${this.ctl("thinkingReward")}${c.rewards}`)}
           ${card("Seed", `<div class="seed-row"><input type="number" data-k="seed" data-scale="1" min="0" max="2147483647" value="${this.draft.seed}" aria-label="Random seed"/><button type="button" class="btn" data-dice>${icon("spark")}Random</button></div>`)}
         </div>`;
       }
@@ -317,9 +294,9 @@ export class Setup {
       case "food":
         return `<div class="cfg-grid">
           ${card("One meal", `${this.ctl("dailyFood")}${this.ctl("bodyCapacity")}`, `${c.meal}<p class="cfg-key"><i style="background:var(--joy)"></i>satisfaction<i style="background:var(--body)"></i>body lost</p>`)}
-          ${card("An average field", `${this.ctl("capacityPerAgent")}${this.ctl("startingStock")}${this.ctl("growth")}${this.ctl("productiveCapacity")}`, c.growth)}
+          ${card("Carrot growth", `${this.ctl("dailyGrowthPercent")}${c.growth}${this.ctl("capacityPerAgent")}${this.ctl("startingStock")}`)}
           ${card("Personal stores", `${this.ctl("personalCapacity")}${this.ctl("representativeCapacity")}`)}
-          ${card("Crop events", `${this.ctl("blightChance")}${this.ctl("bumperChance")}<p class="cfg-key">Each occupied plot draws once per day from day four. The combined chance must be at most 100%. A blighted plot needs one donated carrot per resident from other plots before nightfall.</p>`)}
+          ${card("Crop events", `${this.ctl("blightChance")}${this.ctl("bumperChance")}<p class="cfg-key">Each occupied plot draws once per day from day four. The field can gain up to one daily meal per resident, in extra carrots, limited by field space. The combined chance must be at most 100%. A blighted plot needs one donated carrot per resident from other plots before nightfall.</p>`)}
         </div>`;
       case "mind":
         return `<div class="cfg-grid">
@@ -790,10 +767,10 @@ export class Setup {
         <dt><kbd>[</kbd> and <kbd>]</kbd></dt><dd>Slower or faster.</dd>
         <dt>Drag and scroll</dt><dd>Move around the island and zoom in to pick out individual Amoeboids.</dd></dl>
       <h3>Reading the island</h3>
-      <p>Select a plot to inspect its residents, harvest order and crop conditions. Each resident stays on that plot for the month. A blight puts the plot at risk. Its Trade representative receives donations from other plots and can send carrots to residents. A bumper crop increases the field’s yield.</p>
+      <p>Select a plot to inspect its residents, harvest order and crop conditions. Each resident stays on that plot for the month. A blight puts the plot at risk. Its Trade representative receives donations from other plots and can send carrots to residents. The Extra carrots event adds up to one daily meal per resident, if the field has room.</p>
       <h3>Rules of the world</h3>
       <p>Residents can submit their preferred order for the whole harvest queue. Every active resident may propose rules, elect a representative for Trade or Justice, and vote to revoke either role. Justice handles sanctions. Rule ballots count either residents or tokens, as the plot’s threshold specifies.</p>
-      <p>Eating meets a resident’s daily need. Extra food earns diminishing satisfaction and each unit of mind spent thinking earns one point. An excluded resident’s carrots disappear. The meteor resets plots and roles each month, and residents keep their private memories.</p>
+      <p>Eating meets a resident’s daily need. Extra food earns diminishing satisfaction. Set the rewards for extra food and thinking under New world → World → Satisfaction. An excluded resident’s carrots disappear. The meteor resets plots and roles each month, and residents keep their private memories.</p>
       <p><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the Go agent example</a></p></div>`;
     dlg.querySelector("[data-close]").onclick = () => dlg.close();
     dlg.showModal();

@@ -154,7 +154,7 @@ func (w *World) cropEvent(p *Plot) {
 			p.GrowthRemainder = 0
 		}
 		p.CropEvent = "bumper"
-		w.event("bumper", -1, p.ID, fmt.Sprintf("A bumper crop added %d carrots", gain), float64(gain))
+		w.event("bumper", -1, p.ID, fmt.Sprintf("The field gained %d extra carrots", gain), float64(gain))
 	}
 }
 
@@ -272,7 +272,7 @@ func (w *World) eating(ds map[int]Decision) {
 		a.TotalEaten += n
 		a.Body = math.Min(w.Settings.BodyCapacity, a.Body+float64(n-w.Settings.DailyFood))
 		extra := max(0, n-w.Settings.DailyFood)
-		score := math.Log2(1 + float64(extra))
+		score := w.Settings.OvereatingReward * math.Log2(1+float64(extra))
 		a.Score += score
 		w.event("eat", a.ID, a.Plot, fmt.Sprintf("Ate %d carrots for %.2f satisfaction", n, score), float64(n))
 		if a.Body <= 0 {
@@ -283,7 +283,7 @@ func (w *World) eating(ds map[int]Decision) {
 		if !math.IsNaN(thought) && !math.IsInf(thought, 0) && thought > 0 {
 			a.Mind = roundMind(a.Mind - thought)
 			a.Thought += thought
-			a.Score += thought
+			a.Score += thought * w.Settings.ThinkingReward
 			w.event("think", a.ID, a.Plot, fmt.Sprintf("Thought with %.2f mind", thought), thought)
 		}
 	}

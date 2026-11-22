@@ -10,7 +10,7 @@ import (
 func DefaultSettings() Settings {
 	return Settings{
 		Plots: 6, Copies: 50, Days: 30, Months: 12,
-		CapacityPerAgent: 10, StartingStock: .8, Growth: 4, ProductiveCapacity: 10,
+		CapacityPerAgent: 10, StartingStock: .8, DailyGrowthPercent: 40, OvereatingReward: 1, ThinkingReward: 1,
 		DailyFood: 2, BodyCapacity: 2, MindCapacity: 12, StartingMind: 6,
 		PersonalCapacity: 12, RepresentativeCapacity: 60,
 		WeatherRates: []float64{12, 8, 4}, WeatherPersistence: .6, BlightChance: .04, BumperChance: .04,
@@ -55,13 +55,13 @@ func (s Settings) Validate(teams int) error {
 	if s.CapacityPerAgent < 1 || s.CapacityPerAgent > 1000 || s.Plots > teams*s.Copies*s.CapacityPerAgent || s.PersonalCapacity < 1 || s.PersonalCapacity > 10000 || s.RepresentativeCapacity <= s.PersonalCapacity || s.RepresentativeCapacity > 100000 {
 		return fmt.Errorf("invalid storage or harvest capacity")
 	}
-	vals := []float64{s.StartingStock, s.Growth, s.ProductiveCapacity, s.BodyCapacity, s.MindCapacity, s.StartingMind, s.WeatherPersistence, s.BlightChance, s.BumperChance, s.RuleFraction, s.ProposalCost, s.JusticeCost, s.GovernmentCost}
+	vals := []float64{s.StartingStock, s.Growth, s.ProductiveCapacity, s.OvereatingReward, s.ThinkingReward, s.BodyCapacity, s.MindCapacity, s.StartingMind, s.WeatherPersistence, s.BlightChance, s.BumperChance, s.RuleFraction, s.ProposalCost, s.JusticeCost, s.GovernmentCost}
 	for _, v := range vals {
 		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 100000 {
 			return fmt.Errorf("settings must be finite nonnegative numbers")
 		}
 	}
-	if s.StartingStock > 1 || s.WeatherPersistence > 1 || s.BodyCapacity <= 0 || s.ProductiveCapacity <= 0 || s.StartingMind > s.MindCapacity || s.DailyFood < 0 || s.DailyFood > 1000 || s.BlightChance+s.BumperChance > 1 || len(s.WeatherRates) != 3 {
+	if s.StartingStock > 1 || s.WeatherPersistence > 1 || s.BodyCapacity <= 0 || s.DailyGrowthPercent < 0 || s.DailyGrowthPercent > 100 || s.OvereatingReward > 100 || s.ThinkingReward > 100 || s.StartingMind > s.MindCapacity || s.DailyFood < 0 || s.DailyFood > 1000 || s.BlightChance+s.BumperChance > 1 || len(s.WeatherRates) != 3 {
 		return fmt.Errorf("invalid physical settings")
 	}
 	for _, v := range s.WeatherRates {

@@ -421,7 +421,7 @@ function commons(app, data, sc) {
     ${stat("Empty fields", pct(emptyDays / Math.max(1, plotDays)), `of plot-days; ${fmt(dry)} of ${fmt(s.plots.length)} plots ran dry`)}
     ${stat("Personally held", last ? fmt(last.held) : "–", "carrots at nightfall")}
     ${stat("Blights", fmt(crops.rescued + crops.failed), `${fmt(crops.rescued)} rescued · ${fmt(crops.failed)} failed`)}
-    ${stat("Bumper crops", fmt(crops.bumper), "plot-days")}
+    ${stat("Extra carrot events", fmt(crops.bumper), "plot-days")}
   </div>`;
   const panels = s.plots
     .map((p, j) => {

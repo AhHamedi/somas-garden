@@ -8,32 +8,36 @@ import (
 )
 
 type Settings struct {
-	RepresentativeCapacity int       `json:"representativeCapacity"`
-	BlightChance           float64   `json:"blightChance"`
-	BumperChance           float64   `json:"bumperChance"`
-	VotingTokens           int       `json:"votingTokens"`
-	RuleThreshold          string    `json:"ruleThreshold"`
-	RuleFraction           float64   `json:"ruleFraction"`
-	Plots                  int       `json:"plots"`
-	Copies                 int       `json:"copies"`
-	Days                   int       `json:"days"`
-	Months                 int       `json:"months"`
-	CapacityPerAgent       int       `json:"capacityPerAgent"`
-	StartingStock          float64   `json:"startingStock"`
-	Growth                 float64   `json:"growth"`
-	ProductiveCapacity     float64   `json:"productiveCapacity"`
-	DailyFood              int       `json:"dailyFood"`
-	BodyCapacity           float64   `json:"bodyCapacity"`
-	MindCapacity           float64   `json:"mindCapacity"`
-	StartingMind           float64   `json:"startingMind"`
-	PersonalCapacity       int       `json:"personalCapacity"`
-	WeatherRates           []float64 `json:"weatherRates"`
-	WeatherPersistence     float64   `json:"weatherPersistence"`
-	ProposalCost           float64   `json:"proposalCost"`
-	JusticeCost            float64   `json:"justiceCost"`
-	GovernmentCost         float64   `json:"governmentCost"`
-	DecisionMS             int       `json:"decisionMs"`
-	MemoryBytes            int       `json:"memoryBytes"`
+	RepresentativeCapacity int     `json:"representativeCapacity"`
+	BlightChance           float64 `json:"blightChance"`
+	BumperChance           float64 `json:"bumperChance"`
+	VotingTokens           int     `json:"votingTokens"`
+	RuleThreshold          string  `json:"ruleThreshold"`
+	RuleFraction           float64 `json:"ruleFraction"`
+	Plots                  int     `json:"plots"`
+	Copies                 int     `json:"copies"`
+	Days                   int     `json:"days"`
+	Months                 int     `json:"months"`
+	CapacityPerAgent       int     `json:"capacityPerAgent"`
+	StartingStock          float64 `json:"startingStock"`
+	DailyGrowthPercent     int     `json:"dailyGrowthPercent"`
+	OvereatingReward       float64 `json:"overeatingReward"`
+	ThinkingReward         float64 `json:"thinkingReward"`
+	// Older worlds keep their original worker-limited growth rate.
+	Growth             float64   `json:"growth,omitempty"`
+	ProductiveCapacity float64   `json:"productiveCapacity,omitempty"`
+	DailyFood          int       `json:"dailyFood"`
+	BodyCapacity       float64   `json:"bodyCapacity"`
+	MindCapacity       float64   `json:"mindCapacity"`
+	StartingMind       float64   `json:"startingMind"`
+	PersonalCapacity   int       `json:"personalCapacity"`
+	WeatherRates       []float64 `json:"weatherRates"`
+	WeatherPersistence float64   `json:"weatherPersistence"`
+	ProposalCost       float64   `json:"proposalCost"`
+	JusticeCost        float64   `json:"justiceCost"`
+	GovernmentCost     float64   `json:"governmentCost"`
+	DecisionMS         int       `json:"decisionMs"`
+	MemoryBytes        int       `json:"memoryBytes"`
 }
 type Rule struct {
 	Mode        string   `json:"mode,omitempty"`

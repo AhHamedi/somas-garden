@@ -28,7 +28,7 @@ Open **http://127.0.0.1:8787** and press **Play**. Use **World** to inspect a pl
 | How do votes count?                | Rule ballots can use the share of eligible residents supporting a change, or the share of tokens cast for it. Founding, elections and revocations use a fixed resident majority.      |
 | Who can give food to another plot? | Residents can donate to their local Trade representative. The representative can send food directly to the recipient plot’s elected representative.                                   |
 | Who handles a breach?              | Justice reviews a public record of the breach and can issue a sanction. Residents can revoke either department holder.                                                                |
-| What happens at a crop shock?      | A bumper crop adds carrots. A blighted plot must receive enough outside aid by the end of transfers or all its residents are excluded.                                                |
+| What happens at a crop shock?      | The Extra carrots event adds carrots. A blighted plot must receive enough outside aid by the end of transfers or all its residents are excluded.                                      |
 
 The [MVP specification](docs/AMOEBOIDS_SPECIFICATION.md) gives the daily sequence, parameters and worked examples for harvest ranking, voting and relief.
 

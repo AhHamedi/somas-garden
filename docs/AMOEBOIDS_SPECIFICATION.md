@@ -47,9 +47,9 @@ The result is **B, A, C**, on 5, 3 and 1 points respectively. Suppose the field 
 
 ### Food and score
 
-On an occupied plot, ordinary daily growth is `growth × min(residents, field capacity / productive capacity) × stock / field capacity`. Growth defaults to 4 and productive capacity to 10. Fractional growth accumulates until a whole carrot can be added. Field stock cannot exceed capacity.
+At dawn, each occupied plot grows a percentage of its remaining carrots, up to field capacity. The default is 40%. A field with 10 carrots and room to grow adds 4. Fractions carry over to the next day. Empty fields cannot regrow unaided. Worlds saved under the previous rules keep their original growth model.
 
-Each individual chooses its meal. With a daily need of two, a meal of five counts as three extra carrots and earns `log2(1 + 3) = 2` satisfaction. The body changes by the amount eaten minus daily need, up to body capacity. If it reaches zero the individual is excluded. An active individual can then spend available mind on thinking and earn one satisfaction per unit. With six mind spent, the five-carrot meal and thinking give eight satisfaction that day.
+New world settings give independent rewards for the first extra carrot and each mind spent thinking. Both default to 1 and either can be zero. Meal satisfaction is `overeating reward × log2(1 + carrots eaten above daily need)`. Thinking earns `thinking reward × mind spent`. With the defaults and a daily need of two, a meal of five earns two points. The body changes by the amount eaten minus daily need, up to body capacity. If it reaches zero the individual is excluded. An active individual can then spend available mind on thinking. With six mind spent, the five-carrot meal and thinking give eight satisfaction that day.
 
 ## Proposals, rule thresholds and voting tokens
 
@@ -85,7 +85,7 @@ A local donation moves carrots from the donor to its Trade representative. A gif
 
 ### When a plot needs help
 
-Starting on day four of each month, each occupied plot draws one crop event per day. The default probabilities are 4% blight, 4% bumper crop and 92% neither. A bumper crop adds up to one day’s food requirement for all active residents, subject to field capacity. Blight destroys up to that same amount of standing crop. The plot needs **one carrot per active resident** from other plots’ Trade representatives by the end of that day’s transfers. The receiving representative immediately plants incoming relief, even when its store is full. Each relief carrot restores one field carrot up to field capacity. At capacity, relief still counts and is consumed. Once the target is met, any excess can enter the representative’s personal store if there is room.
+Starting on day four of each month, each occupied plot draws one crop event per day. The default probabilities are 4% blight, 4% extra carrots and 92% neither. The Extra carrots event adds up to one day’s food requirement for all active residents, subject to field capacity. Blight destroys up to that same amount of standing crop. The plot needs **one carrot per active resident** from other plots’ Trade representatives by the end of that day’s transfers. The receiving representative immediately plants incoming relief, even when its store is full. Each relief carrot restores one field carrot up to field capacity. At capacity, relief still counts and is consumed. Once the target is met, any excess can enter the representative’s personal store if there is room.
 
 For example, a blighted plot with five active residents needs five incoming carrots. Three carrots from one outside representative and two from another meet the requirement. With room for five in the field, all five become next day’s standing crop. The residents still choose their meals from their own stores. With only four received by the deadline, the remaining field is lost and the plot’s residents are excluded. Donating to one’s own representative does not count towards the rescue.
 

@@ -42,6 +42,72 @@ func TestDailyMealAndThinking(t *testing.T) {
 		t.Fatalf("daily diminishing return did not reset: %v", a.Score)
 	}
 }
+func TestWorldRewardSettings(t *testing.T) {
+	for _, test := range []struct{ food, mind float64 }{{0, 0}, {0, 2.5}, {1.5, 0}, {1.5, 2.5}} {
+		w := smallWorld(t, 1)
+		w.Settings.OvereatingReward, w.Settings.ThinkingReward = test.food, test.mind
+		a := resident(w, 0)
+		a.Food, a.Mind = 5, 6
+		w.eating(map[int]Decision{0: {Eat: 5, Think: 3}})
+		want := 2*test.food + 3*test.mind
+		snap := w.Snapshot()
+		people := SummariseAgents(&snap, 0)
+		day := SummariseDay(&snap, 0, nil)
+		if a.Score != want || a.Thought != 3 || a.Mind != 3 || people.Thought[0] != 3*test.mind || day.Teams[0].Thought != 3*test.mind {
+			t.Fatalf("reward settings %+v: score %v, thought contribution %v", test, a.Score, people.Thought)
+		}
+		b, err := w.Checkpoint()
+		if err != nil {
+			t.Fatal(err)
+		}
+		restored, err := RestoreCheckpoint(b)
+		if err != nil || restored.Settings.ThinkingReward != test.mind || restored.Settings.OvereatingReward != test.food {
+			t.Fatalf("could not restore reward settings: %v", err)
+		}
+	}
+}
+
+func TestOldSettingsRetainWorkerGrowthAndDefaultRewards(t *testing.T) {
+	w := smallWorld(t, 1)
+	if err := json.Unmarshal([]byte(`{"growth":2,"productiveCapacity":10}`), &w.Settings); err != nil {
+		t.Fatal(err)
+	}
+	resident(w, 0)
+	w.updateResidents()
+	p := w.Plots[0]
+	p.Capacity, p.Stock = 100, 50
+	w.Day = 2
+	w.environment()
+	if p.Stock != 51 || w.Settings.ThinkingReward != 1 || w.Settings.OvereatingReward != 1 {
+		t.Fatal("an old world lost its original growth or reward settings")
+	}
+}
+
+func TestDailyGrowthCarriesFractionsAndIgnoresResidentCount(t *testing.T) {
+	for _, count := range []int{1, 5} {
+		w := smallWorld(t, count)
+		for i := range w.Agents {
+			resident(w, i)
+		}
+		w.updateResidents()
+		w.Day = 2
+		w.Settings.DailyGrowthPercent = 10
+		p := w.Plots[0]
+		p.Capacity, p.Stock = 100, 1
+		for i := 0; i < 10; i++ {
+			w.environment()
+		}
+		if p.Stock != 2 {
+			t.Fatalf("expected a new carrot after 10 days, got %d", p.Stock)
+		}
+		p.Stock = 80
+		w.environment()
+		if p.Stock != 88 {
+			t.Fatalf("with %d residents, 80 carrots grew to %d", count, p.Stock)
+		}
+	}
+}
+
 func TestExclusionDeletesAllCarrotsUntilReset(t *testing.T) {
 	w := smallWorld(t, 2)
 	a, other := resident(w, 0), resident(w, 1)

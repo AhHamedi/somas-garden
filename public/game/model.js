@@ -91,7 +91,7 @@ export function cropStatus(p) {
   return (
     {
       blight: `Blight · ${plural(p.aidNeeded || 0, "carrot")} of outside aid needed`,
-      bumper: "Bumper crop",
+      bumper: "Extra carrots",
       rescued: "Blight relieved",
       failed: "Plot failed",
     }[p.cropEvent] || ""
@@ -619,7 +619,7 @@ export function eventText(e, ix) {
       return `Ate ${plural(e.amount || 0, "carrot")}${sat > 0 ? `, earning ${fmt(sat, 2)} satisfaction` : ""}`;
     }
     case "think":
-      return `Thought with ${fmt(e.amount, 2)} mind, earning as much satisfaction`;
+      return `Thought with ${fmt(e.amount, 2)} mind, earning ${fmt(e.amount * (ix?.s?.settings?.thinkingReward ?? 1), 2)} satisfaction`;
     case "harvest_ranking":
       return ix
         ? `Ranked ${(e.members || []).map((id) => agentName(ix, id)).join(" → ")}`
@@ -643,8 +643,8 @@ export function agentDay(events, id) {
   return events.filter((e) => e.actor === id && !ignored.has(e.kind));
 }
 
-export const SCORE_HELP =
-  "Satisfaction earned this month: one per mind spent thinking, plus log₂(1 + extra carrots) for each meal above the daily need. The meteor resets it.";
+export const scoreHelp = (set) =>
+  `Each mind spent thinking earns ${fmt(set?.thinkingReward ?? 1, 2)} points. Each meal earns ${fmt(set?.overeatingReward ?? 1, 2)} × log₂(1 + extra carrots). The meteor resets satisfaction.`;
 
 // ---------------------------------------------------------------------------
 // Chamber geometry

@@ -129,6 +129,12 @@ function constitution(app) {
     <section class="rb-sec"><h3>Harvest and relief</h3>${facts(
       [
         [
+          "Daily growth",
+          set.productiveCapacity > 0
+            ? "This saved world uses its original worker and stock growth rule."
+            : `At dawn, an occupied plot adds ${set.dailyGrowthPercent}% of its remaining carrots, up to field capacity. Fractions carry over.`,
+        ],
+        [
           "Rankings",
           "Each resident can rank every resident in their plot, including themselves. Highest total rank points harvests first.",
         ],
@@ -140,7 +146,10 @@ function constitution(app) {
           "Blight",
           "Incoming gifts are planted first. The affected Trade representative must receive enough outside carrots by nightfall. An unresolved blight excludes the plot’s residents.",
         ],
-        ["Bumper crop", "A random favourable event increases the field’s yield."],
+        [
+          "Extra carrots",
+          "The plot gains up to one daily meal per resident, limited by remaining field space.",
+        ],
         [
           "Justice",
           "The elected holder decides sanctions for public breaches. Residents can vote to revoke either role.",

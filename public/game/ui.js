@@ -23,7 +23,7 @@ import {
   roleName,
   cropStatus,
   dayLabel,
-  SCORE_HELP,
+  scoreHelp,
   agentDay,
   eventText,
 } from "/game/model.js";
@@ -49,7 +49,7 @@ export function renderVitals(app) {
     `<div class="vital people" title="Active Amoeboids out of the whole population">${icon("people")}<b>${fmt(w.alive)}</b><small>of ${fmt(w.population)} active</small></div>
      <div class="vital food" title="Carrots standing in every field">${icon("carrot")}<b>${fmt(w.field)}</b><small>in the fields</small></div>
      <div class="vital food optional" title="Carrots in personal stores">${icon("granary")}<b>${fmt(w.held)}</b><small>held by residents</small></div>
-     <div class="vital joy" title="${esc(SCORE_HELP)}">${icon("joy")}<b>${fmt(w.satisfaction, 1)}</b><small>avg satisfaction</small></div>
+     <div class="vital joy" title="${esc(scoreHelp(app.ix.s.settings))}">${icon("joy")}<b>${fmt(w.satisfaction, 1)}</b><small>avg satisfaction</small></div>
      <div class="vital civic" title="Plots with a government">${icon("hall")}<b>${fmt(w.governments)}</b><small>${w.governments === 1 ? "government" : "governments"}</small></div>`,
   );
   const open = (app.ix.s.proposals || []).filter(
@@ -496,7 +496,7 @@ function plotOverview(app, p, sum) {
       <div class="vit food"><span class="vit-label">${icon("carrot")}Field</span><span class="vit-value">${fmt(p.stock)}<small>/ ${fmt(p.capacity)}</small></span>${meter(sum.fieldShare)}</div>
       <div class="vit"><span class="vit-label">${icon("gift")}Trade store</span><span class="vit-value">${p.roles?.trade != null ? fmt(ix.agents.get(p.roles.trade)?.food) : "Vacant"}<small>${p.roles?.trade != null ? esc(agentName(ix, p.roles.trade)) : ""}</small></span></div>
       <div class="vit people"><span class="vit-label">${icon("people")}Residents</span><span class="vit-value">${fmt(sum.population)}<small>${fmt(sum.food)} carrots held</small></span><span class="teambar">${teamBar}</span></div>
-      <div class="vit joy" title="${esc(SCORE_HELP)}"><span class="vit-label">${icon("joy")}Satisfaction</span><span class="vit-value">${fmt(sum.satisfaction, 1)}<small>avg</small></span>${sum.hungry ? `<span class="vit-foot warn">${fmt(sum.hungry)} hungry</span>` : ""}</div>
+      <div class="vit joy" title="${esc(scoreHelp(app.ix.s.settings))}"><span class="vit-label">${icon("joy")}Satisfaction</span><span class="vit-value">${fmt(sum.satisfaction, 1)}<small>avg</small></span>${sum.hungry ? `<span class="vit-foot warn">${fmt(sum.hungry)} hungry</span>` : ""}</div>
     </div>
     <div class="mini-stats">
       <span title="Average mind">${icon("mind")}<b>${fmt(sum.mind, 1)}</b> mind</span>
@@ -736,7 +736,7 @@ function renderAgent(app, el) {
       <div class="stat-row"><span class="lbl">${icon("carrot")}Carrots</span>${meter(a.food / (capacity || 1))}<span class="val">${fmt(a.food)} <small>/ ${fmt(capacity)}</small></span></div>
       <div class="stat-row"><span class="lbl">${icon("ballot")}Voting weight</span><span>daily grant</span><span class="val">${fmt(a.votingWeight ?? a.influence)}</span></div>
       <div class="stat-row"><span class="lbl">${icon("ballot")}Voting tokens</span><span>available</span><span class="val">${fmt(a.votingTokens)}</span></div>
-      <div class="stat-row" title="${esc(SCORE_HELP)}"><span class="lbl">${icon("joy")}Satisfaction</span><span></span><span class="val" style="color:var(--joy)">${fmt(a.score, 1)}</span></div>
+      <div class="stat-row" title="${esc(scoreHelp(app.ix.s.settings))}"><span class="lbl">${icon("joy")}Satisfaction</span><span></span><span class="val" style="color:var(--joy)">${fmt(a.score, 1)}</span></div>
     </div>
     ${votes.length ? `<div class="section"><div class="section-head"><h3>Votes today</h3></div><div class="law-list">${votes.map((q) => `<button class="law" data-motion="${esc(q.id)}" style="text-align:left">${icon(q.votes[a.id] === "yes" ? "ballot" : "close")}<div><div class="law-top"><span class="law-name">${esc(motionTitle(ix, q))}</span><span class="law-value" style="color:var(--${q.votes[a.id] === "yes" ? "yes" : q.votes[a.id] === "no" ? "no" : "ink-3"})">${esc(q.votes[a.id])} · ${plural(q.tokenSpends?.[a.id] || 0, "token")}</span></div></div></button>`).join("")}</div></div>` : ""}
     <div class="agent-cols"><div class="section"><div class="section-head"><h3>Today</h3></div>${today.length ? `<ul class="timeline-list">${today.map((e) => `<li><span class="ph">${esc(PHASE_NAME[e.phase] || e.phase)}</span><span class="${e.kind === "excluded" || e.kind.includes("reject") ? "fail" : ""}">${esc(eventText(e, ix))}</span></li>`).join("")}</ul>` : `<p class="note">${app.dayFrames ? "Nothing yet" : "Loading…"}</p>`}</div>
