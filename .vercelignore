@@ -5,10 +5,12 @@ node_modules
 .git
 scripts/*
 !scripts/build-hosted-static.mjs
+!scripts/build-hosted.mjs
+!scripts/build-vercel.mjs
+!scripts/go.mjs
 supabase
 README.md
 test
-cmd
 
 .github
 hosting
