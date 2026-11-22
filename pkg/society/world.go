@@ -13,7 +13,7 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 	if len(teams) == 0 {
 		teams = DefaultTeams()
 	}
-	if err := settings.Validate(len(teams)); err != nil {
+	if _, err := settings.rosterSize(teams); err != nil {
 		return nil, err
 	}
 	for i := range teams {
@@ -36,7 +36,7 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 	}
 	w := &World{Settings: settings, Teams: teams, Seed: seed, Month: 1, Day: 1, AbsoluteDay: 1, Phase: "ready", Deciders: map[int]Decider{}, receipts: map[int][]Event{}, reads: map[int][]Event{}}
 	for t := range teams {
-		for n := 0; n < settings.Copies; n++ {
+		for n := 0; n < teams[t].size(settings.Copies); n++ {
 			id := len(w.Agents)
 			w.Agents = append(w.Agents, &Agent{ID: id, Team: t, Name: fmt.Sprintf("%s %02d", teams[t].Name, n+1), Memory: json.RawMessage(`{}`)})
 		}
@@ -232,7 +232,7 @@ func (w *World) closeDay() {
 			result.Exclusions += a.Exclusions
 		}
 		for i := range result.Teams {
-			result.Teams[i].Mean = result.Teams[i].Score / float64(w.Settings.Copies)
+			result.Teams[i].Mean = result.Teams[i].Score / float64(w.Teams[i].size(w.Settings.Copies))
 		}
 		w.Months = append(w.Months, result)
 		for _, proposal := range w.Proposals {

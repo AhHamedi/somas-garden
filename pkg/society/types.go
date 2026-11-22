@@ -54,6 +54,7 @@ type Rule struct {
 	Evidence    int      `json:"evidence,omitempty"`
 }
 type Team struct {
+	Copies     int      `json:"copies,omitempty"`
 	StrategyID string   `json:"strategyId,omitempty"`
 	Name       string   `json:"name"`
 	Policy     string   `json:"policy"`

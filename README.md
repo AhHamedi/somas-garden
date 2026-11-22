@@ -34,7 +34,7 @@ The [MVP specification](docs/AMOEBOIDS_SPECIFICATION.md) gives the daily sequenc
 
 ## Design an agent
 
-Use the visual strategy editor or import a Go file. Start with the [downloadable Go example](public/society-example.go) and [agent API](docs/AGENT_API.md). The six built-in teams are programmed examples with policies in [presets.go](pkg/society/presets.go). The same code may serve many individuals, each with separate memory. The runner restricts imports, global state and external I/O and applies decision timeouts.
+Open **New world → Choose Amoeboids** to add or swap a preset, set individual team sizes, or edit a behaviour. A blank size follows the world default. Use the visual strategy editor or import a Go file. Start with the [downloadable Go example](public/society-example.go) and [agent API](docs/AGENT_API.md). The nine built-in presets are programmed examples with policies in [presets.go](pkg/society/presets.go). The same code may serve many individuals, each with separate memory. The runner restricts imports, global state and external I/O and applies decision timeouts.
 
 | Built-in team | Example behaviour                                                                  |
 | ------------- | ---------------------------------------------------------------------------------- |
@@ -44,6 +44,9 @@ Use the visual strategy editor or import a Go file. Start with the [downloadable
 | Envoys        | Elect Trade representatives and direct spare carrots toward blighted plots.        |
 | Barons        | Support productivity-based voting tokens and eat spare carrots for satisfaction.   |
 | Sunchasers    | Choose a promising plot for sunlight at reset and spend mind on thinking.          |
+| Minimalists   | Gather only enough for today and save their mind.                                  |
+| Stockpilers   | Store up to three meals, eat one and spend spare mind on thinking.                 |
+| Feasters      | Fill their store, eat everything and skip thinking.                                |
 
 All residents can observe public actions. The observer interface lets the person running the experiment inspect decisions, outcomes and monthly results while the agents make their own choices.
 

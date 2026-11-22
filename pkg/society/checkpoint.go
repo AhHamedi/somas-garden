@@ -144,10 +144,11 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 	if c.Version != checkpointVersion {
 		return nil, fmt.Errorf("unsupported checkpoint version %d", c.Version)
 	}
-	if err := c.Settings.Validate(len(c.Teams)); err != nil {
+	population, err := c.Settings.rosterSize(c.Teams)
+	if err != nil {
 		return nil, fmt.Errorf("invalid checkpoint settings: %w", err)
 	}
-	if len(c.Agents) != len(c.Teams)*c.Settings.Copies || len(c.Memories) != len(c.Agents) || len(c.TeamTokens) != len(c.Teams) || len(c.Plots) != c.Settings.Plots || len(c.GrowthRemainders) != len(c.Plots) || len(c.Weather) != len(c.Plots) || c.PhaseIndex < 0 || c.PhaseIndex >= len(Phases) || c.EventStart < 0 || c.EventStart > len(c.Events) {
+	if len(c.Agents) != population || len(c.Memories) != len(c.Agents) || len(c.TeamTokens) != len(c.Teams) || len(c.Plots) != c.Settings.Plots || len(c.GrowthRemainders) != len(c.Plots) || len(c.Weather) != len(c.Plots) || c.PhaseIndex < 0 || c.PhaseIndex >= len(Phases) || c.EventStart < 0 || c.EventStart > len(c.Events) {
 		return nil, errors.New("checkpoint state is incomplete")
 	}
 	w := &World{

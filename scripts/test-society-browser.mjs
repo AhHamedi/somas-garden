@@ -72,6 +72,22 @@ try {
     "a passive first visit allocates no world",
   );
   const setup = page.locator("#setup-dialog");
+  await setup.getByRole("button", { name: "Choose Amoeboids" }).click();
+  assert.equal(await setup.locator(".roster-row").count(), 6);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup.locator("[data-add-team]").click();
+  assert.equal(await setup.locator("[data-preset]").count(), 9);
+  assert.ok(
+    await setup
+      .locator("#cfg-body")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+  );
+  await setup.locator('[data-preset="minimalist"]').click();
+  assert.match(await setup.locator("#setup-summary").innerText(), /350/);
+  await setup.locator('[data-remove-team="6"]').click();
+  assert.match(await setup.locator("#setup-summary").innerText(), /300/);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setup.locator('[data-stab="world"]').click();
   await setup.getByRole("spinbutton", { name: "First extra carrot" }).fill("1.5");
   await setup.getByRole("spinbutton", { name: "Each mind spent thinking" }).fill("0");
   assert.match(
@@ -289,7 +305,22 @@ try {
   await page.fill('#strategy-dialog [data-b="harvest"]', "4");
   await page.click("#save-strategy");
   await page.waitForSelector("#strategy-dialog[open]", { state: "detached" });
-  assert.equal(await page.locator('[data-team-policy="0"]').inputValue(), "custom");
+  assert.equal(
+    await setup.locator('[data-team-behaviour="0"]').innerText(),
+    "Custom behaviour",
+  );
+  await setup.locator('[data-team-name="1"]').fill("Big eaters");
+  await setup.locator('[data-swap-team="1"]').click();
+  await setup.locator('[data-preset="feaster"]').click();
+  assert.equal(await setup.locator('[data-team-name="1"]').inputValue(), "Big eaters");
+  await setup.locator("[data-add-team]").click();
+  await setup.locator('[data-preset="stockpiler"]').click();
+  await setup.locator('[data-team-size="6"]').fill("2");
+  await setup.locator('[data-swap-team="6"]').click();
+  await setup.locator('[data-preset="minimalist"]').click();
+  assert.equal(await setup.locator('[data-team-name="6"]').inputValue(), "Minimalists");
+  assert.equal(await setup.locator('[data-team-size="6"]').inputValue(), "2");
+  await page.screenshot({ path: join(evidence, "amoeboid-teams.png") });
 
   // A small new world runs to its meteor and reports the month.
   await page.click('[data-stab="world"]');
@@ -300,14 +331,14 @@ try {
   assert.equal(await page.locator('#setup-dialog [data-chart="plots"] rect').count(), 4);
   await page.click('[data-stab="food"]');
   await page.waitForSelector('[data-chart="meal"] svg');
-  assert.ok(
-    (await page.locator("#setup-dialog .cfg-chart").count()) >= 2,
-    "food charts are drawn",
+  assert.match(
+    await setup.locator('[data-chart="growth"]').innerText(),
+    /10 carrots.*grow 4.5 more/,
   );
   await page.screenshot({ path: join(evidence, "new-world.png") });
   await page.click('#setup-dialog button[type="submit"]');
   await page.waitForFunction(
-    () => amoeboids.ix?.s.plots.length === 4 && amoeboids.ix.s.agents.length === 24,
+    () => amoeboids.ix?.s.plots.length === 4 && amoeboids.ix.s.agents.length === 26,
     null,
     { timeout: 20000 },
   );
@@ -321,6 +352,9 @@ try {
   assert.equal(created.snapshot.teams[0].name, "Browser stewards");
   assert.equal(created.snapshot.teams[0].policy, "builder");
   assert.equal(created.snapshot.teams[0].builder.harvest, 4);
+  assert.equal(created.snapshot.teams[1].policy, "feaster");
+  assert.equal(created.snapshot.teams[6].policy, "minimalist");
+  assert.equal(created.snapshot.agents.filter((a) => a.team === 6).length, 2);
   assert.equal(await page.evaluate(() => amoeboids.ix.s.settings.votingTokens), 6);
   assert.equal(await page.locator(".plaque").count(), 4);
   await page.click("#menu-button");

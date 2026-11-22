@@ -20,7 +20,10 @@ func Presets() []PresetInfo {
 		{"locust", "Locusts", "Collect bonus carrots and rank themselves first at harvest"},
 		{"envoy", "Envoys", "Elect Trade representatives and give spare carrots for blight relief"},
 		{"baron", "Barons", "Back voting tokens for productivity and spend spare carrots on satisfaction"},
-		{"sunchaser", "Sunchasers", "Choose a sunny plot at reset and spend their mind on thinking"},
+		{"sunchaser", "Sunchasers", "Seek a sunnier plot at reset and spend available mind on thinking"},
+		{"minimalist", "Minimalists", "Gather just enough for today’s meal and save their mind"},
+		{"stockpiler", "Stockpilers", "Gather up to three days of food, eat one meal and think with spare mind"},
+		{"feaster", "Feasters", "Fill their store, eat everything they gather and skip thinking"},
 	}
 }
 
@@ -35,7 +38,7 @@ func canonicalPolicy(p string) string {
 
 func knownPolicy(p string) bool {
 	switch canonicalPolicy(p) {
-	case "warden", "tinkerer", "locust", "envoy", "baron", "sunchaser":
+	case "warden", "tinkerer", "locust", "envoy", "baron", "sunchaser", "minimalist", "stockpiler", "feaster":
 		return true
 	}
 	return false
@@ -103,6 +106,12 @@ func presetAction(v Observation, policy string) Decision {
 	}
 	plot := v.Plots[v.Self.Plot]
 	need := v.Settings.DailyFood
+	if v.Phase != "harvest_order" {
+		switch policy {
+		case "minimalist", "stockpiler", "feaster":
+			return basicDecision(v, policy)
+		}
+	}
 	switch v.Phase {
 	case "harvest_order":
 		if plot.Rules["harvestOrder"].Mode == "random" {
@@ -130,6 +139,31 @@ func presetAction(v Observation, policy string) Decision {
 			meal = max(need, v.Self.Food-need)
 		}
 		return Decision{Eat: min(meal, v.Self.Food), Think: available(&v.Self)}
+	}
+	return Decision{}
+}
+
+// These three baselines make no political proposals and spend no mind on government.
+func basicDecision(v Observation, policy string) Decision {
+	need, target := v.Settings.DailyFood, v.Settings.DailyFood
+	switch v.Phase {
+	case "harvest":
+		switch policy {
+		case "stockpiler":
+			target = 3 * need
+		case "feaster":
+			target = v.Settings.PersonalCapacity
+		}
+		return Decision{Harvest: max(0, min(target, v.Settings.PersonalCapacity)-v.Self.Food)}
+	case "eating":
+		if policy == "feaster" {
+			return Decision{Eat: v.Self.Food}
+		}
+		d := Decision{Eat: min(need, v.Self.Food)}
+		if policy == "stockpiler" {
+			d.Think = available(&v.Self)
+		}
+		return d
 	}
 	return Decision{}
 }

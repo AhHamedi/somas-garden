@@ -12,7 +12,7 @@ const spell = (p) =>
 // Control definitions: slider range for comfortable tuning; the number box
 // accepts anything the engine accepts.
 const CTL = {
-  copies: ["Amoeboids per team", 1, 100, 1, 500],
+  copies: ["Default team size", 1, 100, 1, 500],
   plots: ["Plots", 1, 24, 1, 48],
   months: ["Months", 1, 24, 1, 24],
   days: ["Days a month", 1, 60, 1, 365],
@@ -44,11 +44,11 @@ const CTL = {
 
 const SECTIONS = [
   ["world", "World", "world"],
-  ["teams", "Teams", "people"],
+  ["teams", "Amoeboids", "people"],
   ["food", "Food", "carrot"],
   ["mind", "Mind and weather", "sun"],
   ["politics", "Politics", "hall"],
-  ["agents", "Agents", "mind"],
+  ["agents", "Runtime limits", "mind"],
 ];
 
 /** Field capacities exactly as the engine assigns them. */
@@ -218,6 +218,7 @@ export class Setup {
       seed: previous.seed ?? 42,
     };
     this.tab = tab;
+    this.picking = null;
     this.render();
     $("setup-dialog").showModal();
     this.drawBody();
@@ -234,7 +235,10 @@ export class Setup {
     this.observer?.observe($("cfg-body"));
   }
   population() {
-    return this.draft.teams.length * this.draft.settings.copies;
+    return this.draft.teams.reduce(
+      (total, team) => total + (team.copies || this.draft.settings.copies),
+      0,
+    );
   }
   summary() {
     const d = this.draft.settings;
@@ -262,6 +266,71 @@ export class Setup {
       weather: () => weatherChart(set, W),
     };
   }
+  rosterHTML() {
+    const teams = this.draft.teams;
+    const presets = this.app.config.presets;
+    if (this.picking !== null) {
+      const team = teams[this.picking];
+      const title = team
+        ? `Swap behaviour for ${esc(team.name)}`
+        : "Choose a team to add";
+      return `<div class="team-list"><div class="roster-head"><h3 tabindex="-1" data-picker-title>${title}</h3><button type="button" class="btn" data-back-roster>Back to teams</button></div>
+        <div class="preset-grid">${presets
+          .map((p) => {
+            const current =
+              team && !team.builder && !team.strategyId && p.policy === team.policy;
+            return `<button type="button" class="preset-choice" data-preset="${esc(p.policy)}" ${current ? 'aria-current="true"' : ""}><strong>${esc(p.name)}</strong>${current ? "<em>Current</em>" : ""}<small>${esc(p.summary)}.</small></button>`;
+          })
+          .join("")}</div></div>`;
+    }
+    const rows = teams
+      .map((team, i) => {
+        const preset = presets.find((p) => p.policy === team.policy);
+        const behaviour = team.strategyId
+          ? "Imported Go behaviour"
+          : team.builder
+            ? "Custom behaviour"
+            : preset?.name || team.policy;
+        const summary = team.strategyId
+          ? "Runs this team’s Go strategy."
+          : team.builder
+            ? "Uses the everyday choices and rules you set."
+            : `${preset?.summary || ""}.`;
+        return `<li class="roster-row"><div class="roster-identity"><span class="avatar" style="background:${teamColor(i)}"></span>
+        <label class="field"><span>Team name</span><input data-team-name="${i}" value="${esc(team.name)}" maxlength="40" aria-label="Team ${i + 1} name"/></label>
+        <label class="field roster-size"><span>Size</span><input type="number" data-team-size="${i}" min="1" max="500" step="1" value="${team.copies || ""}" placeholder="${this.draft.settings.copies}" aria-label="Team ${i + 1} size"/></label></div>
+        <p><strong data-team-behaviour="${i}">${esc(behaviour)}</strong> · ${esc(summary)}</p>
+        <div class="roster-actions"><button type="button" class="btn" data-swap-team="${i}">Swap preset</button><button type="button" class="btn" data-edit-team="${i}">Edit behaviour</button>
+        <button type="button" class="icon-button" data-remove-team="${i}" aria-label="Remove team ${i + 1}" title="Remove team" ${teams.length === 1 ? "disabled" : ""}>${icon("close")}</button></div></li>`;
+      })
+      .join("");
+    return `<div class="team-list"><div class="roster-head"><h3>${plural(teams.length, "team")} in this world</h3><button type="button" class="btn primary" data-add-team ${teams.length >= 24 ? "disabled" : ""}>${icon("plus")}Add team</button></div>
+      ${this.ctl("copies")}<p class="note roster-hint">Leave a team’s size blank to use the default.</p><ol class="roster-list">${rows}</ol></div>`;
+  }
+  choosePreset(policy) {
+    const preset = this.app.config.presets.find((p) => p.policy === policy);
+    const index = this.picking;
+    const teams = this.draft.teams;
+    const team = teams[index];
+    const previous = this.app.config.presets.find((p) => p.policy === team?.policy);
+    const customName = team?.name && team.name !== previous?.name;
+    // Keep a user-given name and size when swapping. Give duplicate additions distinct names.
+    let name = customName ? team.name : preset.name;
+    if (!customName) {
+      let number = 2;
+      while (teams.some((t, i) => i !== index && t.name === name))
+        name = `${preset.name} ${number++}`;
+    }
+    teams[index] = {
+      name,
+      policy,
+      ...(team?.copies ? { copies: team.copies } : {}),
+      ...(team?.color ? { color: team.color } : {}),
+    };
+    this.picking = null;
+    this.drawBody();
+    $("cfg-body").querySelector(`[data-swap-team="${index}"]`).focus();
+  }
   sectionHTML() {
     const set = this.draft.settings;
     const c = Object.fromEntries(
@@ -275,7 +344,7 @@ export class Setup {
     switch (this.tab) {
       case "world": {
         return `<div class="cfg-grid">
-          ${card("Population", `<div class="cfg-big"><b data-live="pop">${fmt(this.population())}</b><span>${plural(this.draft.teams.length, "team")}</span></div>${this.ctl("copies")}`)}
+          ${card("Population", `<div class="cfg-big"><b data-live="pop">${fmt(this.population())}</b><span>${plural(this.draft.teams.length, "team")}</span></div>${this.ctl("copies")}<button type="button" class="btn" data-open-roster>Choose Amoeboids</button>`)}
           ${card("Time", `${this.ctl("months")}${this.ctl("days")}`)}
           ${card("Land", this.ctl("plots"), c.plots)}
           ${card("Satisfaction", `${this.ctl("overeatingReward")}${this.ctl("thinkingReward")}${c.rewards}`)}
@@ -283,14 +352,7 @@ export class Setup {
         </div>`;
       }
       case "teams":
-        return `<div class="team-list">${this.draft.teams
-          .map(
-            (t, i) =>
-              `<div class="team-edit"><span class="avatar" style="background:${teamColor(i)}"></span><label><input data-team-name="${i}" value="${esc(t.name)}" maxlength="40" aria-label="Team ${i + 1} name"/><small>${t.strategyId ? "Imported Go" : t.builder ? "Custom" : esc(this.app.config.presets?.find((x) => x.policy === t.policy)?.summary || "")}</small></label><select data-team-policy="${i}" aria-label="Team ${i + 1} behaviour">${this.app.config.teams.map((p) => `<option value="${esc(p.policy)}" ${t.policy === p.policy && !t.builder && !t.strategyId ? "selected" : ""}>${esc(p.name)}</option>`).join("")}${t.builder ? '<option value="custom" selected>Custom</option>' : ""}${t.strategyId ? '<option value="imported" selected>Imported Go</option>' : ""}</select><button type="button" class="btn" data-edit-team="${i}">Edit</button><button type="button" class="icon-button" data-remove-team="${i}" aria-label="Remove ${esc(t.name)}" ${this.draft.teams.length < 2 ? "disabled" : ""}>${icon("close")}</button></div>`,
-          )
-          .join(
-            "",
-          )}${this.draft.teams.length < 24 ? `<button type="button" class="btn add-team" data-add-team>${icon("plus")}Add team</button>` : ""}</div>`;
+        return this.rosterHTML();
       case "food":
         return `<div class="cfg-grid">
           ${card("One meal", `${this.ctl("dailyFood")}${this.ctl("bodyCapacity")}`, `${c.meal}<p class="cfg-key"><i style="background:var(--joy)"></i>satisfaction<i style="background:var(--body)"></i>body lost</p>`)}
@@ -332,6 +394,7 @@ export class Setup {
     if (inner > 0) this.chartWidth = Math.max(260, Math.round(inner - 34));
     body.innerHTML = this.sectionHTML();
     $("setup-summary").innerHTML = this.summary();
+    dlg.querySelector('button[type="submit"]').disabled = this.picking !== null;
     this.wire(dlg);
   }
   refresh() {
@@ -340,6 +403,8 @@ export class Setup {
       const el = $("setup-dialog").querySelector(`[data-chart="${k}"]`);
       if (el) el.innerHTML = draw();
     }
+    for (const field of $("cfg-body").querySelectorAll("[data-team-size]"))
+      field.placeholder = set.copies;
     const pop = $("setup-dialog").querySelector('[data-live="pop"]');
     if (pop) pop.textContent = fmt(this.population());
     const sp = $("setup-dialog").querySelector('[data-live="spell"]');
@@ -352,6 +417,7 @@ export class Setup {
       (b) =>
         (b.onclick = () => {
           this.tab = b.dataset.stab;
+          this.picking = null;
           dlg
             .querySelectorAll("[data-stab]")
             .forEach((n) => n.setAttribute("aria-current", n === b ? "page" : "false"));
@@ -361,6 +427,8 @@ export class Setup {
     );
     dlg.querySelector("[data-defaults]").onclick = () => {
       this.draft.settings = copy(this.app.config.settings);
+      this.draft.teams = copy(this.app.config.teams);
+      this.picking = null;
       this.drawBody();
     };
     dlg.querySelectorAll("input[data-k]").forEach(
@@ -395,33 +463,55 @@ export class Setup {
           (el.oninput = () =>
             (this.draft.teams[Number(el.dataset.teamName)].name = el.value)),
       );
-    dlg.querySelectorAll("[data-team-policy]").forEach(
-      (el) =>
-        (el.onchange = () => {
-          if (["custom", "imported"].includes(el.value)) return;
-          const t = this.draft.teams[Number(el.dataset.teamPolicy)];
-          t.policy = el.value;
-          delete t.builder;
-          delete t.strategyId;
-          this.drawBody();
-        }),
-    );
+    dlg.querySelector("[data-open-roster]")?.addEventListener("click", () => {
+      const tab = dlg.querySelector('[data-stab="teams"]');
+      tab.click();
+      tab.focus();
+    });
+    dlg.querySelectorAll("[data-team-size]").forEach((el) => {
+      el.oninput = () => {
+        const team = this.draft.teams[Number(el.dataset.teamSize)];
+        if (el.value === "") delete team.copies;
+        else team.copies = Number(el.value);
+        this.refresh();
+      };
+    });
+    const pick = (index) => {
+      this.picking = index;
+      this.drawBody();
+      dlg.querySelector("[data-picker-title]").focus();
+    };
+    dlg
+      .querySelector("[data-add-team]")
+      ?.addEventListener("click", () => pick(this.draft.teams.length));
+    dlg
+      .querySelectorAll("[data-swap-team]")
+      .forEach((b) => (b.onclick = () => pick(Number(b.dataset.swapTeam))));
+    dlg.querySelector("[data-back-roster]")?.addEventListener("click", () => {
+      const index = this.picking;
+      this.picking = null;
+      this.drawBody();
+      (
+        dlg.querySelector(`[data-swap-team="${index}"]`) ||
+        dlg.querySelector("[data-add-team]")
+      ).focus();
+    });
+    dlg
+      .querySelectorAll("[data-preset]")
+      .forEach((b) => (b.onclick = () => this.choosePreset(b.dataset.preset)));
     dlg.querySelectorAll("[data-remove-team]").forEach(
       (b) =>
         (b.onclick = () => {
-          this.draft.teams.splice(Number(b.dataset.removeTeam), 1);
+          const i = Number(b.dataset.removeTeam);
+          this.draft.teams.splice(i, 1);
           this.drawBody();
+          dlg
+            .querySelector(
+              `[data-swap-team="${Math.min(i, this.draft.teams.length - 1)}"]`,
+            )
+            .focus();
         }),
     );
-    dlg.querySelector("[data-add-team]")?.addEventListener("click", () => {
-      const base =
-        this.app.config.teams[this.draft.teams.length % this.app.config.teams.length];
-      this.draft.teams.push({
-        name: `${base.name} ${Math.floor(this.draft.teams.length / this.app.config.teams.length) + 1}`,
-        policy: base.policy,
-      });
-      this.drawBody();
-    });
     dlg
       .querySelectorAll("[data-edit-team]")
       .forEach((b) => (b.onclick = () => this.openStrategy(Number(b.dataset.editTeam))));
@@ -490,7 +580,7 @@ export class Setup {
     ];
     let body = "";
     if (this.mode === "simple")
-      body = `<p class="note" style="margin-bottom:14px">A baseline for every phase. Phase rules can override it.</p><div class="field-grid">${[
+      body = `<p class="note" style="margin-bottom:14px">Saving applies these custom choices to this team. Use phase rules for exceptions.</p><div class="field-grid">${[
         [
           "harvest",
           "Harvest request",
@@ -558,7 +648,7 @@ export class Setup {
         )}</div><button type="button" class="btn" id="add-rule">${icon("plus")}Add a rule</button>
         <label class="field wide" style="margin-top:18px"><span>Standing proposals</span><textarea class="code" id="standing" style="min-height:110px" spellcheck="false">${esc(JSON.stringify(b.proposals || [], null, 2))}</textarea><small>Proposal inputs submitted in the Motions phase, using the policy catalogue's keys.</small></label>`;
     if (this.mode === "go")
-      body = `<p class="note" style="margin-bottom:12px">Import a phase-aware Go behaviour. The server checks and compiles it before it is used; each of the ${fmt(this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
+      body = `<p class="note" style="margin-bottom:12px">Import a phase-aware Go behaviour. The server checks and compiles it before it is used; each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
     dlg.innerHTML = `<div class="dlg-head"><h2 id="strategy-title">${esc(t.name)}</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div>
       <div class="dlg-tabs">${modes.map(([id, n]) => `<button data-mode="${id}" class="${this.mode === id ? "active" : ""}">${n}</button>`).join("")}</div>
       <div class="dlg-body">${body}</div>

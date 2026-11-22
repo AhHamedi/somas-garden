@@ -46,13 +46,17 @@ func (s *Settings) UnmarshalJSON(b []byte) error {
 	return nil
 }
 func (s Settings) Validate(teams int) error {
+	return s.validatePopulation(teams, teams*s.Copies)
+}
+
+func (s Settings) validatePopulation(teams, population int) error {
 	if teams < 1 || teams > 24 || s.Copies < 1 || s.Copies > 500 || s.Plots < 1 || s.Plots > 48 || s.Days < 1 || s.Days > 365 || s.Months < 1 || s.Months > 24 {
 		return fmt.Errorf("choose 1–24 teams, 1–500 copies, 1–48 plots, 1–365 days and 1–24 months")
 	}
-	if teams*s.Copies > 3000 || s.Days*s.Months > 8760 {
+	if population > 3000 || s.Days*s.Months > 8760 {
 		return fmt.Errorf("run exceeds 3000 individuals or 8760 days")
 	}
-	if s.CapacityPerAgent < 1 || s.CapacityPerAgent > 1000 || s.Plots > teams*s.Copies*s.CapacityPerAgent || s.PersonalCapacity < 1 || s.PersonalCapacity > 10000 || s.RepresentativeCapacity <= s.PersonalCapacity || s.RepresentativeCapacity > 100000 {
+	if s.CapacityPerAgent < 1 || s.CapacityPerAgent > 1000 || s.Plots > population*s.CapacityPerAgent || s.PersonalCapacity < 1 || s.PersonalCapacity > 10000 || s.RepresentativeCapacity <= s.PersonalCapacity || s.RepresentativeCapacity > 100000 {
 		return fmt.Errorf("invalid storage or harvest capacity")
 	}
 	vals := []float64{s.StartingStock, s.Growth, s.ProductiveCapacity, s.OvereatingReward, s.ThinkingReward, s.BodyCapacity, s.MindCapacity, s.StartingMind, s.WeatherPersistence, s.BlightChance, s.BumperChance, s.RuleFraction, s.ProposalCost, s.JusticeCost, s.GovernmentCost}
@@ -77,10 +81,30 @@ func (s Settings) Validate(teams int) error {
 func DefaultTeams() []Team {
 	colors := []string{"#547b61", "#7e79b2", "#c28b4c", "#5b9da6", "#b47072", "#a39a3b"}
 	teams := []Team{}
-	for i, p := range Presets() {
-		teams = append(teams, Team{Name: p.Name, Policy: p.Policy, Color: colors[i%len(colors)]})
+	// The original six teams form the default experiment. The other presets are opt-in.
+	for i, p := range Presets()[:len(colors)] {
+		teams = append(teams, Team{Name: p.Name, Policy: p.Policy, Color: colors[i]})
 	}
 	return teams
+}
+
+// A size of zero follows the world default, including in older saves.
+func (t Team) size(defaultSize int) int {
+	if t.Copies == 0 {
+		return defaultSize
+	}
+	return t.Copies
+}
+
+func (s Settings) rosterSize(teams []Team) (int, error) {
+	total := 0
+	for _, team := range teams {
+		if team.Copies < 0 || team.Copies > 500 {
+			return 0, fmt.Errorf("team size must be between 1 and 500")
+		}
+		total += team.size(s.Copies)
+	}
+	return total, s.validatePopulation(len(teams), total)
 }
 
 func (s Settings) validateTeam(t Team) error {

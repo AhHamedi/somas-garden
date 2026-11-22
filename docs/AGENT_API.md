@@ -68,6 +68,6 @@ if len(v.SanctionCases) > 0 {
 
 ## Import and visual builder
 
-Go strategies supply `package main` and `func Decide(v View) Action`. The runtime provides aliases for `View`, `Action`, `Rule`, `Proposal`, `Order`, `Offer`, `RecordQuery` and `VoteChoice`. Uploaded strategies run with a time budget and explicit private memory. The six built-in strategies also work as visual builder fallbacks. The two concrete contracts are [world and agent types](../pkg/society/types.go) and [political types](../pkg/society/politics_types.go).
+Go strategies supply `package main` and `func Decide(v View) Action`. The runtime provides aliases for `View`, `Action`, `Rule`, `Proposal`, `Order`, `Offer`, `RecordQuery` and `VoteChoice`. Uploaded strategies run with a time budget and explicit private memory. The nine built-in strategies also work as visual builder fallbacks. The two concrete contracts are [world and agent types](../pkg/society/types.go) and [political types](../pkg/society/politics_types.go).
 
 A visual condition matches one callback and returns its configured action. Use a fixed harvest ranking only when its IDs match the current plot’s residents. For varying rosters, a Go strategy can build the ranking directly from the observed residents as the downloadable example does. The builder spends one token on a voter-count ballot and its configured amount on a token-count ballot while it can afford each choice.
