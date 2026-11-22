@@ -33,7 +33,12 @@ try {
     run("tar", ["-xzf", filename, "-C", toolchain]);
     go = join(toolchain, "go", "bin", "go");
   }
-  const env = { ...process.env, GO_BINARY: go };
+  // Vercel removes .git before building. Deployment metadata records the commit.
+  const env = {
+    ...process.env,
+    GO_BINARY: go,
+    GOFLAGS: `${process.env.GOFLAGS || ""} -buildvcs=false`.trim(),
+  };
   run(process.execPath, ["scripts/build-hosted.mjs"], env);
   run(process.execPath, ["scripts/build-hosted-static.mjs"], env);
 } finally {
