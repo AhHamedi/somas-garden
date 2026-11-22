@@ -227,8 +227,8 @@ func loadRun(id string) (*societyRun, error) {
 					return nil, fmt.Errorf("could not restore simulation strategies: %w", e)
 				}
 			}
-		case os.IsNotExist(checkpointError):
-			// Replay-only saves made before checkpoints remain readable archives.
+		case os.IsNotExist(checkpointError), errors.Is(checkpointError, society.ErrArchivedCheckpoint):
+			// Replay-only saves and checkpoints from the previous rules remain viewable.
 			if s.Status == "running" || s.Status == "paused" {
 				s.Status = "archived"
 			}
@@ -391,7 +391,9 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 		if s.World != nil {
 			months = s.World.Months
 		} else if b, e := readFrame(s.ID, len(s.Frames)-1); e == nil {
-			var f society.Snapshot
+			var f struct {
+				Months json.RawMessage `json:"months"`
+			}
 			_ = json.Unmarshal(b, &f)
 			months = f.Months
 		}
@@ -482,17 +484,24 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 3 && parts[2] == "export" && r.Method == "GET" {
+		first, err := readFrame(s.ID, 0)
+		var header struct {
+			Version int `json:"version"`
+		}
+		if err != nil || json.Unmarshal(first, &header) != nil {
+			apiError(w, 500, errors.New("could not read replay header"))
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", `attachment; filename="amoeboids-`+s.ID+`.json"`)
-		_, _ = io.WriteString(w, `{"version":5,"id":"`+s.ID+`","frames":[`)
-		for i := range s.Frames {
+		_, _ = fmt.Fprintf(w, `{"version":%d,"id":%q,"frames":[`, header.Version, s.ID)
+		_, _ = w.Write(first)
+		for i := 1; i < len(s.Frames); i++ {
 			b, e := readFrame(s.ID, i)
 			if e != nil {
 				return
 			}
-			if i > 0 {
-				_, _ = io.WriteString(w, ",")
-			}
+			_, _ = io.WriteString(w, ",")
 			_, _ = w.Write(b)
 		}
 		_, _ = io.WriteString(w, "]}")
@@ -506,14 +515,14 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 		apiError(w, 409, errors.New("this simulation stopped after an error; its saved replay is read-only"))
 		return
 	}
+	if s.World == nil {
+		apiError(w, 409, errors.New("this saved replay is read-only; start a new simulation to run again"))
+		return
+	}
 	if parts[2] == "pause" {
 		s.stop = true
 		_ = s.saveIndex()
 		jsonReply(w, 200, s.response())
-		return
-	}
-	if s.World == nil {
-		apiError(w, 409, errors.New("this saved replay is read-only; start a new simulation to run again"))
 		return
 	}
 	if s.Status == "running" {
@@ -593,5 +602,5 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 
 // SocietyConfig is shared by the live engine and the hosted build asset.
 func SocietyConfig() map[string]any {
-	return map[string]any{"settings": society.DefaultSettings(), "teams": society.DefaultTeams(), "presets": society.Presets(), "catalogue": society.Catalogue(), "phases": []string{"environment", "movement", "harvest", "proposals", "voting", "transfers", "eating", "close"}, "goUploads": true}
+	return map[string]any{"version": society.ReplayVersion, "settings": society.DefaultSettings(), "teams": society.DefaultTeams(), "presets": society.Presets(), "catalogue": society.Catalogue(), "phases": society.Phases, "goUploads": true}
 }

@@ -8,43 +8,32 @@ import (
 )
 
 type Settings struct {
-	Plots                 int       `json:"plots"`
-	Copies                int       `json:"copies"`
-	Days                  int       `json:"days"`
-	Months                int       `json:"months"`
-	CapacityPerAgent      int       `json:"capacityPerAgent"`
-	StartingStock         float64   `json:"startingStock"`
-	Growth                float64   `json:"growth"`
-	ProductiveCapacity    float64   `json:"productiveCapacity"`
-	DailyFood             int       `json:"dailyFood"`
-	BodyCapacity          float64   `json:"bodyCapacity"`
-	MindCapacity          float64   `json:"mindCapacity"`
-	StartingMind          float64   `json:"startingMind"`
-	PersonalCapacity      int       `json:"personalCapacity"`
-	HarvestLimit          int       `json:"harvestLimit"`
-	ReservePerResident    int       `json:"reservePerResident"`
-	WeatherRates          []float64 `json:"weatherRates"`
-	WeatherPersistence    float64   `json:"weatherPersistence"`
-	OutsideMind           float64   `json:"outsideMind"`
-	RespawnDelay          int       `json:"respawnDelay"`
-	StartingInfluence     int       `json:"startingInfluence"`
-	MaxInfluence          int       `json:"maxInfluence"`
-	ProposalCost          float64   `json:"proposalCost"`
-	VoteCost              float64   `json:"voteCost"`
-	OfficerCost           float64   `json:"officerCost"`
-	ReadCost              float64   `json:"readCost"`
-	OfferCost             float64   `json:"offerCost"`
-	GovernmentCost        float64   `json:"governmentCost"`
-	FederationCost        float64   `json:"federationCost"`
-	JoiningCost           float64   `json:"joiningCost"`
-	EnforcementCost       float64   `json:"enforcementCost"`
-	RecordsCost           float64   `json:"recordsCost"`
-	FederationRunningCost float64   `json:"federationRunningCost"`
-	FoundingWindow        int       `json:"foundingWindow"`
-	DisputeWindow         int       `json:"disputeWindow"`
-	ImmigrationLookback   int       `json:"immigrationLookback"`
-	DecisionMS            int       `json:"decisionMs"`
-	MemoryBytes           int       `json:"memoryBytes"`
+	RepresentativeCapacity int       `json:"representativeCapacity"`
+	BlightChance           float64   `json:"blightChance"`
+	BumperChance           float64   `json:"bumperChance"`
+	VotingTokens           int       `json:"votingTokens"`
+	RuleThreshold          string    `json:"ruleThreshold"`
+	RuleFraction           float64   `json:"ruleFraction"`
+	Plots                  int       `json:"plots"`
+	Copies                 int       `json:"copies"`
+	Days                   int       `json:"days"`
+	Months                 int       `json:"months"`
+	CapacityPerAgent       int       `json:"capacityPerAgent"`
+	StartingStock          float64   `json:"startingStock"`
+	Growth                 float64   `json:"growth"`
+	ProductiveCapacity     float64   `json:"productiveCapacity"`
+	DailyFood              int       `json:"dailyFood"`
+	BodyCapacity           float64   `json:"bodyCapacity"`
+	MindCapacity           float64   `json:"mindCapacity"`
+	StartingMind           float64   `json:"startingMind"`
+	PersonalCapacity       int       `json:"personalCapacity"`
+	WeatherRates           []float64 `json:"weatherRates"`
+	WeatherPersistence     float64   `json:"weatherPersistence"`
+	ProposalCost           float64   `json:"proposalCost"`
+	JusticeCost            float64   `json:"justiceCost"`
+	GovernmentCost         float64   `json:"governmentCost"`
+	DecisionMS             int       `json:"decisionMs"`
+	MemoryBytes            int       `json:"memoryBytes"`
 }
 type Rule struct {
 	Mode        string   `json:"mode,omitempty"`
@@ -77,19 +66,22 @@ type BehaviorRule struct {
 	Action Decision `json:"action"`
 }
 type Builder struct {
-	Rules      []BehaviorRule  `json:"rules,omitempty"`
-	Fallback   string          `json:"fallback,omitempty"`
-	Harvest    int             `json:"harvest"`
-	Eat        int             `json:"eat"`
-	Think      float64         `json:"think"`
-	KeepMind   float64         `json:"keepMind"`
-	Pledge     float64         `json:"pledge"`
-	Government bool            `json:"government"`
-	Vote       string          `json:"vote"`
-	Migrate    bool            `json:"migrate"`
-	Proposals  []ProposalInput `json:"proposals,omitempty"`
+	VoteTokens     int             `json:"voteTokens,omitempty"`
+	HarvestRanking []int           `json:"harvestRanking,omitempty"`
+	Rules          []BehaviorRule  `json:"rules,omitempty"`
+	Fallback       string          `json:"fallback,omitempty"`
+	Harvest        int             `json:"harvest"`
+	Eat            int             `json:"eat"`
+	Think          float64         `json:"think"`
+	KeepMind       float64         `json:"keepMind"`
+	Pledge         float64         `json:"pledge"`
+	Government     bool            `json:"government"`
+	Vote           string          `json:"vote"`
+	Proposals      []ProposalInput `json:"proposals,omitempty"`
 }
 type Agent struct {
+	VotingWeight   int                `json:"votingWeight"`
+	VotingTokens   int                `json:"votingTokens"`
 	ID             int                `json:"id"`
 	Team           int                `json:"team"`
 	Name           string             `json:"name"`
@@ -99,46 +91,39 @@ type Agent struct {
 	Mind           float64            `json:"mind"`
 	Food           int                `json:"food"`
 	Score          float64            `json:"score"`
-	Influence      int                `json:"influence"`
 	Harvested      int                `json:"harvested"`
 	Eaten          int                `json:"eaten"`
-	Deaths         int                `json:"deaths"`
+	Exclusions     int                `json:"exclusions"`
 	ActiveDays     int                `json:"activeDays"`
 	TotalEaten     int                `json:"totalEaten"`
 	TotalHarvested int                `json:"totalHarvested"`
 	PoliticalMind  float64            `json:"politicalMind"`
 	Thought        float64            `json:"thought"`
-	RespawnAt      int                `json:"respawnAt"`
-	LastPlaceUntil int                `json:"lastPlaceUntil"`
-	NoticeAt       int                `json:"noticeAt"`
+	LastPlaceUntil int                `json:"lastPlaceUntil,omitempty"`
 	Pledges        map[string]float64 `json:"pledges"`
 	Memory         json.RawMessage    `json:"-"`
 	LastResult     string             `json:"lastResult"`
 	Error          string             `json:"error,omitempty"`
-	Permits        map[string]int     `json:"-"`
 }
 type Plot struct {
+	Roles           map[string]int  `json:"roles"`
+	CropEvent       string          `json:"cropEvent,omitempty"`
+	AidNeeded       int             `json:"aidNeeded"`
+	HarvestOrder    []int           `json:"harvestOrder,omitempty"`
 	ID              int             `json:"id"`
 	Name            string          `json:"name"`
 	Capacity        int             `json:"capacity"`
 	Stock           int             `json:"stock"`
-	Reserve         int             `json:"reserve"`
-	ReserveCapacity int             `json:"reserveCapacity"`
+	Reserve         int             `json:"reserve,omitempty"`
 	Weather         int             `json:"weather"`
 	Regeneration    float64         `json:"regeneration"`
 	Government      bool            `json:"government"`
 	Rules           map[string]Rule `json:"rules"`
-	Officers        map[int]Office  `json:"officers"`
-	Federation      int             `json:"federation"`
-	HardFunded      bool            `json:"hardFunded"`
-	RecordsFunded   bool            `json:"recordsFunded"`
+	Officers        map[int]Office  `json:"officers,omitempty"`
+	Federation      int             `json:"federation,omitempty"`
 	Residents       []int           `json:"residents"`
-	// Contributions is each resident's standing while the plot's influence
-	// follows net contributions; empty otherwise.
-	Contributions   []ContributionTotal `json:"contributions,omitempty"`
-	GrowthRemainder float64             `json:"-"`
-	Rotation        []int               `json:"-"`
-	Records         []Event             `json:"-"`
+	GrowthRemainder float64         `json:"-"`
+	Records         []Event         `json:"-"`
 }
 type Event struct {
 	ID          int     `json:"id"`
@@ -149,7 +134,8 @@ type Event struct {
 	Kind        string  `json:"kind"`
 	Actor       int     `json:"actor"`
 	Plot        int     `json:"plot"`
-	Target      int     `json:"target,omitempty"`
+	Target      int     `json:"target"`
+	Members     []int   `json:"members,omitempty"`
 	Message     string  `json:"message"`
 	Amount      float64 `json:"amount,omitempty"`
 	Food        int     `json:"food,omitempty"`
@@ -159,29 +145,25 @@ type Event struct {
 	Rule        Rule    `json:"rule,omitempty"`
 }
 type Offer struct {
-	ID      int `json:"id"`
-	From    int `json:"from"`
-	To      int `json:"to"`
-	Amount  int `json:"amount"`
-	Expires int `json:"expires"`
+	To     int `json:"to"`
+	Amount int `json:"amount"`
 }
 type Decision struct {
-	OrderedVotes []VoteChoice       `json:"orderedVotes,omitempty"`
-	Error        string             `json:"error,omitempty"`
-	Move         *int               `json:"move,omitempty"`
-	Harvest      int                `json:"harvest,omitempty"`
-	Eat          int                `json:"eat,omitempty"`
-	Think        float64            `json:"think,omitempty"`
-	Pledge       map[string]float64 `json:"pledge,omitempty"`
-	Proposals    []ProposalInput    `json:"proposals,omitempty"`
-	Votes        map[string]string  `json:"votes,omitempty"`
-	Orders       []Order            `json:"orders,omitempty"`
-	Read         []RecordQuery      `json:"read,omitempty"`
-	Offer        *Offer             `json:"offer,omitempty"`
-	Accept       []int              `json:"accept,omitempty"`
-	CancelOffer  bool               `json:"cancelOffer,omitempty"`
-	Deposit      int                `json:"deposit,omitempty"`
-	Memory       json.RawMessage    `json:"memory,omitempty"`
+	PlotChoice     *int               `json:"plotChoice,omitempty"`
+	HarvestRanking []int              `json:"harvestRanking,omitempty"`
+	Donate         int                `json:"donate,omitempty"`
+	Gift           *Offer             `json:"gift,omitempty"`
+	OrderedVotes   []VoteChoice       `json:"orderedVotes,omitempty"`
+	Error          string             `json:"error,omitempty"`
+	Harvest        int                `json:"harvest,omitempty"`
+	Eat            int                `json:"eat,omitempty"`
+	Think          float64            `json:"think,omitempty"`
+	Pledge         map[string]float64 `json:"pledge,omitempty"`
+	Proposals      []ProposalInput    `json:"proposals,omitempty"`
+	Votes          map[string]string  `json:"votes,omitempty"`
+	Orders         []Order            `json:"orders,omitempty"`
+	Read           []RecordQuery      `json:"read,omitempty"`
+	Memory         json.RawMessage    `json:"memory,omitempty"`
 }
 type RecordQuery struct {
 	Cursor   string `json:"cursor,omitempty"`
@@ -201,6 +183,7 @@ type RecordPage struct {
 	Error      string  `json:"error,omitempty"`
 }
 type Observation struct {
+	Actions       []Event         `json:"actions,omitempty"`
 	RecordPages   []RecordPage    `json:"recordPages,omitempty"`
 	Pending       []Pending       `json:"pending"`
 	RandomSeed    int64           `json:"randomSeed"`
@@ -213,43 +196,37 @@ type Observation struct {
 	Memory        json.RawMessage `json:"memory"`
 	Settings      Settings        `json:"settings"`
 	Plots         []PlotView      `json:"plots"`
-	Federations   []*Federation   `json:"federations,omitempty"`
 	Proposals     []*Proposal     `json:"proposals"`
-	Offers        []Offer         `json:"offers"`
 	Records       []Event         `json:"records,omitempty"`
 	Receipts      []Event         `json:"receipts,omitempty"`
 }
 type PlotView struct {
-	ID            int             `json:"id"`
-	Name          string          `json:"name"`
-	Capacity      int             `json:"capacity"`
-	Weather       int             `json:"weather"`
-	Regeneration  float64         `json:"regeneration"`
-	Stock         *int            `json:"stock,omitempty"`
-	Reserve       *int            `json:"reserve,omitempty"`
-	Government    bool            `json:"government"`
-	Federation    int             `json:"federation"`
-	Residents     []int           `json:"residents,omitempty"`
-	Rules         map[string]Rule `json:"rules,omitempty"`
-	Officers      map[int]Office  `json:"officers,omitempty"`
-	HardFunded    bool            `json:"hardFunded"`
-	RecordsFunded bool            `json:"recordsFunded"`
-	// Contributions are the plot's public accounts while its influence follows
-	// net contributions: every resident's entries for the last completed days.
-	Contributions []ContributionDay `json:"contributions,omitempty"`
+	Roles        map[string]int  `json:"roles"`
+	CropEvent    string          `json:"cropEvent,omitempty"`
+	AidNeeded    int             `json:"aidNeeded"`
+	HarvestOrder []int           `json:"harvestOrder,omitempty"`
+	ID           int             `json:"id"`
+	Name         string          `json:"name"`
+	Capacity     int             `json:"capacity"`
+	Weather      int             `json:"weather"`
+	Regeneration float64         `json:"regeneration"`
+	Stock        *int            `json:"stock,omitempty"`
+	Government   bool            `json:"government"`
+	Residents    []int           `json:"residents,omitempty"`
+	Rules        map[string]Rule `json:"rules,omitempty"`
 }
 type MonthlyResult struct {
-	Month  int          `json:"month"`
-	Teams  []TeamResult `json:"teams"`
-	Scores []float64    `json:"scores"`
-	Deaths int          `json:"deaths"`
+	Month      int          `json:"month"`
+	Teams      []TeamResult `json:"teams"`
+	Scores     []float64    `json:"scores"`
+	Exclusions int          `json:"exclusions"`
 }
 type TeamResult struct {
-	Team   int     `json:"team"`
-	Name   string  `json:"name"`
-	Score  float64 `json:"score"`
-	Mean   float64 `json:"mean"`
-	Deaths int     `json:"deaths"`
+	Team       int     `json:"team"`
+	Name       string  `json:"name"`
+	Score      float64 `json:"score"`
+	Mean       float64 `json:"mean"`
+	Exclusions int     `json:"exclusions"`
 }
 type Stats struct {
 	Alive        int     `json:"alive"`
@@ -258,8 +235,8 @@ type Stats struct {
 	Stored       int     `json:"stored"`
 	Satisfaction float64 `json:"satisfaction"`
 	Governments  int     `json:"governments"`
-	Federations  int     `json:"federations"`
-	Deaths       int     `json:"deaths"`
+	Federations  int     `json:"federations,omitempty"`
+	Exclusions   int     `json:"exclusions"`
 }
 type Snapshot struct {
 	Pending     []Pending       `json:"pending"`
@@ -275,7 +252,7 @@ type Snapshot struct {
 	Meteor      bool            `json:"meteor"`
 	Agents      []*Agent        `json:"agents"`
 	Plots       []*Plot         `json:"plots"`
-	Federations []*Federation   `json:"federations"`
+	Federations []*Federation   `json:"federations,omitempty"`
 	Proposals   []*Proposal     `json:"proposals"`
 	Events      []Event         `json:"events"`
 	Months      []MonthlyResult `json:"months"`
@@ -293,11 +270,9 @@ type World struct {
 	Seed                    int64
 	Agents                  []*Agent
 	Plots                   []*Plot
-	Federations             []*Federation
 	Proposals               []*Proposal
 	Pending                 []Pending
 	Events                  []Event
-	Offers                  []Offer
 	Month, Day, AbsoluteDay int
 	Phase                   string
 	Done, Meteor            bool
@@ -312,7 +287,6 @@ type World struct {
 	advance                 bool
 	eventStart              int
 	nextEvent               int
-	nextOffer               int
 	reads                   map[int][]Event
 	receipts                map[int][]Event
 }

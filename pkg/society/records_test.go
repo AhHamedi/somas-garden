@@ -9,23 +9,19 @@ func recordWorld(t *testing.T) *World {
 	w := smallWorld(t, 2)
 	resident(w, 0)
 	resident(w, 1)
-	p := w.Plots[0]
-	p.Government = true
-	p.RecordsFunded = true
-	p.Rules["recordAccess"] = Rule{Mode: "all"}
 	for i := 0; i < 5; i++ {
 		w.event("harvest", i%2, 0, "recorded harvest", 1)
 	}
 	return w
 }
-func TestRecordPaginationChargesOnceAndFreezesSnapshot(t *testing.T) {
+func TestPublicRecordPaginationIsFreeAndFreezesSnapshot(t *testing.T) {
 	w := recordWorld(t)
 	a := w.Agents[0]
 	first, e := w.ReadRecordsPage(0, RecordQuery{Plot: 0, PageSize: 2})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(first.Rows) != 2 || first.Total != 5 || first.Offset != 0 || first.NextCursor == "" || a.Mind != 5.8 {
+	if len(first.Rows) != 2 || first.Total != 5 || first.Offset != 0 || first.NextCursor == "" || a.Mind != 6 {
 		t.Fatalf("invalid first page: %+v mind%v", first, a.Mind)
 	}
 	first.Rows[0].Message = "mutated"
@@ -38,16 +34,16 @@ func TestRecordPaginationChargesOnceAndFreezesSnapshot(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(second.Rows) != 2 || len(third.Rows) != 1 || third.NextCursor != "" || third.Total != 5 || third.Offset != 4 || a.Mind != 5.8 {
+	if len(second.Rows) != 2 || len(third.Rows) != 1 || third.NextCursor != "" || third.Total != 5 || third.Offset != 4 || a.Mind != 6 {
 		t.Fatal("continuation changed query, repeated charge or exceeded page")
 	}
 	again, e := w.ReadRecordsPage(0, RecordQuery{Cursor: first.Cursor})
-	if e != nil || again.Rows[0].Message == "mutated" || len(again.Rows) != 2 || a.Mind != 5.8 {
+	if e != nil || again.Rows[0].Message == "mutated" || len(again.Rows) != 2 || a.Mind != 6 {
 		t.Fatal("repeated page is not detached, stable or free")
 	}
 	fresh, e := w.ReadRecordsPage(0, RecordQuery{Plot: 0})
-	if e != nil || fresh.Total != 6 || a.Mind != 5.6 {
-		t.Fatal("new query did not capture new snapshot and charge once")
+	if e != nil || fresh.Total != 6 || a.Mind != 6 {
+		t.Fatal("new query did not capture new snapshot without charge")
 	}
 }
 func TestRecordCursorScopePermissionsAndReset(t *testing.T) {
@@ -68,14 +64,14 @@ func TestRecordCursorScopePermissionsAndReset(t *testing.T) {
 	if _, e = w.ReadRecordsPage(0, RecordQuery{Cursor: first.NextCursor, Subject: &subject}); e == nil {
 		t.Fatal("cursor changed filter")
 	}
-	w.Plots[0].Rules["recordAccess"] = Rule{Mode: "named", Members: []int{1}}
-	if _, e = w.ReadRecordsPage(0, RecordQuery{Cursor: first.NextCursor}); e == nil {
-		t.Fatal("revoked permission bypassed")
+	// Moving the reader out of this plot does not hide public records.
+	w.Agents[0].Plot = -1
+	if _, e = w.ReadRecordsPage(0, RecordQuery{Cursor: first.NextCursor}); e != nil {
+		t.Fatal(e)
 	}
-	w.Plots[0].Rules["recordAccess"] = Rule{Mode: "all"}
 	w.Agents[0].Alive = false
 	if _, e = w.ReadRecordsPage(0, RecordQuery{Cursor: first.NextCursor}); e == nil {
-		t.Fatal("dead agent read records")
+		t.Fatal("excluded agent read records")
 	}
 	w.Agents[0].Alive = true
 	if _, e = w.ReadRecordsPage(0, RecordQuery{Cursor: first.NextCursor}); e != nil || w.Agents[0].Mind != mind {
@@ -117,7 +113,7 @@ func TestRecordsPhaseCanContinueWithoutDuplicateEvidence(t *testing.T) {
 		return Decision{}
 	}
 	w.recordsPhase()
-	if len(w.reads[0]) != 5 || w.Agents[0].Mind != 5.8 {
+	if len(w.reads[0]) != 5 || w.Agents[0].Mind != 6 {
 		t.Fatalf("duplicate/paid continuations records%d mind%v", len(w.reads[0]), w.Agents[0].Mind)
 	}
 	v := w.View(0)

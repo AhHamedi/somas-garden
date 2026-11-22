@@ -4,7 +4,7 @@ import { Playback, phaseWeight, SPEEDS } from "../public/game/playback.js";
 
 const PHASES = [
   "environment",
-  "movement",
+  "harvest_order",
   "harvest",
   "proposals",
   "voting",

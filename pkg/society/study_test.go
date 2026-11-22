@@ -33,7 +33,7 @@ func TestStudySummariesAgreeWithTheEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 	var prev *StudyDay
-	days, deaths, motions := 0, 0, 0
+	days, exclusions, motions := 0, 0, 0
 	for frame := 1; !w.Done; frame++ {
 		if err := w.Step(); err != nil {
 			t.Fatal(err)
@@ -82,15 +82,15 @@ func TestStudySummariesAgreeWithTheEngine(t *testing.T) {
 		if d.Gini < 0 || d.Gini > 1 {
 			t.Fatalf("gini out of range: %v", d.Gini)
 		}
-		deaths += d.Deaths
+		exclusions += d.Exclusions
 		if snap.Meteor {
 			a := SummariseAgents(&snap, frame)
 			total := 0
-			for _, n := range a.Deaths {
+			for _, n := range a.Exclusions {
 				total += n
 			}
-			if !a.Complete || total != deaths || total != snap.Stats.Deaths {
-				t.Fatalf("daily deaths %d, month totals %d, engine %d", deaths, total, snap.Stats.Deaths)
+			if !a.Complete || total != exclusions || total != snap.Stats.Exclusions {
+				t.Fatalf("daily exclusions %d, month totals %d, engine %d", exclusions, total, snap.Stats.Exclusions)
 			}
 		}
 	}
@@ -102,15 +102,15 @@ func TestStudySummariesAgreeWithTheEngine(t *testing.T) {
 	}
 }
 
-func TestFirstDayCountsArrivalsFromTheWilds(t *testing.T) {
+func TestSettlementDoesNotCountAsDailyMovement(t *testing.T) {
 	w := smallWorld(t, 3)
 	resident(w, 0)
 	resident(w, 1)
 	w.Day, w.Phase = 1, "close"
 	snap := w.Snapshot()
 	d := SummariseDay(&snap, 8, nil)
-	if d.Moves != 2 {
-		t.Fatalf("moves = %d, want the 2 Amoeboids who entered a plot", d.Moves)
+	if d.Moves != 0 {
+		t.Fatalf("moves = %d, monthly settlement is not migration", d.Moves)
 	}
 	next := SummariseDay(&snap, 16, &d)
 	if next.Moves != 0 {

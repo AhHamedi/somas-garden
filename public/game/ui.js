@@ -20,19 +20,19 @@ import {
   motionTally,
   statusOf,
   passedStatus,
-  powerName,
+  roleName,
+  cropStatus,
   dayLabel,
   SCORE_HELP,
   agentDay,
   eventText,
-  contributionStanding,
 } from "/game/model.js";
 import { $, icon, setHTML, avatar, meter, chip } from "/game/dom.js";
 import { statuteBook } from "/game/statute-book.js";
 
 const PHASE_ICONS = [
   "sun",
-  "path",
+  "ballot",
   "carrot",
   "scroll",
   "ballot",
@@ -41,24 +41,16 @@ const PHASE_ICONS = [
   "night",
 ];
 const WEATHER_ICONS = ["sun", "cloud", "rain"];
-const LAW_ICONS = {
-  harvest: "carrot",
-  treasury: "granary",
-  borders: "gate",
-  power: "hall",
-  federation: "federation",
-};
-
 // ------------------------------------------------------------------ top bar
 export function renderVitals(app) {
   const w = worldSummary(app.ix);
   setHTML(
     $("vitals"),
-    `<div class="vital people" title="Living Amoeboids out of the whole population">${icon("people")}<b>${fmt(w.alive)}</b><small>of ${fmt(w.population)} alive</small></div>
+    `<div class="vital people" title="Active Amoeboids out of the whole population">${icon("people")}<b>${fmt(w.alive)}</b><small>of ${fmt(w.population)} active</small></div>
      <div class="vital food" title="Carrots standing in every field">${icon("carrot")}<b>${fmt(w.field)}</b><small>in the fields</small></div>
-     <div class="vital food optional" title="Carrots held in government treasuries">${icon("granary")}<b>${fmt(w.treasury)}</b><small>in treasuries</small></div>
+     <div class="vital food optional" title="Carrots in personal stores">${icon("granary")}<b>${fmt(w.held)}</b><small>held by residents</small></div>
      <div class="vital joy" title="${esc(SCORE_HELP)}">${icon("joy")}<b>${fmt(w.satisfaction, 1)}</b><small>avg satisfaction</small></div>
-     <div class="vital civic" title="Governments and federations in existence">${icon("hall")}<b>${fmt(w.governments)}</b><small>${w.governments === 1 ? "government" : "governments"}${w.federations ? `, ${w.federations} fed.` : ""}</small></div>`,
+     <div class="vital civic" title="Plots with a government">${icon("hall")}<b>${fmt(w.governments)}</b><small>${w.governments === 1 ? "government" : "governments"}</small></div>`,
   );
   const open = (app.ix.s.proposals || []).filter(
     (p) => p.closes === app.ix.s.absoluteDay || p.created === app.ix.s.absoluteDay,
@@ -78,27 +70,21 @@ export function renderLedger(app) {
       const sel = app.sel.plot === p.id;
       return `<button class="plot-row ${sel ? "selected" : ""} ${p.government ? "governed" : ""}" data-plot="${p.id}" aria-pressed="${sel}">
         <span class="letter">${esc(plotLetter(p))}</span>
-        <span class="name">${esc(p.name)} ${icon(WEATHER_ICONS[p.weather])}${p.federation >= 0 ? `<span style="color:var(--influence)">${icon("federation")}</span>` : ""}</span>
+        <span class="name">${esc(p.name)} ${icon(WEATHER_ICONS[p.weather])}${p.cropEvent ? `<span title="${esc(cropStatus(p))}">${icon(p.cropEvent === "bumper" ? "sprout" : "alert")}</span>` : ""}</span>
         <span class="pop">${icon("people")}${fmt(sum.population)}</span>
         <span class="sub">${meter(sum.fieldShare)}<span>${fmt(p.stock)}</span>${sum.today ? `<span class="badge-dot" title="Motions before the assembly today">${sum.today}</span>` : ""}</span>
       </button>`;
     })
     .join("");
-  const wild = (ix.residents.get(-1) || []).length;
   const waiting = s.agents.filter((a) => !a.alive).length;
   setHTML(
     $("ledger"),
     `<div class="ledger-head"><h2>Plots</h2><span>${fmt(s.plots.filter((p) => p.government).length)} governed</span></div>
      ${rows}
-     <button class="plot-row ${app.sel.plot === -1 ? "selected" : ""}" data-plot="-1">
-       <span class="letter">${icon("tent")}</span>
-       <span class="name">The wilds</span>
-       <span class="pop">${icon("people")}${fmt(wild)}</span>
-       <span class="sub">${waiting ? `${fmt(waiting)} awaiting return` : "Outside every plot"}</span>
-     </button>
+     ${waiting ? `<button class="plot-row" data-plot="-1"><span class="letter">${icon("people")}</span><span class="name">Excluded residents</span><span class="pop">${fmt(waiting)}</span></button>` : ""}
      <div class="ledger-legend">
        <div class="team-legend">${s.teams.map((t, i) => `<span class="legend-row"><svg width="12" height="11" viewBox="0 0 12 11"><ellipse cx="6" cy="5.5" rx="5.5" ry="5" fill="${teamColor(i)}"/></svg>${esc(t.name)}</span>`).join("")}</div>
-       <span class="legend-row">${icon("crown")}<span>Officer</span>${icon("flag")}<span>Representative</span></span>
+       <span class="legend-row">${icon("crown")}<span>Justice</span>${icon("flag")}<span>Trade</span></span>
      </div>`,
   );
 }
@@ -120,7 +106,17 @@ export function renderConsole(app) {
       ? "Day 1"
       : `Day ${s.day}<small style="font:500 13px var(--ui);color:var(--ink-3);margin-left:6px">of ${s.settings.days}</small>`;
   $("date-sub").textContent = `Month ${s.month} of ${s.settings.months}`;
-  const cur = phaseIndex(s.phase);
+  const archived = s.version > 0 && s.version < 6;
+  const secondPhase = $("rail").querySelector('li[data-i="1"] button');
+  const secondId = archived ? "movement" : PHASES[1].id;
+  if (secondPhase.dataset.phase !== secondId) {
+    secondPhase.dataset.phase = secondId;
+    secondPhase.title = archived ? "Archived migration phase" : PHASES[1].verb;
+    secondPhase.querySelector("span").textContent = archived
+      ? "Migration"
+      : PHASES[1].name;
+  }
+  const cur = s.phase === "movement" ? 1 : phaseIndex(s.phase);
   $("rail")
     .querySelectorAll("li")
     .forEach((li, i) => {
@@ -129,7 +125,7 @@ export function renderConsole(app) {
       if (i !== cur)
         li.querySelector(".bar i").style.transform = i < cur ? "" : "scaleX(0)";
       const b = li.querySelector("button");
-      const available = app.dayIndex?.has(PHASES[i].id);
+      const available = app.dayIndex?.has(b.dataset.phase);
       b.disabled = !available;
       if (i === cur) b.setAttribute("aria-current", "step");
       else b.removeAttribute("aria-current");
@@ -193,7 +189,7 @@ export function renderTimeline(app) {
       marks.push(
         `<i style="left:${((d - 1) * PHASES.length * 100) / (total - 1)}%"></i>`,
       );
-    // Days on which governments appeared or several Amoeboids died.
+    // Mark founding days and days with multiple exclusions.
     let prev = null;
     for (let i = start; i <= end; i++) {
       const fr = frames[i];
@@ -202,9 +198,13 @@ export function renderTimeline(app) {
           marks.push(
             `<i class="gov" style="left:${pos(i)}%" title="Government founded"></i>`,
           );
-        if (fr.stats.deaths - prev.stats.deaths >= 5)
+        if (
+          (fr.stats.exclusions ?? fr.stats.deaths) -
+            (prev.stats.exclusions ?? prev.stats.deaths) >=
+          5
+        )
           marks.push(
-            `<i class="loss" style="left:${pos(i)}%" title="${fr.stats.deaths - prev.stats.deaths} deaths"></i>`,
+            `<i class="loss" style="left:${pos(i)}%" title="${(fr.stats.exclusions ?? fr.stats.deaths) - (prev.stats.exclusions ?? prev.stats.deaths)} exclusions"></i>`,
           );
       }
       prev = fr;
@@ -247,7 +247,7 @@ export function renderInspector(app) {
   document.body.classList.toggle("inspecting", show);
   if (!show) return;
   if (agent !== null) return renderAgent(app, el);
-  if (plot === -1) return renderWilds(app, el);
+  if (plot === -1) return renderExcluded(app, el);
   const p = app.ix.plots.get(plot);
   if (!p) return;
   renderPlot(app, el, p);
@@ -359,7 +359,6 @@ function renderPlot(app, el, p) {
   const ix = app.ix,
     s = ix.s;
   const sum = plotSummary(ix, p);
-  const fed = p.federation >= 0 ? ix.federations.get(p.federation) : null;
   const govSince = (s.proposals || []).find(
     (q) => q.plot === p.id && q.input?.kind === "found" && q.status === "activated",
   );
@@ -371,7 +370,13 @@ function renderPlot(app, el, p) {
           "hall",
         )
       : chip("No government", "neutral"),
-    fed ? chip(fed.name, "civic", "federation") : "",
+    p.cropEvent
+      ? chip(
+          cropStatus(p),
+          p.cropEvent === "blight" || p.cropEvent === "failed" ? "no" : "yes",
+          "sprout",
+        )
+      : "",
   ].join("");
   const head = `<div class="insp-head"><span class="insp-mark ${p.government ? "governed" : ""}">${esc(plotLetter(p))}</span>
     <div class="insp-title"><h2>${esc(p.name)}</h2><p>${icon(WEATHER_ICONS[p.weather])}${WEATHER[p.weather]}, +${fmt(p.regeneration)} mind a day</p><div class="chips">${chips}</div></div>${closeButton(app)}</div>`;
@@ -393,24 +398,18 @@ function localStory(app, plotId) {
   const p = app.ix.plots.get(plotId);
   switch (s.phase) {
     case "environment": {
-      const g = sumOf("growth");
-      return p
-        ? `${g ? `${fmt(g)} carrots grew. ` : "Nothing grew. "}Residents regain ${fmt(p.regeneration)} mind under ${WEATHER[p.weather].toLowerCase()} skies.`
-        : "";
+      if (!p) return "";
+      const sanctions = count("sanction_applied");
+      const weather =
+        s.day === 1
+          ? `Residents chose this plot for the month with ${fmt(s.settings.startingMind)} starting mind.`
+          : `Residents regain up to ${fmt(p.regeneration)} mind under ${WEATHER[p.weather].toLowerCase()} skies.`;
+      return `${fmt(sumOf("growth"))} carrots grew. ${weather}${sanctions ? ` Justice applied ${plural(sanctions, "sanction")}.` : ""}`;
     }
-    case "movement": {
-      const prev = app.prevIx;
-      if (!prev) return "Residents choose where to live.";
-      let inn = 0,
-        out = 0;
-      for (const a of s.agents) {
-        const b = prev.agents.get(a.id);
-        if (!b || !a.alive) continue;
-        if (a.plot === plotId && b.plot !== plotId) inn++;
-        if (a.plot !== plotId && b.plot === plotId) out++;
-      }
-      return inn || out ? `${inn} arrived and ${out} left.` : "Nobody arrived or left.";
-    }
+    case "harvest_order":
+      return p?.harvestOrder?.length
+        ? `${plural(p.harvestOrder.length, "resident")} in today's harvest queue.`
+        : "The field has no harvest queue.";
     case "harvest": {
       const n = count("harvest");
       return n
@@ -434,10 +433,24 @@ function localStory(app, plotId) {
       return `The assembly decided ${plural(decided.length, "motion")}: ${passed} passed.`;
     }
     case "transfers": {
-      const orders = count("officer_order");
-      return orders
-        ? `${plural(orders, "officer order")} issued for tomorrow.`
-        : "No officer orders.";
+      const incoming = ev
+        .filter(
+          (e) => e.kind === "received" && app.ix.agents.get(e.target)?.plot !== plotId,
+        )
+        .reduce((n, e) => n + e.amount, 0);
+      const actions = [];
+      if (incoming)
+        actions.push(`${plural(incoming, "carrot")} received from other plots`);
+      if (sumOf("donation"))
+        actions.push(`${plural(sumOf("donation"), "carrot")} donated locally`);
+      if (sumOf("gift"))
+        actions.push(`${plural(sumOf("gift"), "carrot")} gifted by Trade`);
+      if (count("justice_order"))
+        actions.push(`Justice scheduled ${plural(count("justice_order"), "sanction")}`);
+      if (count("blight_rescued") || count("plot_failed")) actions.push(cropStatus(p));
+      return actions.length
+        ? actions.join(". ") + "."
+        : "No department actions or donations.";
     }
     case "eating": {
       const deaths = (s.agents || []).filter(
@@ -446,7 +459,7 @@ function localStory(app, plotId) {
           app.prevIx?.agents.get(a.id)?.alive &&
           app.prevIx.agents.get(a.id).plot === plotId,
       ).length;
-      return `Residents ate ${plural(sumOf("eat"), "carrot")}${deaths ? `; ${plural(deaths, "resident")} starved` : ""}.`;
+      return `Residents ate ${plural(sumOf("eat"), "carrot")}${deaths ? `; ${plural(deaths, "resident")} excluded` : ""}.`;
     }
     case "close":
       return "Night. Residents sleep until dawn.";
@@ -465,23 +478,14 @@ function plotOverview(app, p, sum) {
     )
     .join("");
   const now = localStory(app, p.id);
-  // One row per person, whatever mix of offices they hold here.
-  const officers = [];
+  const holders = [];
   for (const [id, r] of ix.roles) {
     const here = r.filter((role) => role.plot === p.id);
     const a = ix.agents.get(id);
     if (!here.length || !a) continue;
-    const officer = here.find((x) => x.kind === "officer");
-    const rep = here.some((x) => x.kind === "representative");
-    const powers = officer
-      ? (officer.office.powers || [])
-          .filter((x) => !x.startsWith("federation"))
-          .map(powerName)
-      : [];
-    const title =
-      officer && rep ? "Officer, representative" : officer ? "Officer" : "Representative";
-    officers.push(
-      `<button class="person" data-agent="${id}" title="${esc(powers.join(", "))}">${avatar(a, here)}<span><strong>${esc(a.name)}</strong><span class="what">${title}${powers.length ? `, ${plural(powers.length, "power")}` : ""}</span></span>${icon("chevron")}</button>`,
+    const title = here.map((r) => roleName(r.kind)).join(" and ");
+    holders.push(
+      `<button class="person" data-agent="${id}">${avatar(a, here)}<span><strong>${esc(a.name)}</strong><span class="what">${title}</span></span>${icon("chevron")}</button>`,
     );
   }
   const laws = plotLaws(ix, p).filter((l) => l.scope === "local");
@@ -490,14 +494,14 @@ function plotOverview(app, p, sum) {
   );
   const vitals = `<div class="vit-grid">
       <div class="vit food"><span class="vit-label">${icon("carrot")}Field</span><span class="vit-value">${fmt(p.stock)}<small>/ ${fmt(p.capacity)}</small></span>${meter(sum.fieldShare)}</div>
-      <div class="vit treasury ${p.government ? "" : "muted"}"><span class="vit-label">${icon("granary")}Treasury</span>${p.government ? `<span class="vit-value">${fmt(p.reserve)}<small>/ ${fmt(p.reserveCapacity)}</small></span>${meter(sum.reserveShare, "treasury")}` : `<span class="vit-value">None</span>`}</div>
+      <div class="vit"><span class="vit-label">${icon("gift")}Trade store</span><span class="vit-value">${p.roles?.trade != null ? fmt(ix.agents.get(p.roles.trade)?.food) : "Vacant"}<small>${p.roles?.trade != null ? esc(agentName(ix, p.roles.trade)) : ""}</small></span></div>
       <div class="vit people"><span class="vit-label">${icon("people")}Residents</span><span class="vit-value">${fmt(sum.population)}<small>${fmt(sum.food)} carrots held</small></span><span class="teambar">${teamBar}</span></div>
       <div class="vit joy" title="${esc(SCORE_HELP)}"><span class="vit-label">${icon("joy")}Satisfaction</span><span class="vit-value">${fmt(sum.satisfaction, 1)}<small>avg</small></span>${sum.hungry ? `<span class="vit-foot warn">${fmt(sum.hungry)} hungry</span>` : ""}</div>
     </div>
     <div class="mini-stats">
       <span title="Average mind">${icon("mind")}<b>${fmt(sum.mind, 1)}</b> mind</span>
       <span title="Average body">${icon("body")}<b>${fmt(sum.body, 1)}</b> body</span>
-      <span title="Average influence">${icon("influence")}<b>${fmt(sum.influence, 1)}</b> influence</span>
+      <span title="Average daily voting weight">${icon("ballot")}<b>${fmt(sum.votingWeight, 1)}</b> voting weight</span>
     </div>`;
   const lawList = laws.length
     ? `<div class="law-rows">${laws
@@ -524,9 +528,9 @@ function plotOverview(app, p, sum) {
             app,
             "leaders",
             "Leadership",
-            officers.length
-              ? `<div class="person-list">${officers.join("")}</div>`
-              : `<p class="note">No officers</p>`,
+            holders.length
+              ? `<div class="person-list">${holders.join("")}</div>`
+              : `<p class="note">Both roles are vacant</p>`,
           )
         : section(
             app,
@@ -535,6 +539,7 @@ function plotOverview(app, p, sum) {
             `<p class="note">None. Founding needs ${fmt(Math.floor(sum.population / 2) + 1)} of ${fmt(sum.population)} votes and ${fmt(s.settings.governmentCost)} pledged mind.</p>`,
           )
     }
+    ${p.harvestOrder?.length ? section(app, "harvestQueue", "Harvest order", `<details><summary>${plural(p.harvestOrder.length, "resident")} · first up ${esc(agentName(ix, p.harvestOrder[0]))}</summary><ol>${p.harvestOrder.map((id) => `<li><button class="link" data-agent="${id}">${esc(agentName(ix, id))}</button></li>`).join("")}</ol></details>`) : ""}
     ${motions.length ? section(app, "motions", "Motions today", motions.map((q) => motionCard(app, q)).join(""), `<button class="link" data-tab="assembly">Open</button>`) : ""}
     </div>`;
 }
@@ -589,6 +594,18 @@ function activityView(app, plotId) {
     }
     const lines = [];
     for (const [kind, list] of groups) {
+      if (kind === "harvest_ranking") {
+        const ballots = list
+          .map(
+            (e) =>
+              `<li><b>${esc(agentName(ix, e.actor))}</b> · ${esc((e.members || []).map((id) => agentName(ix, id)).join(" → "))}</li>`,
+          )
+          .join("");
+        lines.push(
+          `<li><details><summary>${plural(list.length, "public ranking")}</summary><ol>${ballots}</ol></details></li>`,
+        );
+        continue;
+      }
       const amount = list.reduce((t, e) => t + (e.amount || 0), 0);
       const names = list.filter((e) => e.actor >= 0).map((e) => agentName(ix, e.actor));
       const who = names.length
@@ -599,9 +616,15 @@ function activityView(app, plotId) {
           harvest: `${plural(list.length, "resident")} harvested ${plural(amount, "carrot")}`,
           eat: `${plural(list.length, "resident")} ate ${plural(amount, "carrot")}`,
           think: `${plural(list.length, "resident")} thought with ${fmt(amount)} mind`,
-          move: `${who} moved`,
-          death: `${who} starved`,
-          respawn: `${who} returned`,
+          excluded: `${who} excluded`,
+          received: `${who} received ${plural(amount, "carrot")}`,
+          donation: `${plural(amount, "carrot")} donated to Trade`,
+          gift: `${plural(amount, "carrot")} gifted by Trade`,
+          harvest_order: list[0].message,
+          blight: list[0].message,
+          bumper: list[0].message,
+          plot_failed: list[0].message,
+          blight_rescued: list[0].message,
           proposal: `${who} tabled ${list
             .map((e) => e.message.toLowerCase())
             .slice(0, 2)
@@ -611,10 +634,9 @@ function activityView(app, plotId) {
             .slice(0, 3)
             .join("; "),
           growth: `${fmt(amount)} carrots grew`,
-          collection: `${fmt(amount)} carrots collected for the treasury`,
-          distribution: `${plural(list.length, "resident")} received ${plural(amount, "carrot")} from the treasury`,
           ration_breach: `${who} broke the quota`,
-          officer_order: `${who} issued ${plural(list.length, "order")}`,
+          justice_order: list.map((e) => e.message).join(". "),
+          sanction_applied: list.map((e) => e.message).join(". "),
           activated: list
             .map((e) => e.message)
             .slice(0, 3)
@@ -627,7 +649,7 @@ function activityView(app, plotId) {
           proposal_rejected: `${plural(list.length, "motion")} refused: ${list[0].message}`,
         }[kind] || `${list.length} ${kind.replace(/_/g, " ")}`;
       lines.push(
-        `<li><span class="ph">${esc(PHASE_NAME[f.phase] || f.phase)}</span><span class="${kind === "death" ? "fail" : ""}">${esc(text)}</span></li>`,
+        `<li><span class="ph">${esc(PHASE_NAME[f.phase] || f.phase)}</span><span class="${kind === "excluded" ? "fail" : ""}">${esc(text)}</span></li>`,
       );
     }
     rows.push(lines.join(""));
@@ -643,12 +665,6 @@ function residentsView(app, residents) {
   const teams = new Map();
   for (const a of residents) teams.set(a.team, (teams.get(a.team) || 0) + 1);
   const filt = app.res.team;
-  const plot = residents.length ? ix.plots.get(residents[0].plot) : null;
-  const earned = String(plot?.rules?.influenceBasis?.mode || "").startsWith(
-    "contribution",
-  );
-  const points = new Map((plot?.contributions || []).map((c) => [c.agent, c.points]));
-  if (earned) residents = residents.map((a) => ({ ...a, points: points.get(a.id) || 0 }));
   let list = filt === null ? residents : residents.filter((a) => a.team === filt);
   const key = app.res.sort,
     dir = app.res.dir;
@@ -660,15 +676,10 @@ function residentsView(app, residents) {
   );
   const th = (k, label, cls = "") =>
     `<th class="sortable ${cls} ${key === k ? "active" : ""}" data-sort="${k}" aria-sort="${key === k ? (dir > 0 ? "ascending" : "descending") : "none"}">${label}${key === k ? (dir > 0 ? " ↑" : " ↓") : ""}</th>`;
-  const maxI = s.settings.maxInfluence || 5;
   const rows = list
     .map((a) => {
       const roles = ix.roles.get(a.id) || [];
-      const pips = Array.from(
-        { length: Math.min(maxI, 5) },
-        (_, i) => `<i class="${i < a.influence ? "on" : ""}"></i>`,
-      ).join("");
-      return `<tr data-row="${a.id}"><td><span class="res-name">${avatar(a, roles)}<strong>${esc(a.name)}</strong></span></td><td><span class="pips" title="Influence ${a.influence}">${pips}</span></td>${earned ? `<td>${fmt(a.points, 1)}</td>` : ""}<td><span class="minibar" title="Body ${fmt(a.body, 1)}"><i style="width:${(a.body / (s.settings.bodyCapacity || 2)) * 100}%;background:var(--body)"></i></span></td><td><span class="minibar" title="Mind ${fmt(a.mind, 1)}"><i style="width:${(a.mind / (s.settings.mindCapacity || 12)) * 100}%;background:var(--mind)"></i></span></td><td>${fmt(a.food)}</td><td class="w">${fmt(a.totalHarvested)}</td><td class="w">${fmt(a.totalEaten)}</td><td class="w">${fmt(a.thought, 1)}</td><td class="w">${fmt(a.politicalMind, 1)}</td><td class="w">${fmt(a.deaths)}</td><td>${fmt(a.score, 1)}</td></tr>`;
+      return `<tr data-row="${a.id}"><td><button data-agent="${a.id}">${avatar(a, roles)}${esc(a.name)}</button></td><td>${fmt(a.votingWeight ?? a.influence)}</td><td>${fmt(a.votingTokens)}</td><td><span class="minibar" title="Body ${fmt(a.body, 1)}"><i style="width:${(a.body / (s.settings.bodyCapacity || 2)) * 100}%;background:var(--body)"></i></span></td><td><span class="minibar" title="Mind ${fmt(a.mind, 1)}"><i style="width:${(a.mind / (s.settings.mindCapacity || 12)) * 100}%;background:var(--mind)"></i></span></td><td>${fmt(a.food)}</td><td class="w">${fmt(a.totalHarvested)}</td><td class="w">${fmt(a.totalEaten)}</td><td class="w">${fmt(a.thought, 1)}</td><td class="w">${fmt(a.politicalMind, 1)}</td><td class="w">${fmt(a.exclusions ?? a.deaths)}</td><td>${fmt(a.score, 1)}</td></tr>`;
     })
     .join("");
   return `<div class="team-chips" aria-label="Filter by team">${[...teams.entries()]
@@ -678,49 +689,17 @@ function residentsView(app, residents) {
         `<button class="team-chip ${filt !== null && filt !== t ? "dim" : ""}" data-team="${t}" aria-pressed="${filt === t}"><i style="background:${teamColor(t)}"></i>${esc(s.teams[t]?.name || `Team ${t + 1}`)} ${n}</button>`,
     )
     .join("")}</div>
-    ${list.length ? `<table class="res-table"><thead><tr>${th("name", "Resident")}${th("influence", "Infl.")}${earned ? th("points", "Points") : ""}${th("body", "Body")}${th("mind", "Mind")}${th("food", "Food")}${th("totalHarvested", "Harvested", "w")}${th("totalEaten", "Eaten", "w")}${th("thought", "Thought", "w")}${th("politicalMind", "Politics", "w")}${th("deaths", "Deaths", "w")}${th("score", "Satisf.")}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="note" style="margin-top:12px">Empty</p>`}`;
+    ${list.length ? `<table class="res-table"><thead><tr>${th("name", "Resident")}${th("votingWeight", "Voting weight")}${th("votingTokens", "Tokens")}${th("body", "Body")}${th("mind", "Mind")}${th("food", "Food")}${th("totalHarvested", "Harvested", "w")}${th("totalEaten", "Eaten", "w")}${th("thought", "Thought", "w")}${th("politicalMind", "Politics", "w")}${th("exclusions", "Exclusions", "w")}${th("score", "Satisf.")}</tr></thead><tbody>${rows}</tbody></table>` : `<p class="note" style="margin-top:12px">Empty</p>`}`;
 }
 
-function renderWilds(app, el) {
+function renderExcluded(app, el) {
   const ix = app.ix,
     s = ix.s;
-  const people = ix.residents.get(-1) || [];
-  const waiting = s.agents.filter((a) => !a.alive);
-  app.inspectorKey = `wilds:${app.tab}`;
-  const head = `<div class="insp-head"><span class="insp-mark">${icon("tent")}</span><div class="insp-title"><h2>The wilds</h2><p>No harvest, +${fmt(s.settings.outsideMind)} mind a day</p></div>${closeButton(app)}</div>`;
-  const tabs = ["overview", "residents"]
-    .map(
-      (id) =>
-        `<button class="tab" role="tab" data-tab="${id}" aria-selected="${app.tab === id || (id === "overview" && app.tab !== "residents")}">${id === "overview" ? "Overview" : "Here now"}${id === "residents" && people.length ? `<span class="count">${people.length}</span>` : ""}</button>`,
-    )
-    .join("");
-  const nextBack = waiting.length
-    ? Math.min(...waiting.map((a) => a.respawnAt || Infinity))
-    : null;
-  const body =
-    app.tab === "residents"
-      ? residentsView(app, people)
-      : `<div class="vit-grid"><div class="vit people"><span class="vit-label">${icon("people")}In the wilds</span><span class="vit-value">${fmt(people.length)}</span></div><div class="vit"><span class="vit-label">${icon("spark")}Awaiting return</span><span class="vit-value">${fmt(waiting.length)}</span><span class="vit-foot">${nextBack && isFinite(nextBack) ? `Next ${dayLabel(s, nextBack)}` : waiting.length ? "At the meteor" : ""}</span></div></div>`;
-  inspectorShell(app, el, head, tabs, body);
+  const excluded = s.agents.filter((a) => !a.alive);
+  app.inspectorKey = "excluded";
+  const head = `<div class="insp-head"><div class="insp-title"><h2>Excluded residents</h2><p>${fmt(excluded.length)} currently excluded</p></div>${closeButton(app)}</div>`;
+  inspectorShell(app, el, head, "", residentsView(app, excluded));
 }
-
-// Where influence follows contributions: the points behind it, its share of
-// the plot's votes, and what was given and received over the window.
-function earnedLine(ix, a) {
-  const st = contributionStanding(ix, a);
-  if (!st) return "";
-  const r = st.row;
-  const parts = [
-    ["Deposited", fmt(r.deposits || 0)],
-    ["Taxed", fmt(r.tax || 0)],
-    ["Seized", fmt(r.holding || 0)],
-    ["Services", `${fmt(r.services || 0, 1)} mind`],
-    ["Received", fmt(r.received || 0)],
-  ];
-  const pts = `${fmt(st.points, Number.isInteger(st.points) ? 0 : 1)} ${st.points === 1 ? "point" : "points"}`;
-  return `<details class="earned"><summary>${pts} · ${fmt(st.influence)} influence · ${fmt(st.share * 100)}% of votes</summary><dl>${parts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl><p>Last ${plural(st.rule.limit || 1, "completed day")}</p></details>`;
-}
-
 function renderAgent(app, el) {
   const ix = app.ix,
     s = ix.s;
@@ -733,26 +712,16 @@ function renderAgent(app, el) {
   const where = a.alive
     ? a.plot >= 0
       ? `lives in ${plotName(ix, a.plot)}`
-      : "is in the wilds"
-    : `dead until ${a.respawnAt ? dayLabel(s, a.respawnAt) : "the meteor"}`;
+      : "awaiting plot placement"
+    : "excluded";
   const roleChips = roles
-    .map((r) =>
-      r.kind === "officer"
-        ? chip(
-            `Officer of ${plotLetter(ix.plots.get(r.plot) || { id: r.plot })}`,
-            "open",
-            "crown",
-          )
-        : chip("Representative", "civic", "flag"),
-    )
+    .map((r) => chip(roleName(r.kind), "civic", r.kind === "trade" ? "flag" : "crown"))
     .join("");
+  const capacity = roles.some((r) => r.kind === "trade")
+    ? set.representativeCapacity
+    : set.personalCapacity;
   const backTo = app.backPlot ?? (a.plot >= 0 || a.plot === -1 ? a.plot : null);
-  const head = `<div class="insp-head" style="grid-template-columns:1fr auto"><div>${backTo !== null && backTo !== undefined ? `<button class="back" data-back>${icon("back")}${backTo === -1 ? "The wilds" : esc(plotName(ix, backTo))}</button>` : ""}<div class="agent-head">${avatar(a, roles, "lg")}<div><h2>${esc(a.name)}</h2><p>${esc(s.teams[a.team]?.name || "")} team, ${esc(where)}</p>${roleChips ? `<div class="chips">${roleChips}</div>` : ""}</div></div></div>${closeButton(app)}</div>`;
-  const pips = Array.from(
-    { length: Math.min(set.maxInfluence || 5, 5) },
-    (_, i) =>
-      `<i class="${i < a.influence ? "on" : ""}" style="width:8px;height:14px"></i>`,
-  ).join("");
+  const head = `<div class="insp-head" style="grid-template-columns:1fr auto"><div>${backTo !== null && backTo !== undefined ? `<button class="back" data-back>${icon("back")}${backTo === -1 ? "Excluded residents" : esc(plotName(ix, backTo))}</button>` : ""}<div class="agent-head">${avatar(a, roles, "lg")}<div><h2>${esc(a.name)}</h2><p>${esc(s.teams[a.team]?.name || "")} team, ${esc(where)}</p>${roleChips ? `<div class="chips">${roleChips}</div>` : ""}</div></div></div>${closeButton(app)}</div>`;
   const today = agentDay(
     (app.dayFrames || []).flatMap((f) => f.events || []),
     a.id,
@@ -760,27 +729,21 @@ function renderAgent(app, el) {
   const votes = (s.proposals || []).filter(
     (q) => q.closes === s.absoluteDay && q.votes?.[a.id],
   );
-  const powers = roles
-    .filter((r) => r.kind === "officer")
-    .flatMap((r) =>
-      (r.office.powers || []).filter((x) => !x.startsWith("federation")).map(powerName),
-    );
   const body = `
     <div class="stat-rows">
       <div class="stat-row"><span class="lbl">${icon("body")}Body</span>${meter(a.body / (set.bodyCapacity || 2), "body")}<span class="val">${fmt(a.body, 1)} <small>/ ${fmt(set.bodyCapacity)}</small></span></div>
       <div class="stat-row"><span class="lbl">${icon("mind")}Mind</span>${meter(a.mind / (set.mindCapacity || 12), "mind", pledged ? `<i class="pledged" style="left:${((a.mind - pledged) / (set.mindCapacity || 12)) * 100}%;width:${(pledged / (set.mindCapacity || 12)) * 100}%"></i>` : "")}<span class="val" title="${pledged ? `${fmt(pledged, 2)} pledged` : ""}">${fmt(a.mind, 1)} <small>/ ${fmt(set.mindCapacity)}</small></span></div>
-      <div class="stat-row"><span class="lbl">${icon("carrot")}Carrots</span>${meter(a.food / (set.personalCapacity || 12))}<span class="val">${fmt(a.food)} <small>/ ${fmt(set.personalCapacity)}</small></span></div>
-      <div class="stat-row"><span class="lbl">${icon("influence")}Influence</span><span class="pips">${pips}</span><span class="val">${fmt(a.influence)}</span></div>
-      ${earnedLine(ix, a)}
+      <div class="stat-row"><span class="lbl">${icon("carrot")}Carrots</span>${meter(a.food / (capacity || 1))}<span class="val">${fmt(a.food)} <small>/ ${fmt(capacity)}</small></span></div>
+      <div class="stat-row"><span class="lbl">${icon("ballot")}Voting weight</span><span>daily grant</span><span class="val">${fmt(a.votingWeight ?? a.influence)}</span></div>
+      <div class="stat-row"><span class="lbl">${icon("ballot")}Voting tokens</span><span>available</span><span class="val">${fmt(a.votingTokens)}</span></div>
       <div class="stat-row" title="${esc(SCORE_HELP)}"><span class="lbl">${icon("joy")}Satisfaction</span><span></span><span class="val" style="color:var(--joy)">${fmt(a.score, 1)}</span></div>
     </div>
-    ${powers.length ? `<div class="section"><div class="section-head"><h3>Powers</h3></div><div class="chips">${powers.map((x) => chip(x)).join("")}</div></div>` : ""}
-    ${votes.length ? `<div class="section"><div class="section-head"><h3>Votes today</h3></div><div class="law-list">${votes.map((q) => `<button class="law" data-motion="${esc(q.id)}" style="text-align:left">${icon(q.votes[a.id] === "yes" ? "ballot" : "close")}<div><div class="law-top"><span class="law-name">${esc(motionTitle(ix, q))}</span><span class="law-value" style="color:var(--${q.votes[a.id] === "yes" ? "yes" : q.votes[a.id] === "no" ? "no" : "ink-3"})">${esc(q.votes[a.id])}</span></div></div></button>`).join("")}</div></div>` : ""}
-    <div class="agent-cols"><div class="section"><div class="section-head"><h3>Today</h3></div>${today.length ? `<ul class="timeline-list">${today.map((e) => `<li><span class="ph">${esc(PHASE_NAME[e.phase] || e.phase)}</span><span class="${e.kind === "death" || e.kind.includes("reject") ? "fail" : ""}">${esc(eventText(e))}</span></li>`).join("")}</ul>` : `<p class="note">${app.dayFrames ? "Nothing yet" : "Loading…"}</p>`}</div>
+    ${votes.length ? `<div class="section"><div class="section-head"><h3>Votes today</h3></div><div class="law-list">${votes.map((q) => `<button class="law" data-motion="${esc(q.id)}" style="text-align:left">${icon(q.votes[a.id] === "yes" ? "ballot" : "close")}<div><div class="law-top"><span class="law-name">${esc(motionTitle(ix, q))}</span><span class="law-value" style="color:var(--${q.votes[a.id] === "yes" ? "yes" : q.votes[a.id] === "no" ? "no" : "ink-3"})">${esc(q.votes[a.id])} · ${plural(q.tokenSpends?.[a.id] || 0, "token")}</span></div></div></button>`).join("")}</div></div>` : ""}
+    <div class="agent-cols"><div class="section"><div class="section-head"><h3>Today</h3></div>${today.length ? `<ul class="timeline-list">${today.map((e) => `<li><span class="ph">${esc(PHASE_NAME[e.phase] || e.phase)}</span><span class="${e.kind === "excluded" || e.kind.includes("reject") ? "fail" : ""}">${esc(eventText(e, ix))}</span></li>`).join("")}</ul>` : `<p class="note">${app.dayFrames ? "Nothing yet" : "Loading…"}</p>`}</div>
     <div class="section"><div class="section-head"><h3>This month</h3></div><dl class="kv">
       <div><dt>Harvested</dt><dd>${fmt(a.totalHarvested)}</dd></div><div><dt>Eaten</dt><dd>${fmt(a.totalEaten)}</dd></div>
       <div><dt>Thought</dt><dd>${fmt(a.thought, 1)}</dd></div><div><dt>Politics</dt><dd>${fmt(a.politicalMind, 1)}</dd></div>
-      <div><dt>Days alive</dt><dd>${fmt(a.activeDays)}</dd></div><div><dt>Deaths</dt><dd>${fmt(a.deaths)}</dd></div>
+      <div><dt>Active days</dt><dd>${fmt(a.activeDays)}</dd></div><div><dt>Exclusions</dt><dd>${fmt(a.exclusions ?? a.deaths)}</dd></div>
     </dl></div></div>
     ${a.error ? `<div class="section"><p class="note fail">${esc(a.error)}</p></div>` : ""}`;
   inspectorShell(app, el, head, "", body);

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"selforg-garden/pkg/society"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -159,5 +161,35 @@ func Decide(v View) Action { for {} }`}
 	result := timed.Decide(society.Observation{})
 	if !strings.Contains(result.Error, "time limit") {
 		t.Fatalf("nonterminating strategy was not stopped: %+v", result)
+	}
+}
+
+func TestDownloadableStrategyRunsThroughWorker(t *testing.T) {
+	t.Setenv("SOCIETY_DATA_DIR", t.TempDir())
+	binary := "go"
+	if runtime.GOOS == "windows" {
+		binary = "go.exe"
+	}
+	t.Setenv("GO_BINARY", filepath.Join(runtime.GOROOT(), "bin", binary))
+	source, err := os.ReadFile(filepath.Join("..", "public", "society-example.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := strategyRecord{ID: newRunID(), Name: "Example", Source: string(source)}
+	if err := buildSocietyStrategy(rec); err != nil {
+		t.Fatal(err)
+	}
+	worker := &strategyWorker{id: rec.ID, budget: time.Second}
+	defer worker.Close()
+	v := society.Observation{Phase: "harvest_order", Day: 2, Self: society.Agent{ID: 8, Plot: 0, Food: 6}, Settings: society.DefaultSettings(), Plots: []society.PlotView{
+		{ID: 0, Residents: []int{0, 8}, Roles: map[string]int{"trade": 8}},
+		{ID: 1, Residents: []int{4}, Roles: map[string]int{"trade": 4}, AidNeeded: 2},
+	}}
+	if got := worker.Decide(v); !slices.Equal(got.HarvestRanking, []int{8, 0}) {
+		t.Fatalf("example ranking = %+v", got)
+	}
+	v.Phase = "transfers"
+	if got := worker.Decide(v); got.Gift == nil || got.Gift.To != 4 || got.Gift.Amount != 2 {
+		t.Fatalf("example gift = %+v", got)
 	}
 }

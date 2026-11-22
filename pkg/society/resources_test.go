@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -20,7 +21,13 @@ func smallWorld(t *testing.T, n int) *World {
 	}
 	return w
 }
-func resident(w *World, id int) *Agent { a := w.Agents[id]; a.Plot = 0; a.Influence = 1; return a }
+func resident(w *World, id int) *Agent {
+	a := w.Agents[id]
+	a.Plot = 0
+	a.VotingWeight = w.Settings.VotingTokens
+	a.VotingTokens = a.VotingWeight
+	return a
+}
 func TestDailyMealAndThinking(t *testing.T) {
 	w := smallWorld(t, 1)
 	a := resident(w, 0)
@@ -35,107 +42,240 @@ func TestDailyMealAndThinking(t *testing.T) {
 		t.Fatalf("daily diminishing return did not reset: %v", a.Score)
 	}
 }
-func TestEatingIsNeverAutomatic(t *testing.T) {
-	w := smallWorld(t, 1)
-	w.Settings.RespawnDelay = 1
-	a := resident(w, 0)
-	a.Food = 12
-	w.eating(map[int]Decision{})
-	if a.Alive || a.Body != 0 || a.Food != 0 || a.RespawnAt != 3 {
-		t.Fatalf("unrequested meal occurred or bad respawn: %+v", a)
-	}
-	if len(w.Events) < 2 {
-		t.Fatal("missing death receipt")
-	}
-}
-func TestDefaultDeathLastsUntilTheMeteor(t *testing.T) {
-	w := smallWorld(t, 1)
-	if w.Settings.RespawnDelay != -1 {
-		t.Fatalf("default respawn delay is %d, want -1 (return after the meteor)", w.Settings.RespawnDelay)
-	}
-	a := resident(w, 0)
-	w.eating(map[int]Decision{})
-	if a.Alive || a.RespawnAt != 0 {
-		t.Fatalf("a death should not schedule an ordinary respawn: %+v", a)
-	}
-}
-func TestStorageAndFieldLimits(t *testing.T) {
+func TestExclusionDeletesAllCarrotsUntilReset(t *testing.T) {
 	w := smallWorld(t, 2)
-	a := resident(w, 0)
-	resident(w, 1)
-	a.Food = 11
-	w.Plots[0].Stock = 3
-	w.harvest(map[int]Decision{0: {Harvest: 100}, 1: {Harvest: 100}})
-	total := w.Agents[0].Food + w.Agents[1].Food + w.Plots[0].Stock
-	if total != 14 || a.Food > 12 || w.Agents[1].Food > 4 || w.Plots[0].Stock < 0 {
-		t.Fatal("harvesting violated conservation or capacity")
+	a, other := resident(w, 0), resident(w, 1)
+	a.Food, other.Food = 12, 2
+	w.eating(map[int]Decision{1: {Eat: 2}})
+	if a.Alive || a.Body != 0 || a.Food != 0 || a.Plot != -1 || a.Exclusions != 1 || other.Food != 0 {
+		t.Fatalf("exclusion failed or transferred food: %+v, %+v", a, other)
+	}
+	w.Day, w.AbsoluteDay = 2, 2
+	w.environment()
+	if a.Alive {
+		t.Fatal("excluded resident returned before the meteor")
+	}
+	deleted := 0
+	for _, e := range w.Events {
+		if e.Kind == "deleted" {
+			deleted += int(e.Amount)
+		}
+	}
+	if deleted != 12 {
+		t.Errorf("removed %d carrots, want 12", deleted)
 	}
 }
+
+func TestPlacementLocksUntilNextReset(t *testing.T) {
+	s := DefaultSettings()
+	s.Plots, s.Copies, s.Days, s.Months = 2, 2, 2, 2
+	w, err := New(s, []Team{{Policy: "warden"}}, 17)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := w.Agents[0]
+	w.Deciders[0] = func(v Observation) Decision {
+		plot := v.Month % 2
+		if v.Phase != "placement" {
+			plot = 1 - plot
+		}
+		return Decision{PlotChoice: &plot, Harvest: 2, Eat: 2}
+	}
+	for !w.Done {
+		if err := w.Step(); err != nil {
+			t.Fatal(err)
+		}
+		if a.Alive && a.Plot != w.Month%2 {
+			t.Fatalf("wrong residency at month %d day %d phase %s: plot %d", w.Month, w.Day, w.Phase, a.Plot)
+		}
+	}
+}
+
+func TestRankedHarvestAndPhysicalLimits(t *testing.T) {
+	w := smallWorld(t, 4)
+	for i := range w.Agents {
+		resident(w, i)
+	}
+	// Residents 0 and 1 agree, resident 2 disagrees, resident 3 submits a duplicate.
+	w.rankHarvest(map[int]Decision{
+		0: {HarvestRanking: []int{2, 0, 3, 1}},
+		1: {HarvestRanking: []int{2, 0, 3, 1}},
+		2: {HarvestRanking: []int{3, 1, 2, 0}},
+		3: {HarvestRanking: []int{3, 3, 1, 2}},
+	})
+	p := w.Plots[0]
+	if p.HarvestOrder[0] != 2 || p.HarvestOrder[1] != 3 || p.HarvestOrder[2] != 0 || p.HarvestOrder[3] != 1 {
+		t.Fatal("ranked outcome:", p.HarvestOrder)
+	}
+	count := 0
+	for _, e := range w.Events {
+		if e.Kind == "harvest_ranking" {
+			count++
+		}
+	}
+	if count != 3 {
+		t.Fatalf("published %d ballots, want 3", count)
+	}
+	w.Agents[2].Food = 2
+	p.Stock = 11
+	p.Government = true
+	p.Rules["quota"] = Rule{Mode: "limited", Amount: 2}
+	w.harvest(map[int]Decision{0: {Harvest: 99}, 1: {Harvest: 99}, 2: {Harvest: 99}, 3: {Harvest: 99}})
+	if w.Agents[2].Food != 12 || w.Agents[3].Food != 1 || w.Agents[1].Food+w.Agents[0].Food+p.Stock != 0 {
+		t.Fatalf("ranked harvest, stock or personal capacity was violated: %+v", w.Agents)
+	}
+	found := false
+	for _, e := range w.Events {
+		if e.Kind == "ration_breach" && e.Actor == 2 && e.Amount == 8 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("over-quota harvest did not produce public evidence")
+	}
+	w.Agents[2].LastPlaceUntil = w.AbsoluteDay
+	w.rankHarvest(map[int]Decision{0: {HarvestRanking: []int{2, 0, 1, 3}}})
+	if p.HarvestOrder[3] != 2 {
+		t.Fatal("Justice last-place sanction was skipped")
+	}
+}
+
+func TestRankingsRejectShortForeignOrExcludedIDs(t *testing.T) {
+	w := smallWorld(t, 4)
+	for i := range w.Agents {
+		resident(w, i)
+	}
+	w.exclude(w.Agents[3], "Excluded for test")
+	for _, bad := range [][]int{{0, 1}, {0, 1, 1}, {0, 1, 3}, {0, 1, -1}, {0, 1, 99}} {
+		if w.validHarvestRanking(bad, 0, 3) {
+			t.Errorf("accepted %v", bad)
+		}
+	}
+}
+
 func TestGrowthUsesOnlyFieldAndResidents(t *testing.T) {
 	w := smallWorld(t, 50)
 	for _, a := range w.Agents {
 		a.Plot = 0
 	}
 	p := w.Plots[0]
-	p.Capacity = 500
-	p.Stock = 400
-	p.Reserve = 200
+	p.Capacity, p.Stock = 500, 400
+	w.updateResidents()
+	w.Day, w.AbsoluteDay = 2, 2
 	w.environment()
 	if p.Stock != 500 {
-		t.Fatalf("growth must cap at500: %d", p.Stock)
+		t.Fatalf("growth must cap at 500, got %d", p.Stock)
 	}
-	p.Stock = 0
-	p.GrowthRemainder = .9
+	p.Stock, p.GrowthRemainder = 0, .9
 	w.environment()
 	if p.Stock != 0 || p.GrowthRemainder != 0 {
-		t.Fatal("empty field regrew from reserves/remainder")
+		t.Fatal("an empty field regrew spontaneously")
 	}
 }
-func TestFirstDaySunlightAndRespawn(t *testing.T) {
-	w := smallWorld(t, 1)
-	a := w.Agents[0]
-	w.environment()
-	if a.Mind != 6 {
-		t.Fatal("first day must keep starting mind")
+
+func TestBumperCanRestartExhaustedStandingCrop(t *testing.T) {
+	w := smallWorld(t, 2)
+	for i := range w.Agents {
+		resident(w, i)
 	}
-	a.Alive = false
-	a.Mind = 0
-	a.RespawnAt = 3
-	w.Day = 2
-	w.AbsoluteDay = 2
-	w.environment()
-	if a.Alive {
-		t.Fatal("respawn skipped missed day")
-	}
-	w.Day = 3
-	w.AbsoluteDay = 3
-	w.environment()
-	if !a.Alive || a.Mind != 6 || a.Plot != -1 {
-		t.Fatal("respawn failed or added same-morning sunlight")
-	}
-}
-func TestEstateAllocationAndDefaultDeletion(t *testing.T) {
-	w := smallWorld(t, 4)
-	for _, a := range w.Agents {
-		a.Plot = 0
-		a.Food = 2
-	}
+	w.Day, w.AbsoluteDay = 4, 4
+	w.Settings.BlightChance, w.Settings.BumperChance = 0, 1
 	p := w.Plots[0]
-	p.Government = true
-	p.Rules["inheritance"] = Rule{Mode: "equal"}
-	w.Agents[0].Food = 9
-	w.Agents[1].Food = 11
-	w.Agents[2].Food = 8
-	w.Agents[3].Food = 2
-	w.Agents[0].Alive = false
-	w.death(w.Agents[0])
-	want := []int{0, 12, 12, 6}
-	for i, a := range w.Agents {
-		if a.Food != want[i] {
-			t.Fatalf("estate%d got%d want%d", i, a.Food, want[i])
+	p.Stock = 0
+	w.environment()
+	if p.Stock != 4 || p.CropEvent != "bumper" {
+		t.Fatalf("bumper left %d carrots, event %q", p.Stock, p.CropEvent)
+	}
+	p.Stock = p.Capacity - 1
+	w.cropEvent(p)
+	if p.Stock != p.Capacity {
+		t.Fatal("bumper exceeded field capacity")
+	}
+}
+
+func TestTradeDonationsAndBlightRelief(t *testing.T) {
+	for _, enough := range []bool{true, false} {
+		s := DefaultSettings()
+		s.Copies, s.Plots = 5, 2
+		w, err := New(s, []Team{{Policy: "warden"}}, 19)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 0 and 1 can send aid to the three residents of plot 1.
+		for _, a := range w.Agents {
+			a.Plot = 0
+			if a.ID >= 2 {
+				a.Plot = 1
+			}
+			w.Deciders[a.ID] = func(v Observation) Decision { return Decision{} }
+		}
+		for i, id := range []int{0, 2} {
+			w.Plots[i].Government = true
+			w.Plots[i].Roles = map[string]int{"trade": id}
+		}
+		w.Day, w.AbsoluteDay = 4, 4
+		w.Settings.BlightChance, w.Settings.BumperChance = 1, 0
+		p := w.Plots[1]
+		p.Stock = 16
+		w.cropEvent(p)
+		if p.AidNeeded != 3 || p.Stock != 10 {
+			t.Fatalf("blight did not damage field or call for relief: %+v", p)
+		}
+		w.Agents[1].Food, w.Agents[3].Food, w.Agents[4].Food = 4, 2, 1
+		gift := 3
+		if !enough {
+			gift = 2
+		}
+		w.Deciders[1] = func(v Observation) Decision { return Decision{Donate: 4} }
+		w.Deciders[3] = func(v Observation) Decision { return Decision{Donate: 2} }
+		w.Deciders[0] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 2, Amount: gift}} }
+		w.Deciders[4] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 0, Amount: 1}} }
+		w.transfers()
+		if enough {
+			if p.CropEvent != "rescued" || w.Agents[2].Food != 2 || w.Agents[0].Food != 1 || w.Agents[4].Food != 1 || p.Stock != 13 {
+				t.Fatalf("unexpected relief result: %+v", p)
+			}
+		} else {
+			if p.CropEvent != "failed" || p.Stock != 0 || w.roleHolder(1, "trade") != nil {
+				t.Fatalf("plot survived inadequate external aid: %+v", p)
+			}
+			for _, id := range []int{2, 3, 4} {
+				if w.Agents[id].Alive || w.Agents[id].Food != 0 {
+					t.Fatal("resident or personal carrots survived failed blight")
+				}
+			}
 		}
 	}
 }
+
+func TestRepresentativeCapacityAndTransferPermissions(t *testing.T) {
+	w := smallWorld(t, 3)
+	for i := range w.Agents {
+		resident(w, i)
+	}
+	p := w.Plots[0]
+	p.Government = true
+	p.Roles = map[string]int{"trade": 0}
+	p.Stock = 100
+	w.rankHarvest(map[int]Decision{0: {HarvestRanking: []int{0, 1, 2}}})
+	w.harvest(map[int]Decision{0: {Harvest: 100}, 1: {Harvest: 100}})
+	if w.Agents[0].Food != w.Settings.RepresentativeCapacity || w.Agents[1].Food != w.Settings.PersonalCapacity {
+		t.Fatal("role-specific capacity not enforced")
+	}
+	delete(p.Roles, "trade")
+	w.harvest(map[int]Decision{0: {Harvest: 100}})
+	if w.Agents[0].Food != w.Settings.RepresentativeCapacity {
+		t.Fatal("revocation collected excess food or allowed new harvesting")
+	}
+	w.Deciders[0] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 2, Amount: 2}} }
+	w.Deciders[1] = func(v Observation) Decision { return Decision{Donate: 3} }
+	w.Deciders[2] = func(v Observation) Decision { return Decision{} }
+	w.transfers()
+	if w.Agents[2].Food != 0 || w.Agents[1].Food != w.Settings.PersonalCapacity {
+		t.Fatal("unauthorised gift or donation to vacant office executed")
+	}
+}
+
 func TestViewHasNoOtherPrivateBalancesAndDetachedMaps(t *testing.T) {
 	w := smallWorld(t, 2)
 	resident(w, 0)
@@ -177,7 +317,7 @@ func TestMeteorOnlyMemorySurvives(t *testing.T) {
 	w.phaseIndex = 0
 	_ = w.Step()
 	a := w.Agents[0]
-	if w.Month != 2 || w.Day != 1 || a.Score != 0 || a.Food != 0 || a.Plot != -1 || !a.Alive || w.Plots[0].Government || string(a.Memory) != `{"learned":7}` {
+	if w.Month != 2 || w.Day != 1 || a.Score != 0 || a.Food != 0 || a.Plot != 0 || !a.Alive || w.Plots[0].Government || string(a.Memory) != `{"learned":7}` {
 		t.Fatalf("bad reset %+v", a)
 	}
 }
@@ -234,7 +374,6 @@ func TestFullYearAccountingAndMemory(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	maxFed, maxOff := 0, 0
 	steps := 0
 	for !w.Done {
 		if e = w.Step(); e != nil {
@@ -242,57 +381,40 @@ func TestFullYearAccountingAndMemory(t *testing.T) {
 		}
 		steps++
 		for _, a := range w.Agents {
-			if a.Food < 0 || a.Food > w.Settings.PersonalCapacity || a.Mind < -1e-6 || a.Mind > w.Settings.MindCapacity+1e-6 {
-				t.Fatalf("invalid balance day%d: %+v", w.AbsoluteDay, a)
+			if a.Food < 0 || a.Food > w.Settings.RepresentativeCapacity || a.Mind < -1e-6 || a.Mind > w.Settings.MindCapacity+1e-6 {
+				t.Fatalf("invalid balance day %d: %+v", w.AbsoluteDay, a)
 			}
-			pledged := 0.
-			for _, v := range a.Pledges {
-				pledged += v
-			}
-			if pledged > a.Mind+1e-6 {
-				t.Fatal("reserved mind exceeds actual mind")
+			if !a.Alive && (a.Plot != -1 || a.Food != 0 || a.VotingTokens != 0) {
+				t.Fatalf("excluded agent retained resources: %+v", a)
 			}
 		}
-		off := 0
-		fed := 0
 		for _, p := range w.Plots {
-			off += len(p.Officers)
-			if p.Stock < 0 || p.Stock > p.Capacity || p.Reserve < 0 || p.Reserve > p.ReserveCapacity {
-				t.Fatal("invalid plot balance")
+			if p.Stock < 0 || p.Stock > p.Capacity {
+				t.Fatal("invalid field balance")
 			}
 		}
-		for _, f := range w.Federations {
-			if !f.Dissolved {
-				fed++
-			}
-		}
-		maxOff = max(maxOff, off)
-		maxFed = max(maxFed, fed)
 	}
-	if steps != 360*8 || len(w.Months) != 12 || len(w.Agents) != 300 || maxOff == 0 || maxFed == 0 {
-		t.Fatalf("full year incomplete steps%d months%d officers%d feds%d", steps, len(w.Months), maxOff, maxFed)
+	if steps != 360*len(Phases) || len(w.Months) != 12 || len(w.Agents) != 300 {
+		t.Fatalf("full year incomplete: %d phases, %d months", steps, len(w.Months))
 	}
 	for _, a := range w.Agents {
-		var m map[string]float64
-		json.Unmarshal(a.Memory, &m)
-		if m["months"] != 12 {
-			t.Fatalf("private memory did not survive year: %s", a.Memory)
+		if w.Teams[a.Team].Policy != "tinkerer" {
+			continue
+		}
+		var memory struct{ Trials []int }
+		if err := json.Unmarshal(a.Memory, &memory); err != nil {
+			t.Fatal(err)
+		}
+		months := 0
+		for _, trials := range memory.Trials {
+			months += trials
+		}
+		if months != w.Settings.Months {
+			t.Fatalf("resident %d remembers %d monthly trials", a.ID, months)
 		}
 	}
 }
-func TestOnlyFundedEventFamiliesEnterPoliticalRecords(t *testing.T) {
-	w := smallWorld(t, 1)
-	a := resident(w, 0)
-	p := w.Plots[0]
-	p.Government = true
-	p.RecordsFunded = true
-	w.event("think", a.ID, p.ID, "private thought", 2)
-	w.event("eat", a.ID, p.ID, "private meal", 2)
-	w.event("harvest", a.ID, p.ID, "public recorded harvest", 2)
-	if len(p.Records) != 1 || p.Records[0].Kind != "harvest" {
-		t.Fatal("records captured private consumption/thinking")
-	}
-}
+
 func TestUnknownStrategyAndInvalidBuilderFailClearly(t *testing.T) {
 	s := DefaultSettings()
 	s.Copies = 1
@@ -372,8 +494,10 @@ func TestMeteorClearsLiveEventsAndKeepsEventIdentityMonotonic(t *testing.T) {
 			t.Fatal("previous-month political evidence remains in live world")
 		}
 	}
-	if len(w.View(0).Receipts) != 0 || len(w.View(0).Records) != 0 || len(w.Plots[0].Records) != 0 {
-		t.Fatal("meteor retained agent-visible receipts or records")
+	for _, e := range w.View(0).Receipts {
+		if e.Month != 2 {
+			t.Fatal("meteor retained prior receipts")
+		}
 	}
 	e := w.event("harvest", 0, 0, "new month's event", 1)
 	if e.ID <= oldID || e.Month != 2 {
@@ -387,52 +511,97 @@ func TestMeteorClearsLiveEventsAndKeepsEventIdentityMonotonic(t *testing.T) {
 	}
 }
 
-func TestPendingObservationIsRelevantAndDetached(t *testing.T) {
+func TestPublicActionsReachAnotherPlotWithoutSharingPrivateMemory(t *testing.T) {
 	s := DefaultSettings()
-	s.Copies = 4
-	s.Plots = 3
-	w, e := New(s, []Team{{Name: "Review", Policy: "warden"}}, 9)
-	if e != nil {
-		t.Fatal(e)
+	s.Copies, s.Plots = 2, 2
+	w, err := New(s, []Team{{Policy: "warden"}}, 9)
+	if err != nil {
+		t.Fatal(err)
 	}
-	w.Agents[0].Plot = 0
-	w.Agents[1].Plot = 1
-	w.Agents[2].Plot = 2
-	w.Plots[0].Federation = 1
-	w.Plots[1].Federation = 1
-	w.Plots[2].Federation = 2
-	w.Pending = []Pending{
-		{ID: "local", Actor: 1, Plot: 0, Federation: -1, Input: ProposalInput{Kind: "distribution", Target: 0, Members: []int{0}, Amount: 2}},
-		{ID: "foreignTreasury", Actor: 1, Plot: 1, Federation: 1, Input: ProposalInput{Kind: "distribution", Target: 1, Members: []int{1}, Amount: 10}},
-		{ID: "sharedConstitution", Actor: 1, Plot: 1, Federation: 1, Input: ProposalInput{Kind: "federationPolicy", Key: "gifts", Rule: Rule{Mode: "on"}}},
-		{ID: "foreignConstitution", Actor: 2, Plot: 2, Federation: 2, Input: ProposalInput{Kind: "federationPolicy", Key: "data", Rule: Rule{Mode: "on"}}},
-		{ID: "myEntry", Actor: 2, Plot: 2, Federation: 2, Input: ProposalInput{Kind: "permitEntry", Target: 0}},
-		{ID: "ownOrder", Actor: 0, Plot: 2, Federation: 2, Input: ProposalInput{Kind: "policy", Key: "entry", Rule: Rule{Mode: "open"}}},
-		{ID: "ourFormation", Actor: 2, Plot: 2, Federation: -1, Input: ProposalInput{Kind: "createFederation", Members: []int{0, 2}}},
-	}
+	w.Agents[0].Plot, w.Agents[1].Plot = 0, 1
+	w.Agents[1].Memory = json.RawMessage(`{"secret":999}`)
+	e := w.event("harvest_ranking", 1, 1, "Ranked", 0, 1)
+	seen := false
 	view := w.View(0)
-	visible := map[string]bool{}
-	for _, p := range view.Pending {
-		visible[p.ID] = true
+	for _, action := range view.Actions {
+		if action.ID == e.ID && action.Actor == 1 && reflect.DeepEqual(action.Members, []int{1}) {
+			seen = true
+		}
 	}
-	if len(visible) != 5 || visible["foreignTreasury"] || visible["foreignConstitution"] || !visible["local"] || !visible["myEntry"] || !visible["sharedConstitution"] || !visible["ownOrder"] || !visible["ourFormation"] {
-		t.Fatalf("incorrect pending scope: %+v", visible)
+	if !seen {
+		t.Fatal("resident cannot inspect ranked action on another plot")
 	}
-	view.Pending[0].Input.Members[0] = 999
-	view.Pending[0].Input.Amount = 999
-	if w.Pending[0].Input.Members[0] != 0 || w.Pending[0].Input.Amount != 2 {
-		t.Fatal("private pending view aliases world")
+	b, _ := json.Marshal(view)
+	if strings.Contains(string(b), "secret") {
+		t.Fatal("view exposed another agent's private memory")
 	}
-	observer := w.Snapshot()
-	if len(observer.Pending) != len(w.Pending) {
-		t.Fatal("observer cannot inspect full authorised queue")
+}
+
+func TestFullTradeStoreStillReceivesAndPlantsRelief(t *testing.T) {
+	s := DefaultSettings()
+	s.Copies, s.Plots = 2, 2
+	w, err := New(s, []Team{{Policy: "warden"}}, 23)
+	if err != nil {
+		t.Fatal(err)
 	}
-	observer.Pending[0].Input.Members[0] = 999
-	if w.Pending[0].Input.Members[0] != 0 {
-		t.Fatal("observer pending snapshot aliases world")
+	for id, a := range w.Agents {
+		a.Plot = id
+		w.Plots[id].Government = true
+		w.Plots[id].Roles = map[string]int{"trade": id}
 	}
-	outside := w.View(3)
-	if len(outside.Pending) != 0 {
-		t.Fatal("unrelated outsider sees private pending operations")
+	from, to := w.Agents[0], w.Agents[1]
+	from.Food, to.Food = 6, s.RepresentativeCapacity
+	p := w.Plots[1]
+	p.CropEvent, p.AidNeeded, p.Stock = "blight", 3, p.Capacity-2
+	w.Deciders[0] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 1, Amount: 6}} }
+	w.Deciders[1] = func(v Observation) Decision { return Decision{} }
+	w.transfers()
+	if p.CropEvent != "rescued" || p.Stock != p.Capacity || to.Food != s.RepresentativeCapacity || from.Food != 3 {
+		t.Fatalf("full rep did not protect its plot or accepted excess beyond capacity: %+v", p)
+	}
+	used, planted := 0, 0
+	for _, e := range w.Events {
+		if e.Kind == "relief_used" {
+			used += int(e.Amount)
+		}
+		if e.Kind == "relief_planted" {
+			planted += int(e.Amount)
+		}
+	}
+	if used != 1 || planted != 2 {
+		t.Fatalf("relief accounting used %d, planted %d", used, planted)
+	}
+}
+
+func TestTradeGiftMustReachDestinationRepresentative(t *testing.T) {
+	s := DefaultSettings()
+	s.Plots, s.Copies = 2, 3
+	w, err := New(s, []Team{{Policy: "warden"}}, 11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, a := range w.Agents {
+		a.Plot = min(id, 1)
+		w.Deciders[id] = func(v Observation) Decision { return Decision{} }
+	}
+	for i, p := range w.Plots {
+		p.Government = true
+		p.Roles = map[string]int{"trade": i}
+	}
+	w.Agents[0].Food = 4
+	w.Deciders[0] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 2, Amount: 4}} }
+	w.transfers()
+	if w.Agents[0].Food != 4 || w.Agents[2].Food != 0 {
+		t.Fatal("direct cross-plot gift bypassed Trade")
+	}
+	w.Deciders[0] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 1, Amount: 4}} }
+	w.Deciders[1] = func(v Observation) Decision { return Decision{Gift: &Offer{To: 2, Amount: 4}} }
+	w.transfers()
+	if w.Agents[1].Food != 4 || w.Agents[2].Food != 0 {
+		t.Fatal("incoming aid was forwarded before the next decision")
+	}
+	w.transfers()
+	if w.Agents[1].Food != 0 || w.Agents[2].Food != 4 {
+		t.Fatal("receiving representative could not gift to a local resident")
 	}
 }

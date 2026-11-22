@@ -1,11 +1,13 @@
 package society
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -14,82 +16,32 @@ func (w *World) rawView(id int) Observation {
 		return Observation{}
 	}
 	a := w.Agents[id]
-	v := Observation{RecordPages: w.recordPages[id], RandomSeed: w.privateSeed(id, w.Phase), SanctionCases: w.SanctionCases(id), Month: w.Month, Day: w.Day, AbsoluteDay: w.AbsoluteDay, Phase: w.Phase, Self: *a, Memory: append(json.RawMessage{}, a.Memory...), Settings: w.Settings, Plots: []PlotView{}, Proposals: []*Proposal{}, Offers: []Offer{}, Pending: []Pending{}, Receipts: w.receipts[id], Records: w.reads[id]}
+	// Recent actions are shared from the engine ledger. The full month's
+	// actions are available through free paginated queries on every plot.
+	start := sort.Search(len(w.Events), func(i int) bool { return w.Events[i].AbsoluteDay >= w.AbsoluteDay-1 })
+	v := Observation{
+		RecordPages: w.recordPages[id], RandomSeed: w.privateSeed(id, w.Phase),
+		SanctionCases: w.SanctionCases(id), Month: w.Month, Day: w.Day,
+		AbsoluteDay: w.AbsoluteDay, Phase: w.Phase, Self: *a, Memory: a.Memory,
+		Settings: w.Settings, Plots: make([]PlotView, 0, len(w.Plots)),
+		Proposals: w.Proposals, Pending: w.Pending, Receipts: w.receipts[id], Records: w.reads[id],
+		Actions: w.Events[start:],
+	}
 	for _, p := range w.Plots {
-		pv := PlotView{ID: p.ID, Name: p.Name, Capacity: p.Capacity, Weather: p.Weather, Regeneration: p.Regeneration, Government: p.Government, Federation: p.Federation}
-		share := p.ID == a.Plot
-		if a.Plot >= 0 && p.Federation >= 0 && p.Federation == w.Plots[a.Plot].Federation {
-			for _, f := range w.Federations {
-				if f.ID == p.Federation && !f.Dissolved && f.Funded && (f.Rules["data"].Mode == "on" || f.Rules["data"].Enabled) {
-					share = true
-				}
-			}
-		}
-		if share {
-			x, y := p.Stock, p.Reserve
-			pv.Stock = &x
-			pv.Reserve = &y
-		}
-		if p.ID == a.Plot {
-			pv.Rules = p.Rules
-			pv.Officers = p.Officers
-			pv.HardFunded = p.HardFunded
-			pv.RecordsFunded = p.RecordsFunded
-			for _, r := range w.residents(p.ID) {
-				pv.Residents = append(pv.Residents, r.ID)
-			}
-			// The influence basis law makes the plot's accounts public to its
-			// residents; otherwise contributions are known only from records.
-			if _, _, ok := w.contributionBasis(p); ok {
-				pv.Contributions = w.completedContributions(p.ID, MaxContributionWindow)
-			}
-		}
-		v.Plots = append(v.Plots, pv)
-	}
-	if a.Plot >= 0 {
-		for _, f := range w.Federations {
-			if f.ID == w.Plots[a.Plot].Federation && !f.Dissolved {
-				v.Federations = append(v.Federations, f)
-			}
-		}
-	}
-	for _, p := range w.Proposals {
-		if p.Plot == a.Plot || (a.Plot >= 0 && p.Federation >= 0 && p.Federation == w.Plots[a.Plot].Federation) {
-			v.Proposals = append(v.Proposals, p)
-		}
-	}
-	for _, scheduled := range w.Pending {
-		visible := scheduled.Actor == id || (a.Plot >= 0 && scheduled.Plot == a.Plot)
-		// A prospective entrant or named recipient sees the operation that
-		// directly affects them, without seeing the rest of a foreign treasury.
-		if has([]string{"distribution", "permitEntry", "permitExit", "sanction", "applySanction", "directSanction", "office"}, scheduled.Input.Kind) && scheduled.Input.Target == id {
-			visible = true
-		}
-		if scheduled.Input.Kind == "distribution" && includes(scheduled.Input.Members, id) {
-			visible = true
-		}
-		if a.Plot >= 0 {
-			ownFed := w.Plots[a.Plot].Federation
-			if ownFed >= 0 && scheduled.Federation == ownFed && has([]string{"federationPolicy", "federationRepeal", "federationAdmit", "federationDissolve"}, scheduled.Input.Kind) {
-				visible = true
-			}
-			if scheduled.Input.Kind == "createFederation" && includes(scheduled.Input.Members, a.Plot) {
-				visible = true
-			}
-		}
-		if visible {
-			v.Pending = append(v.Pending, scheduled)
-		}
-	}
-	for _, o := range w.Offers {
-		if o.From == id || o.To == id {
-			v.Offers = append(v.Offers, o)
-		}
+		v.Plots = append(v.Plots, PlotView{
+			ID: p.ID, Name: p.Name, Capacity: p.Capacity, Stock: &p.Stock, Weather: p.Weather,
+			Regeneration: p.Regeneration, Government: p.Government, Residents: p.Residents,
+			Roles: p.Roles, Rules: p.Rules, CropEvent: p.CropEvent, AidNeeded: p.AidNeeded,
+			HarvestOrder: p.HarvestOrder,
+		})
 	}
 	return v
 }
 func (w *World) View(id int) Observation {
-	v := w.rawView(id)
+	return detachView(w.rawView(id))
+}
+
+func detachView(v Observation) Observation {
 	b, _ := json.Marshal(v)
 	var detached Observation
 	_ = json.Unmarshal(b, &detached)
@@ -105,10 +57,7 @@ func (w *World) decisions(phase string) map[int]Decision {
 		}
 		v := w.rawView(a.ID)
 		if w.Deciders[a.ID] != nil {
-			v = w.View(a.ID)
-		} else {
-			v.Receipts = nil
-			v.Records = nil
+			v = detachView(v)
 		}
 		v.Phase = phase
 		v.RandomSeed = w.privateSeed(a.ID, phase)
@@ -167,10 +116,12 @@ func field(v Observation, name string) float64 {
 		return float64(v.Month)
 	case "plot":
 		return float64(v.Self.Plot)
-	case "deaths":
-		return float64(v.Self.Deaths)
-	case "influence":
-		return float64(v.Self.Influence)
+	case "exclusions":
+		return float64(v.Self.Exclusions)
+	case "votingWeight":
+		return float64(v.Self.VotingWeight)
+	case "votingTokens":
+		return float64(v.Self.VotingTokens)
 	case "stock":
 		if v.Self.Plot >= 0 && v.Plots[v.Self.Plot].Stock != nil {
 			return float64(*v.Plots[v.Self.Plot].Stock)
@@ -220,11 +171,13 @@ func builtinDecision(v Observation, t Team) Decision {
 		}
 		d := Decision{}
 		switch v.Phase {
-		case "movement":
-			if v.Self.Plot < 0 || b.Migrate {
-				p := v.Self.ID % len(v.Plots)
-				d.Move = &p
+		case "placement":
+			if len(v.Plots) > 0 {
+				p := initialPlot(v)
+				d.PlotChoice = &p
 			}
+		case "harvest_order":
+			d.HarvestRanking = b.HarvestRanking
 		case "harvest":
 			d.Harvest = b.Harvest
 		case "pledges":
@@ -240,10 +193,15 @@ func builtinDecision(v Observation, t Team) Decision {
 				d.Proposals = append(d.Proposals, b.Proposals...)
 			}
 		case "voting":
-			d.Votes = map[string]string{}
+			balance := v.Self.VotingTokens
 			for _, p := range v.Proposals {
-				if p.Status == "open" {
-					d.Votes[p.ID] = b.Vote
+				tokens := 1
+				if p.TallyBasis == "tokens" {
+					tokens = max(1, b.VoteTokens)
+				}
+				if p.Status == "open" && p.Plot == v.Self.Plot && balance >= tokens && (b.Vote == "yes" || b.Vote == "no") {
+					d.OrderedVotes = append(d.OrderedVotes, VoteChoice{Proposal: p.ID, Choice: b.Vote, Tokens: tokens})
+					balance -= tokens
 				}
 			}
 		case "eating":
@@ -252,12 +210,7 @@ func builtinDecision(v Observation, t Team) Decision {
 			if b.Think < 0 {
 				d.Think = math.Max(0, available(&v.Self)-b.KeepMind)
 			}
-		case "accept":
-			for _, o := range v.Offers {
-				if o.To == v.Self.ID {
-					d.Accept = append(d.Accept, o.ID)
-				}
-			}
+
 		}
 		return d
 	}
@@ -293,4 +246,47 @@ func initialPlot(v Observation) int {
 func (w *World) privateSeed(id int, phase string) int64 {
 	h := sha256.Sum256([]byte(fmt.Sprintf("private/%d/%d/%d/%d/%s", w.Seed, w.Month, w.Day, id, phase)))
 	return int64(binary.LittleEndian.Uint64(h[:8]) & 0x7fffffffffffffff)
+}
+
+// Saved visual strategies used "movement" for both initial placement and subsequent
+// travel. Reuse a valid destination only at reset, when a plot choice is meaningful.
+func (b *Builder) UnmarshalJSON(data []byte) error {
+	type current Builder
+	var saved struct {
+		current
+		Migrate json.RawMessage `json:"migrate"`
+		Rules   []struct {
+			BehaviorRule
+			Action struct {
+				Decision
+				Move *int `json:"move"`
+			} `json:"action"`
+		} `json:"rules"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&saved); err != nil {
+		return err
+	}
+	*b = Builder(saved.current)
+	for _, row := range saved.Rules {
+		rule := row.BehaviorRule
+		rule.Action = row.Action.Decision
+		if rule.Phase == "movement" {
+			rule.Phase = "placement"
+			if oldPlot := row.Action.Move; oldPlot != nil && *oldPlot >= 0 {
+				rule.Action.PlotChoice = oldPlot
+			}
+		} else if row.Action.Move != nil {
+			return fmt.Errorf("plot choice is available only at monthly placement")
+		}
+		switch rule.Field {
+		case "deaths":
+			rule.Field = "exclusions"
+		case "influence":
+			rule.Field = "votingWeight"
+		}
+		b.Rules = append(b.Rules, rule)
+	}
+	return nil
 }

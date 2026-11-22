@@ -94,9 +94,9 @@ func TestCheckpointPreservesPrivateRecordsAndCursorSnapshots(t *testing.T) {
 	w := recordWorld(t)
 	w.Teams[0].Token = "private-team-token"
 	w.Agents[0].Memory = json.RawMessage(`{"private":19}`)
-	w.Agents[0].Permits["entry"] = 9
+	w.Agents[0].VotingTokens = 2
 	w.Plots[0].GrowthRemainder = 0.3
-	w.Plots[0].Rotation = []int{1, 0}
+	w.Plots[0].HarvestOrder = []int{1, 0}
 	page, err := w.ReadRecordsPage(0, RecordQuery{Plot: 0, PageSize: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestCheckpointPreservesPrivateRecordsAndCursorSnapshots(t *testing.T) {
 	wantState, _ := w.Checkpoint()
 	gotState, _ := got.Checkpoint()
 	if !bytes.Equal(wantState, gotState) {
-		t.Fatal("private records or permissions were lost")
+		t.Fatal("private records or balances were lost")
 	}
 	observer, _ := json.Marshal(got.Snapshot())
 	if bytes.Contains(observer, []byte("private-team-token")) || bytes.Contains(observer, []byte(`"private"`)) || bytes.Contains(observer, []byte(`"memory"`)) {

@@ -1,16 +1,12 @@
 # Amoeboids
 
-A programmable society of autonomous agents, shared carrot plots and institutions that the agents create themselves. The simulation runs in daily phases. Individuals decide how to harvest, eat, think, move, propose, vote and exercise delegated powers. Weather changes mind regeneration; private and government stores preserve food. A meteor resets the world each month, leaving only each individual's private memory.
+Amoeboids is a programmable society game. Each individual chooses a carrot plot at the start of the month and shares its harvest with the same neighbours until the reset. Residents rank one another for harvest, spend voting tokens on decisions and elect representatives. A blighted plot needs food from another plot’s Trade representative by the end of the day.
 
-The default experiment has six behaviours, 50 independent copies of each, six plots and twelve 30-day months. The supplied behaviours are transparent programmed examples, not evidence of learned cooperation.
+The default run has six teams of 50 individuals, six plots and twelve 30-day months. Each individual chooses how much to harvest, eat and think. Extra food and thinking earn satisfaction. Private memory lets a strategy use its experience when the next month begins.
 
-**[Play the hosted game](https://somas.sites.moonisolutions.net/)**, or run your own local copy below.
+## Run locally
 
-![Amoeboids: the island during a vote, with assemblies gathered at each hall](docs/images/amoeboids-world.png)
-
-## Run the MVP
-
-Install **Node 20.18.1+** and **Go 1.23+**:
+Install Node 20.18.1 or later and Go 1.23 or later.
 
 ```sh
 git clone https://github.com/AhHamedi/somas-garden.git
@@ -19,66 +15,53 @@ npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:8787** and press **Play**. The island lights up through each day's eight phases while every Amoeboid migrates, harvests, debates, votes, eats and sleeps. Play continues until you pause; selecting things never stops it.
+Open **http://127.0.0.1:8787** and press **Play**. Use **World** to inspect a plot and its residents, **Council** to see the ballots, and **Rulebook** to look up institutional rules. The chronicle and results let you inspect how a run unfolded. Menu controls open the setup and team strategy editor.
 
-- **World:** select a plot on the map, in the ledger or with the number keys. Its inspector shows what is happening there now, field and treasury, residents with roles and influence, every law in force, today's motions and the day's activity. Select an Amoeboid for its body, mind, food, satisfaction, powers and votes. Widen the inspector with its ↔ button or drag its edge.
-- **Council:** every motion seated as a chamber, with the passing line, before and after, and support by team.
-- **Rulebook:** every law, charter rule and one-off decision the Amoeboids can vote on, with every option, how it is decided and where it is in force.
-- **Chronicle** and **Results:** the month day by day, and a study of the run (outcomes, behaviour, the commons and institutions) with table views and CSV exports.
-- The console at the bottom shows the phase, what it achieved, speed (½× to 8×) and a scrubbable month timeline. Space plays and pauses; the arrows step; Shift and the right arrow skip to nightfall. **Menu → New world** changes the setup, with live charts for meals, field regrowth and weather and the respawn rule (by default the dead return at the meteor); **Menu → Team behaviours** edits strategies.
+`GO_BINARY` can select a Go installation. `PORT` and `ENGINE_PORT` choose alternative ports. The local service saves its data under `.local/data/society/`. Set `LOCAL_DATA_DIR` or `SOCIETY_DATA_DIR` to use another location. The original one-field prototype and its replay viewer remain available at **/legacy**.
 
-The legacy one-field prototype remains at **/legacy**. Its strategies and old replay format are separate from the new game.
+## The decisions
 
-`GO_BINARY` can point to a Go installation. `PORT` and `ENGINE_PORT` choose alternative ports. Local simulation replays and uploaded strategies are saved under `.local/data/society/`; `LOCAL_DATA_DIR` or `SOCIETY_DATA_DIR` can select another location. Never commit `.local/`.
+| Question                           | Who decides                                                                                                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who harvests first?                | By default each resident ranks everyone on its plot. Borda points determine the order. Each individual then requests a quantity, limited by the remaining crop and room in its store. |
+| What can residents change?         | Every active resident may propose. Plot rules set harvest order, advisory quotas, voting thresholds and how many voting tokens each resident receives.                                |
+| How do votes count?                | Rule ballots can use the share of eligible residents supporting a change, or the share of tokens cast for it. Founding, elections and revocations use a fixed resident majority.      |
+| Who can give food to another plot? | Residents can donate to their local Trade representative. The representative can send food directly to the recipient plot’s elected representative.                                   |
+| Who handles a breach?              | Justice reviews a public record of the breach and can issue a sanction. Residents can revoke either department holder.                                                                |
+| What happens at a crop shock?      | A bumper crop adds carrots. A blighted plot must receive enough outside aid by the end of transfers or all its residents are excluded.                                                |
 
-Worlds and saved replays survive server restarts. New runs recover at their last saved phase, including private agent memory and uploaded behaviours. Older replay-only saves remain read-only archives. Browser settings and strategy drafts are also retained locally.
-
-## The six built-in teams
-
-Each is a complete style of play using only what an Amoeboid can observe. They are in `pkg/society/presets.go` and are meant as examples to read, beat and copy.
-
-| Team           | Style                                                                                                                                                                                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Wardens**    | Guard the commons. Compute the harvest that keeps the field steady from the growth rule, table a quota at that share with hard enforcement, cap entry at what the field can feed, and repeal a granary levy that eats into the field.                |
-| **Tinkerers**  | Learn. Each tries four styles (frugal, civic, feast, roam) in its first months, staggered so the team explores them all at once, then keeps the best by an upper confidence bound on its monthly satisfaction. Shortages deepen the larder it keeps. |
-| **Locusts**    | Free-ride. Harvest to the limit while a field has surplus, vote down every limit, never pay for institutions, leave a thinned field, and drift away from plots that enforce quotas.                                                                  |
-| **Envoys**     | Federate. Found governments, form a federation of every governed plot, take council seats, ratify and enact data sharing, gifts and donations, and send carrots from a healthy field to a failing member.                                            |
-| **Barons**     | Seek power. Win a treasury office worded so cautious neighbours accept it, levy the field's surplus into the treasury and pay it out to barons only; also try for influence, harvest order, the gate and the agenda, dropping what fails twice.      |
-| **Sunchasers** | Think. Follow tomorrow's expected sunshine between plots with room to feed them, carry a two-day larder, and never spend mind on politics.                                                                                                           |
-
-All six eat to restore their bodies, think with every unpledged unit of mind, leave crowded plots in proportion to the excess, and remember fields they have seen and plots that refused them. In a default run the commons usually holds all year; Locusts tend to out-score the teams that pay for order, and Envoys pay most.
+The [MVP specification](docs/AMOEBOIDS_SPECIFICATION.md) gives the daily sequence, parameters and worked examples for harvest ranking, voting and relief.
 
 ## Design an agent
 
-Use the visual strategy editor for simple decisions and phase-specific rules. For more control, import a Go file through the editor. Start with [the downloadable example](public/society-example.go) and [the agent guide](docs/AGENT_API.md).
+Use the visual strategy editor or import a Go file. Start with the [downloadable Go example](public/society-example.go) and [agent API](docs/AGENT_API.md). The six built-in teams are programmed examples with policies in [presets.go](pkg/society/presets.go). The same code may serve many individuals, each with separate memory. The runner restricts imports, global state and external I/O and applies decision timeouts.
 
-Each individual has explicit private JSON memory. The same code may serve 50 individuals, but they do not share mutable global variables. The local Go runner accepts a pure standard-library subset, rejects global mutable state and external I/O, and applies decision timeouts. It is intended for team-authored local experiments; it is not a general internet-facing arbitrary-code execution service.
+| Built-in team | Example behaviour                                                                  |
+| ------------- | ---------------------------------------------------------------------------------- |
+| Wardens       | Propose harvest rules and use Justice to respond to quota breaches.                |
+| Tinkerers     | Try four strategies across months and use their own scores to choose the next one. |
+| Locusts       | Rank themselves first and try to fill their stores.                                |
+| Envoys        | Elect Trade representatives and direct spare carrots toward blighted plots.        |
+| Barons        | Support productivity-based voting tokens and eat spare carrots for satisfaction.   |
+| Sunchasers    | Choose a promising plot for sunlight at reset and spend mind on thinking.          |
 
-The plot's **Assembly** tab shows its laws and motions, **Council** shows the votes, and **Rulebook** explains the available local and federal powers. Clicking an observer control does not cast a vote or force an institution into existence. Formation unlocks powers; policies and offices require subsequent votes.
-
-## Specification
-
-[The approved specification](docs/AMOEBOIDS_SPECIFICATION.md) defines the physical rules, political powers, timing, worked examples, information boundaries and monthly resets. [The agent API](docs/AGENT_API.md) defines the corresponding programming interface.
-
-Core features include zero-rule founding, unlimited mind-funded proposals, competing policy votes, influence voted or earned by contribution, delegated officers, storage taxes and inheritance, proportional mind pledges, funded records and enforcement, evidence-based sanctions, federations, representative voting, donations, shared records and immigration checks.
+All residents can observe public actions. The observer interface lets the person running the experiment inspect decisions, outcomes and monthly results while the agents make their own choices.
 
 ## Reproducible experiments
 
-Run the same engine without the interface:
+Run the engine with the default teams and save an experiment.
 
 ```sh
 go run ./cmd/society -seed 42 -output experiment.json
 ```
 
-For a smaller experiment:
+For a smaller run, adjust the number of copies, plots, days and months.
 
 ```sh
 go run ./cmd/society -copies 5 -plots 3 -days 10 -months 2 -seed 42
 ```
 
-`-config setup.json` accepts an object containing `settings` and `teams`. The headless command runs built-in and visual-builder policies. Imported Go strategies run through the local application service, which owns compilation and isolated memory transport.
-
-Compare runs with the same settings and seed. Retaining memory enables agent-written adaptation; improvement must be measured against a memory-reset baseline across multiple seeds before claiming learning.
+`-config setup.json` accepts an object containing `settings` and `teams`. The headless command runs built-in and visual-builder policies. Imported Go strategies run through the local application service, which compiles them and transports private memory between callbacks. Hold settings and seed fixed to compare replay outcomes. To study adaptation, compare strategies with and without retained memory across several seeds.
 
 ## Development and verification
 
@@ -89,26 +72,20 @@ npm run test:browser:society
 npm run check
 ```
 
-Go tests exercise physical accounting, information access, institutional timing and political rules. The society browser test exercises the actual service and rendered interface. The legacy browser checks remain available through `npm run test:browser:legacy`.
+| Area                                             | Files                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------- |
+| Daily phases, resources, observations and agents | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go` |
+| Rules, votes and departments                     | `pkg/society/politics*.go`                                      |
+| World settings                                   | `pkg/society/settings.go`                                       |
+| Local runs, history, imports and Go workers      | `api/society.go`, `api/society_strategy.go`                     |
+| Observer interface                               | `public/society.html`, `public/game/`                           |
+| Headless experiments                             | `cmd/society/main.go`                                           |
+| Original one-field experiment                    | `pkg/garden/`, `public/index.html`                              |
 
-See [verification results](docs/VERIFICATION.md), the [independent engineering review](docs/DEEP_REVIEW.md) and the [interface review](docs/GAME_UX_REVIEW.md) for measured performance, reviewed flows and remaining limitations. [Presentation decisions](docs/PRESENTATION_DESIGN.md) explain the visual and interaction design.
+## Hosting
 
-| Area                                            | Files                                                                                            |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Physical world, phases, memory and observations | `pkg/society/world.go`, `resources.go`, `agents.go`, `types.go`                                  |
-| Policies, votes, delegations and federations    | `pkg/society/politics*.go`                                                                       |
-| Configurable defaults                           | `pkg/society/settings.go`                                                                        |
-| Local runs, history, imports and Go workers     | `api/society.go`, `api/society_strategy.go`                                                      |
-| Observer interface                              | `public/society.html`, `public/game/` (map, playback, panels, council, rulebook, results, setup) |
-| Headless experiments                            | `cmd/society/main.go`                                                                            |
-| Legacy engine and viewer                        | `pkg/garden/`, `public/index.html`                                                               |
-
-## Hosted game
-
-The public site runs the same society engine and interface. Each browser gets an isolated Vercel Sandbox and a persistent drive for its worlds, replays and imported strategies. A signed, secure browser cookie reopens that workspace; clearing it or using a different browser creates a separate workspace. Export results before clearing browser data. Servers sleep when idle and restore their last committed phase when reopened.
-
-The hosted API keeps infrastructure credentials on the server and isolates uploaded Go inside the visitor's workspace. Supabase enforces new-workspace allocation limits; individual runs and playback do not consume new allocations. See [hosting and release instructions](hosting/README.md) for deployment, limits and recovery. The local application does not upload local strategies or simulation data.
+The [hosted game](https://somas.sites.moonisolutions.net/) provides browser workspaces using Vercel Sandbox, with a persistent drive for worlds, replays and imported strategies. A signed browser cookie reopens the workspace. The [hosting instructions](hosting/README.md) cover deployment, workspace limits and recovery. Local runs keep strategies and simulation data on your machine.
 
 ## Foundation
 
-The original prototype extends `BaseServer` and `BaseAgent` from [basePlatformSOMAS v2.1.0](https://github.com/MattSScott/basePlatformSOMAS/tree/v2.1.0), MIT-licensed, © 2023 Matt Scott. The new society engine implements explicit daily phases separately because the legacy lifecycle models one harvest/contribution action per day. The original package remains available and tested.
+The original prototype extends `BaseServer` and `BaseAgent` from [basePlatformSOMAS v2.1.0](https://github.com/MattSScott/basePlatformSOMAS/tree/v2.1.0), MIT-licensed, © 2023 Matt Scott. The society engine implements the daily phases separately. The original package remains available and tested.

@@ -18,14 +18,19 @@ const HABITS = [
   ["eaten", "Eaten", (t) => t.eaten, "carrots a day"],
   ["held", "Carrots held", (t) => t.held, "carrots"],
   ["mind", "Mind", (t) => t.mind, "mind"],
-  ["influence", "Influence", (t) => t.influence, "influence"],
+  [
+    "votingWeight",
+    "Voting weight",
+    (t) => t.votingWeight ?? t.influence,
+    "tokens allocated",
+  ],
+  ["votingTokens", "Voting tokens remaining", (t) => t.votingTokens ?? null, "tokens"],
   ["politics", "Mind on politics", (t) => t.politics, "mind this month"],
-  ["wilds", "In the wilds", (t) => (t.alive ? t.wilds / t.alive : null), "share"],
 ];
 const GOV_STATES = [
   { name: "No government", color: "" },
   { name: "Government", color: "rgba(196,163,255,0.5)" },
-  { name: "Government in a federation", color: "rgba(196,163,255,0.95)" },
+  { name: "Government with an elected representative", color: "rgba(196,163,255,0.95)" },
 ];
 
 // --- data loading ----------------------------------------------------------
@@ -121,11 +126,11 @@ function outcomes(app, data, sc, teams) {
   );
   const decided = sc.motions.length;
   const passedN = sc.motions.filter(S.passed).length;
-  const deaths = rows.reduce((t, r) => t + r.deaths, 0);
+  const exclusions = rows.reduce((t, r) => t + r.exclusions, 0);
   const kpis = `<div class="rstats">
     ${stat("Satisfaction", fmt(S.mean(scores) ?? 0, 1), partial ? `per Amoeboid, month to date` : "per Amoeboid per month")}
     ${stat("Inequality", fmt(S.gini(scores), 2), "Gini, 0 is equal")}
-    ${stat("Deaths", fmt(deaths), `${pct(rows.length ? rows.filter((r) => r.deaths > 0).length / rows.length : 0)} of Amoeboid-months`)}
+    ${stat("Exclusions", fmt(exclusions), `${pct(rows.length ? rows.filter((r) => r.exclusions > 0).length / rows.length : 0)} of Amoeboid-months`)}
     ${stat("Governed", pct(plotDays ? governed / plotDays : 0), "of plot-days")}
     ${stat("Motions passed", decided ? pct(passedN / decided) : "–", `of ${fmt(decided)} decided`)}
   </div>`;
@@ -152,7 +157,7 @@ function outcomes(app, data, sc, teams) {
         value: r.score,
         jitter: jitter(r.id, r.month),
         title: `${data.agentNames?.[r.id] ?? `#${r.id}`}, month ${r.month}`,
-        extra: `food ${fmt(r.food, 1)}, thought ${fmt(r.thought, 1)}${r.deaths ? `, died ${r.deaths}×` : ""}`,
+        extra: `food ${fmt(r.food, 1)}, thought ${fmt(r.thought, 1)}${r.exclusions ? `, excluded ${r.exclusions}×` : ""}`,
       })),
     })),
     height: 40 + dist.length * 38,
@@ -293,7 +298,8 @@ function behaviour(app, data, sc, teams) {
     ["score", "Satisfaction", (v) => fmt(v, 1)],
     ["food", "from food", (v) => fmt(v, 1)],
     ["thought", "from thought", (v) => fmt(v, 1)],
-    ["survival", "Alive", (v) => pct(v)],
+    ["activeShare", "Active", (v) => pct(v)],
+    ["exclusions", "Exclusions", (v) => fmt(v, 2)],
     ["harvested", "Harvested", (v) => fmt(v, 0)],
     ["eaten", "Eaten", (v) => fmt(v, 0)],
     ["held", "Held", (v) => fmt(v, 1)],
@@ -301,11 +307,9 @@ function behaviour(app, data, sc, teams) {
     ["tabled", "Motions", (v) => fmt(v, 2)],
     ["votes", "Votes", (v) => fmt(v, 1)],
     ["yesShare", "Yes", (v) => pct(v)],
-    ["officerDays", "Officer days", (v) => fmt(v, 1)],
-    ["influence", "Influence", (v) => fmt(v, 2)],
-    ["wilds", "In wilds", (v) => pct(v)],
-    ["moves", "Moves", (v) => fmt(v, 1)],
-    ["deaths", "Deaths", (v) => fmt(v, 2)],
+    ["roleDays", "Days in office", (v) => fmt(v, 1)],
+    ["votingWeight", "Voting weight", (v) => fmt(v, 2)],
+    ["votingTokens", "Tokens left", (v) => fmt(v, 2)],
   ];
   const sortKey = app.resultsSort || "score";
   const sorted = [...table].sort(
@@ -319,13 +323,13 @@ function behaviour(app, data, sc, teams) {
       return [k, v.length > 1 && hi - Math.min(...v) > Math.abs(hi) * 0.01 ? hi : null];
     }),
   );
-  const groups = `<tr class="grp"><th></th><th colspan="4">Outcome</th><th colspan="3">Food</th><th colspan="6">Politics</th><th colspan="3">Movement and death</th></tr>`;
+  const groups = `<tr class="grp"><th></th><th colspan="5">Outcome</th><th colspan="3">Food</th><th colspan="7">Politics</th></tr>`;
   const hints = {
-    survival: "Share of member-days alive",
-    wilds: "Share of living days spent in the wilds",
+    activeShare: "Share of member-days active",
     held: "Mean carrots held at nightfall",
-    influence: "Mean influence of the living",
-    yesShare: "Yes share of yes-or-no votes",
+    votingWeight: "Average daily token allocation per active resident",
+    votingTokens: "Average unspent balance at nightfall per active resident",
+    yesShare: "Share of participating residents voting yes",
   };
   const head = `<tr><th>Team</th>${cols.map(([k, n]) => `<th><button class="th-sort" data-rsort="${k}" aria-pressed="${sortKey === k}"${hints[k] ? ` title="${esc(hints[k])}"` : ""}>${esc(n)}</button></th>`).join("")}</tr>`;
   const body = sorted
@@ -363,10 +367,7 @@ function behaviour(app, data, sc, teams) {
 
   const plots = s.plots.length;
   const res = S.residence(sc, s.teams.length, plots);
-  const cols2 = [
-    ...s.plots.map((p, j) => ({ name: p.name, short: plotLabel(app, j) })),
-    { name: "Wilds", short: "Wilds" },
-  ];
+  const cols2 = [...s.plots.map((p, j) => ({ name: p.name, short: plotLabel(app, j) }))];
   const heat = figure("r-where", {
     type: "heat",
     label: "Share of each team's days spent on each plot",
@@ -386,8 +387,8 @@ function behaviour(app, data, sc, teams) {
 
   return `<div class="rgrid">
     ${card(app, "r-teams", "Teams", teamTable, { span: "w3", table: false, sub: `${monthlyNote(sc)}; select a heading to sort` })}
-    ${card(app, "r-habit", habit[1], `${habits}${legend(app, teams)}`, { span: "w3", sub: `${habit[3] === "share" ? "Share of living members" : `Mean per member, ${habit[3]}`}`, tools: habitTools })}
-    ${card(app, "r-where", "Where teams live", heat, { span: "w3", sub: "Share of each team's living days" })}
+    ${card(app, "r-habit", habit[1], `${habits}${legend(app, teams)}`, { span: "w3", sub: `${habit[3] === "share" ? "Share of active members" : `Mean per member, ${habit[3]}`}`, tools: habitTools })}
+    ${card(app, "r-where", "Where teams live", heat, { span: "w3", sub: "Share of each team’s active resident-days" })}
   </div>`;
 }
 
@@ -409,6 +410,7 @@ function commons(app, data, sc) {
     (t, d) => t + d.plots.filter((p) => p.stock === 0).length,
     0,
   );
+  const crops = S.cropEvents(sc.days);
   const dry = s.plots.filter((_, j) =>
     sc.days.some((d) => d.plots[j]?.stock === 0),
   ).length;
@@ -417,7 +419,9 @@ function commons(app, data, sc) {
     ${stat("Lowest field", lows.length ? pct(Math.min(...lows)) : "–", "of capacity, any night")}
     ${stat("Harvest", sc.days.length ? fmt(S.mean(sc.days.map((d) => d.harvest)), 0) : "–", "carrots a day")}
     ${stat("Empty fields", pct(emptyDays / Math.max(1, plotDays)), `of plot-days; ${fmt(dry)} of ${fmt(s.plots.length)} plots ran dry`)}
-    ${stat("Treasuries", last ? fmt(last.treasury) : "–", "carrots, last night")}
+    ${stat("Personally held", last ? fmt(last.held) : "–", "carrots at nightfall")}
+    ${stat("Blights", fmt(crops.rescued + crops.failed), `${fmt(crops.rescued)} rescued · ${fmt(crops.failed)} failed`)}
+    ${stat("Bumper crops", fmt(crops.bumper), "plot-days")}
   </div>`;
   const panels = s.plots
     .map((p, j) => {
@@ -455,7 +459,7 @@ function commons(app, data, sc) {
           tipExtra: (i) => {
             const q = days[i]?.plots[j];
             return q
-              ? `${fmt(q.stock)} of ${fmt(q.capacity)} carrots, ${fmt(q.residents)} residents${q.government ? ", governed" : ""}`
+              ? `${fmt(q.stock)} of ${fmt(q.capacity)} carrots, ${fmt(q.residents)} residents${q.cropEvent ? `, ${q.cropEvent} crop event` : ""}${q.aidNeeded ? `, ${fmt(q.aidNeeded)} carrots needed` : ""}`
               : "";
           },
         },
@@ -507,7 +511,7 @@ function commons(app, data, sc) {
   });
   return `${kpis}<div class="rgrid">
     ${card(app, "r-fields", "Fields", `<div class="minis">${panels}</div><p class="strip-key"><span><i style="background:var(--carrot)"></i>field stock, share of capacity</span><span><i style="background:rgba(196,163,255,0.35)"></i>governed</span></p>`, { span: "w3", table: false })}
-    ${card(app, "r-flows", "Harvest and meals", `${flows}<p class="strip-key"><span><i style="background:var(--carrot)"></i>harvested</span><span><i style="background:var(--joy)"></i>eaten</span><span><i class="k-dash"></i>needed by the living</span></p>`, { span: "w3", sub: "Carrots a day" })}
+    ${card(app, "r-flows", "Harvest and meals", `${flows}<p class="strip-key"><span><i style="background:var(--carrot)"></i>harvested</span><span><i style="background:var(--joy)"></i>eaten</span><span><i class="k-dash"></i>needed by active residents</span></p>`, { span: "w3", sub: "Carrots a day" })}
     ${card(app, "r-people", "Residents", people, { span: "w3", sub: `Darker is more, up to ${fmt(maxRes)}` })}
   </div>`;
 }
@@ -518,13 +522,15 @@ function institutions(app, data, sc, teams) {
   const passedN = decided.filter(S.passed).length;
   const turnouts = decided.map(S.turnout).filter((v) => v !== null);
   const founded = decided.filter((m) => m.kind === "found" && S.passed(m)).length;
-  const feds = decided.filter((m) => m.kind === "federationFound" && S.passed(m)).length;
+  const elections = decided.filter((m) => m.kind === "elect" && S.passed(m)).length;
+  const governmentState = (plot) =>
+    plot.government ? (Object.keys(plot.roles || {}).length ? 2 : 1) : 0;
   const kpis = `<div class="rstats">
     ${stat("Motions", fmt(decided.length), "decided")}
     ${stat("Passed", decided.length ? pct(passedN / decided.length) : "–", `${fmt(passedN)} motions`)}
-    ${stat("Turnout", turnouts.length ? pct(S.mean(turnouts)) : "–", "yes or no, of the electorate")}
+    ${stat("Turnout", turnouts.length ? pct(S.mean(turnouts)) : "–", "eligible residents voting yes or no")}
     ${stat("Governments", fmt(founded), "founded")}
-    ${stat("Federations", fmt(feds), "formed")}
+    ${stat("Elections won", fmt(elections), "department roles")}
   </div>`;
 
   // Governance timeline.
@@ -537,16 +543,14 @@ function institutions(app, data, sc, teams) {
     }
   const timeline = figure("r-gov", {
     type: "timeline",
-    label: "Government and federation membership of each plot by day",
+    label: "Government and elected departments in each plot by day",
     length: days.length,
     breaks: monthBreaks(days),
     dividers: monthDividers(days).filter(([i]) => i > 0),
     states: GOV_STATES,
     rows: s.plots.map((p, j) => ({
       label: p.name,
-      states: days.map((d) =>
-        d.plots[j].government ? (d.plots[j].federation >= 0 ? 2 : 1) : 0,
-      ),
+      states: days.map((d) => governmentState(d.plots[j])),
       marks: days.flatMap((d, i) =>
         passedDays.has(`${j}:${d.abs}`) ? [{ i, kind: "pass" }] : [],
       ),
@@ -560,7 +564,7 @@ function institutions(app, data, sc, teams) {
         title: `${s.plots[k].name}, month ${d.month}, day ${d.day}`,
         rows: [
           {
-            name: GOV_STATES[q.government ? (q.federation >= 0 ? 2 : 1) : 0].name,
+            name: GOV_STATES[governmentState(q)].name,
             value: `${fmt(q.residents)} residents`,
           },
         ],
@@ -577,9 +581,9 @@ function institutions(app, data, sc, teams) {
       };
     },
     table: () =>
-      `<table class="table"><thead><tr><th>Day</th>${s.plots.map((p) => `<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>${days.map((d) => `<tr><td>Month ${d.month}, day ${d.day}</td>${d.plots.map((p) => `<td>${p.government ? (p.federation >= 0 ? "Federation" : "Government") : ""}${p.laws.length ? ` (${p.laws.length} laws)` : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+      `<table class="table"><thead><tr><th>Day</th>${s.plots.map((p) => `<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>${days.map((d) => `<tr><td>Month ${d.month}, day ${d.day}</td>${d.plots.map((p) => `<td>${GOV_STATES[governmentState(p)].name}${p.laws.length ? ` (${p.laws.length} laws)` : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
   });
-  const govKey = `<p class="strip-key"><span><i style="background:${GOV_STATES[1].color}"></i>government</span><span><i style="background:${GOV_STATES[2].color}"></i>in a federation</span><span><i class="k-pass"></i>a motion passed</span></p>`;
+  const govKey = `<p class="strip-key"><span><i style="background:${GOV_STATES[1].color}"></i>government</span><span><i style="background:${GOV_STATES[2].color}"></i>elected role filled</span><span><i class="k-pass"></i>a motion passed</span></p>`;
 
   // Laws: adoption and residents' satisfaction with and without.
   const adoption = S.lawAdoption(sc, STATUTES).filter((r) => r.plotDays || r.tabled);
@@ -700,7 +704,7 @@ function institutions(app, data, sc, teams) {
   return `${kpis}<div class="rgrid">
     ${card(app, "r-gov", "Governance", `${timeline}${govKey}`, { span: "w3" })}
     ${card(app, "r-laws", "Laws", lawTable, { span: "w3", table: false })}
-    ${card(app, "r-votes", "How teams vote", `${vote}${voteKey}`, { span: "w2", sub: "Yes share of yes-or-no votes" })}
+    ${card(app, "r-votes", "How teams vote", `${vote}${voteKey}`, { span: "w2", sub: "Share of participating residents voting yes" })}
     ${card(app, "r-subjects", "Motions by subject", `${subjects}<p class="strip-key"><span><i style="background:var(--yes)"></i>passed</span><span><i style="background:var(--no)"></i>rejected</span><span><i style="background:var(--abstain)"></i>beaten, tied or cancelled</span></p>`, { sub: "Passed of decided" })}
     ${card(app, "r-daily", "Motions each day", `${daily}<p class="strip-key"><span><i style="background:var(--ink-3)"></i>decided</span><span><i style="background:var(--yes)"></i>passed</span></p>`, { span: "w15" })}
     ${card(app, "r-authors", "Who tables motions", authors, { span: "w15", sub: monthlyNote(sc) })}

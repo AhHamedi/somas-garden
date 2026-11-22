@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -237,5 +238,57 @@ func assertFailedRunRejectsMutations(t *testing.T, id string) {
 	_ = json.Unmarshal(history["frames"], &frames)
 	if len(frames) != 1 || frames[0].Phase != "ready" {
 		t.Fatal("failed simulation skipped a phase in its replay")
+	}
+}
+
+// A v5 checkpoint contains a different phase sequence and political state. Its
+// observer frames, export header and monthly results must survive unchanged.
+func TestPreviousRulesOpenAsArchive(t *testing.T) {
+	t.Setenv("SELFORG_ENGINE_SECRET", "test-society-secret")
+	t.Setenv("SOCIETY_DATA_DIR", t.TempDir())
+	id := newRunID()
+	dir := runDir(id)
+	defer forgetSocietyRun(id)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := societyRun{ID: id, Status: "paused", Frames: []frameIndex{{Index: 0, Phase: "movement"}}}
+	if err := s.saveIndex(); err != nil {
+		t.Fatal(err)
+	}
+	frame := `{"version":5,"phase":"movement","months":[{"month":1,"deaths":3,"teams":[]}]}`
+	for path, raw := range map[string]string{
+		filepath.Join(dir, "00000.json.gz"): frame,
+		checkpointPath(id, 0):               `{"Version":1}`,
+	} {
+		var buf bytes.Buffer
+		z := gzip.NewWriter(&buf)
+		if _, err := z.Write([]byte(raw)); err != nil {
+			t.Fatal(err)
+		}
+		if err := z.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, buf.Bytes(), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, res := societyRequest(t, "GET", "runs/"+id, "")
+	if code != 200 || string(res["status"]) != `"archived"` || string(res["snapshot"]) != frame {
+		t.Fatalf("old run %#v", res)
+	}
+	for _, route := range []string{"step", "run", "pause"} {
+		code, _ = societyRequest(t, "POST", "runs/"+id+"/"+route, "{}")
+		if code != 409 {
+			t.Fatalf("archived %s returned %d", route, code)
+		}
+	}
+	_, history := societyRequest(t, "GET", "runs/"+id+"/history", "")
+	if !bytes.Contains(history["months"], []byte(`"deaths":3`)) {
+		t.Fatal("old monthly results were rewritten")
+	}
+	_, export := societyRequest(t, "GET", "runs/"+id+"/export", "")
+	if string(export["version"]) != "5" || string(export["frames"]) != "["+frame+"]" {
+		t.Fatal("archive export changed version or content")
 	}
 }

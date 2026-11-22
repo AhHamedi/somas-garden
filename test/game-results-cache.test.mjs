@@ -28,7 +28,7 @@ const { ensureStudy } = await import(
 
 const phases = [
   "environment",
-  "movement",
+  "harvest_order",
   "harvest",
   "proposals",
   "voting",

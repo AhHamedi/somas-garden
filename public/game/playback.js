@@ -20,8 +20,8 @@ export function phaseWeight(s) {
   switch (s.phase) {
     case "environment":
       return s.day === 1 ? 1.1 : 0.85;
-    case "movement":
-      return has("move") ? 1.25 : 0.45;
+    case "harvest_order":
+      return has("harvest_ranking") ? 1 : 0.45;
     case "harvest":
       return has("harvest") ? 1 : 0.45;
     case "proposals":
@@ -29,7 +29,7 @@ export function phaseWeight(s) {
     case "voting":
       return (s.proposals || []).some((p) => p.closes === s.absoluteDay) ? 1.6 : 0.4;
     case "transfers":
-      return has("officer_order") || has("offer") ? 0.7 : 0.35;
+      return has("gift") || has("donation") ? 0.7 : 0.35;
     case "eating":
       return 1.05;
     case "close":

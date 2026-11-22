@@ -7,7 +7,6 @@ import * as S from "../public/game/study.js";
 // month 2, shaped like /runs/:id/study.
 const team = (o = {}) => ({
   alive: 2,
-  wilds: 0,
   score: 0,
   thought: 0,
   politics: 0,
@@ -15,19 +14,18 @@ const team = (o = {}) => ({
   eaten: 2,
   held: 0,
   mind: 4,
-  influence: 1,
+  votingWeight: 6,
+  votingTokens: 2,
   officers: 0,
-  deaths: 0,
-  moves: 0,
+  exclusions: 0,
   ...o,
 });
 const plot = (o = {}) => ({
   residents: 2,
   stock: 10,
   capacity: 20,
-  reserve: 0,
   government: false,
-  federation: -1,
+  roles: {},
   laws: [],
   score: 0,
   weather: 0,
@@ -40,15 +38,12 @@ const day = (month, d, o = {}) => ({
   day: d,
   abs: (month - 1) * 2 + d,
   gini: 0.1,
-  moves: 0,
-  deaths: 0,
+  exclusions: 0,
   harvest: 8,
   eaten: 8,
   field: 20,
-  treasury: 0,
   held: 0,
   governments: 0,
-  federations: 0,
   teams: [team(), team()],
   plots: [plot(), plot()],
   ...o,
@@ -59,7 +54,6 @@ const motion = (o = {}) => ({
   created: 1,
   abs: 1,
   plot: 0,
-  federation: -1,
   kind: "policy",
   key: "quota",
   mode: "limited",
@@ -68,15 +62,14 @@ const motion = (o = {}) => ({
   no: 1,
   abstain: 0,
   total: 4,
-  threshold: "majority",
+  tallyBasis: "voters",
+  fraction: 0.5,
   electorate: 4,
   author: 0,
   authorTeam: 0,
   teamYes: [2, 1],
   teamNo: [0, 1],
   teamAbstain: [0, 0],
-  plotYes: 0,
-  plotNo: 0,
   ...o,
 });
 const study = {
@@ -112,9 +105,8 @@ const study = {
       id: "m2-p1",
       month: 2,
       abs: 3,
-      kind: "federationPolicy",
-      key: "gifts",
-      federation: 0,
+      kind: "elect",
+      key: "trade",
     }),
   ],
   months: [
@@ -128,10 +120,11 @@ const study = {
       politics: [1, 0, 0, 0],
       eaten: [4, 4, 4, 4],
       harvested: [4, 4, 4, 4],
-      deaths: [0, 1, 0, 0],
+      exclusions: [0, 1, 0, 0],
       active: [2, 1, 2, 2],
       alive: [true, false, true, true],
-      influence: [1, 0, 1, 1],
+      votingWeight: [6, 0, 6, 6],
+      votingTokens: [2, 0, 3, 0],
       office: [true, false, false, false],
     },
     {
@@ -144,10 +137,11 @@ const study = {
       politics: [0, 0, 0, 0],
       eaten: [2, 2, 2, 2],
       harvested: [2, 2, 2, 2],
-      deaths: [0, 0, 0, 0],
+      exclusions: [0, 0, 0, 0],
       active: [1, 1, 1, 1],
       alive: [true, true, true, true],
-      influence: [0, 0, 0, 0],
+      votingWeight: [6, 6, 6, 6],
+      votingTokens: [6, 6, 6, 6],
       office: [false, false, false, false],
     },
   ],
@@ -188,7 +182,7 @@ test("team table and distributions follow the agents' teams", () => {
   assert.equal(t[1].score, 35);
   assert.equal(t[0].thought, 12.5);
   assert.equal(t[0].food, 2.5, "food satisfaction is satisfaction less thought");
-  assert.equal(t[0].deaths, 0.5);
+  assert.equal(t[0].exclusions, 0.5);
   assert.equal(t[0].tabled, 0.5, "one motion by two members in one month");
   assert.equal(t[1].tabled, 0.5);
   assert.equal(t[1].yesShare, 2 / 4);
@@ -202,23 +196,23 @@ test("team table and distributions follow the agents' teams", () => {
 
 test("monthly team comparisons exclude unfinished months from every measure", () => {
   const data = structuredClone(study);
-  Object.assign(data.days[0].teams[0], { moves: 1, officers: 1 });
-  Object.assign(data.days[1].teams[0], { moves: 0, officers: 1 });
-  Object.assign(data.days[2].teams[0], { moves: 2, officers: 2 });
+  Object.assign(data.days[0].teams[0], { votingTokens: 1, officers: 1 });
+  Object.assign(data.days[1].teams[0], { votingTokens: 3, officers: 1 });
+  Object.assign(data.days[2].teams[0], { votingTokens: 5, officers: 2 });
 
   const all = S.teamTable(data, S.scope(data), 2);
   const completed = S.teamTable(data, S.scope(data, 1), 2);
   assert.deepEqual(all, completed, "numerators and membership cover the same months");
   assert.equal(all[0].tabled, 0.5);
-  assert.equal(all[0].moves, 0.5);
-  assert.equal(all[0].officerDays, 1);
+  assert.equal(all[0].votingTokens, 2);
+  assert.equal(all[0].roleDays, 1);
   assert.equal(S.scope(data).days.length, 3, "daily charts retain the current month");
 
   const partial = S.teamTable(data, S.scope(data, 2), 2)[0];
   assert.equal(partial.score, 1);
   assert.equal(partial.tabled, 0.5, "selected month shows actual month-to-date totals");
-  assert.equal(partial.moves, 1);
-  assert.equal(partial.officerDays, 1);
+  assert.equal(partial.votingTokens, 5);
+  assert.equal(partial.roleDays, 1);
   const firstMonth = { ...data, months: [data.months[1]] };
   assert.deepEqual(
     S.teamTable(firstMonth, S.scope(firstMonth), 2)[0],
@@ -229,17 +223,17 @@ test("monthly team comparisons exclude unfinished months from every measure", ()
   data.months[1].complete = true;
   const both = S.teamTable(data, S.scope(data), 2)[0];
   assert.equal(both.tabled, 0.5, "completed months use both months' membership");
-  assert.equal(both.moves, 0.75);
-  assert.equal(both.officerDays, 1);
+  assert.equal(both.votingTokens, 3);
+  assert.equal(both.roleDays, 1);
 });
 
-test("motions are sorted into subjects and charter changes are told apart", () => {
+test("motions distinguish harvest, voting rules and department appointments", () => {
   assert.equal(S.subjectOf(study.motions[0]), "harvest");
   assert.equal(S.subjectOf(study.motions[1]), "government");
-  assert.equal(S.subjectOf(study.motions[2]), "charter");
+  assert.equal(S.subjectOf(study.motions[2]), "departments");
   assert.equal(S.statuteKeyOf(study.motions[2]), null);
-  assert.equal(S.charterKeyOf(study.motions[2]), "gifts");
-  assert.equal(S.statuteKeyOf({ kind: "office", key: "" }), "office");
+  assert.equal(S.subjectOf({ kind: "policy", key: "tokenAllocation" }), "voting");
+  assert.equal(S.subjectOf({ kind: "revoke", key: "justice" }), "departments");
   const v = S.votingMatrix(S.scope(study, 1), 2);
   assert.deepEqual(v[0].harvest, { yes: 2, no: 0, abstain: 0 });
   assert.deepEqual(v[1].government, { yes: 1, no: 1, abstain: 0 });
@@ -279,4 +273,18 @@ test("CSV exports quote safely and carry one row per record", () => {
     S.csvPlotDays(study, ["Plot A", "Plot B"], teams).trim().split("\n").length,
     1 + 6,
   );
+});
+
+test("crop events count repeated blights and the transition into field failure", () => {
+  const days = [
+    ["rescued", "bumper"],
+    ["rescued", ""],
+    ["failed", "failed"],
+    ["", "failed"],
+  ].map((events, i) => ({
+    month: i < 3 ? 1 : 2,
+    plots: events.map((cropEvent) => ({ cropEvent })),
+  }));
+  days.push({ ...days.at(-1) });
+  assert.deepEqual(S.cropEvents(days), { rescued: 2, bumper: 1, failed: 3 });
 });

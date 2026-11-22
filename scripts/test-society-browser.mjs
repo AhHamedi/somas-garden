@@ -75,9 +75,9 @@ try {
   await page.waitForFunction(() => window.amoeboids?.ix, null, { timeout: 30000 });
   const initialRunId = await page.evaluate(() => amoeboids.pb.id);
 
-  // The island, its plots and the wilds are all on screen.
-  assert.equal(await page.locator(".plaque").count(), 7);
-  assert.equal(await page.locator("#ledger .plot-row").count(), 7);
+  // Every inhabited field is selectable.
+  assert.equal(await page.locator(".plaque").count(), 6);
+  assert.equal(await page.locator("#ledger .plot-row").count(), 6);
   assert.match(await page.locator("#vitals").innerText(), /300/);
   assert.equal(await page.locator("#inspector").isVisible(), false);
   await page.screenshot({ path: join(evidence, "world.png") });
@@ -112,14 +112,14 @@ try {
   // The statute book shows every local law, and a law unfolds in place with each option.
   await page.click('[data-tab="assembly"]');
   await page.click('[data-amode="laws"]');
-  assert.equal(await page.locator(".lc-grid").first().locator(".lawcard").count(), 4);
-  assert.ok((await page.locator(".lawcard").count()) >= 20, "all local laws are listed");
-  await page.click('[data-law="local:collection"]');
+  assert.equal(await page.locator(".lc-grid").first().locator(".lawcard").count(), 2);
+  assert.ok((await page.locator(".lawcard").count()) === 4, "all local rules are listed");
+  await page.click('[data-law="local:harvestOrder"]');
   await page.waitForSelector(".lawx .lx-opt");
   assert.equal(
     await page.locator(".lawx .lx-opt:not(.base)").count(),
-    4,
-    "every collection option is shown",
+    2,
+    "both harvest order options are shown",
   );
   assert.equal(
     await page.locator(".lawx .lx-opt.current, .lawx .lx-opt.default").count(),
@@ -160,7 +160,7 @@ try {
   await page.waitForSelector(".agent-head h2");
   assert.match(
     await page.locator(".stat-rows").innerText(),
-    /Body[\s\S]*Mind[\s\S]*Carrots[\s\S]*Influence[\s\S]*Satisfaction/,
+    /Body[\s\S]*Mind[\s\S]*Carrots[\s\S]*Voting weight[\s\S]*Voting tokens[\s\S]*Satisfaction/,
   );
   await page.screenshot({ path: join(evidence, "agent.png") });
   await page.keyboard.press("Escape");
@@ -234,10 +234,10 @@ try {
   const csv = await readFile(await download.path(), "utf8");
   assert.match(csv.split("\n")[0], /^id,month,tabled_day,decided_day,plot/);
 
-  // Rulebook: every law, charter rule and decision, searchable.
+  // Rulebook: every local rule and decision, searchable.
   await page.click('[data-view="rulebook"]');
   await page.waitForSelector("#rb-index .rb-item");
-  assert.equal(await page.locator("#rb-index .rb-item").count(), 1 + 21 + 8 + 16);
+  assert.equal(await page.locator("#rb-index .rb-item").count(), 1 + 4 + 5);
   await page.fill("#rb-q", "quota");
   await page.waitForFunction(
     () => document.querySelectorAll("#rb-index .rb-item").length < 10,
@@ -252,14 +252,14 @@ try {
     "the law's standing in every plot",
   );
   await page.fill("#rb-q", "");
-  await page.click('[data-rb="local:collection"]');
+  await page.click('[data-rb="local:harvestOrder"]');
   await page.waitForFunction(
-    () => document.querySelector(".rb-head h2")?.textContent === "Field collection",
+    () => document.querySelector(".rb-head h2")?.textContent === "Harvest order",
   );
   assert.equal(
     await page.locator(".rb-opts .rb-opt").count(),
-    5,
-    "four options and the default of no law",
+    2,
+    "both harvest order choices",
   );
   await page.screenshot({ path: join(evidence, "rulebook.png") });
   await page.keyboard.press("Escape");
@@ -278,11 +278,6 @@ try {
 
   // A small new world runs to its meteor and reports the month.
   await page.click('[data-stab="world"]');
-  assert.equal(
-    await page.locator('[data-respawn="meteor"]').getAttribute("aria-pressed"),
-    "true",
-    "the dead return at the meteor by default",
-  );
   for (const [key, value] of Object.entries({ copies: 4, plots: 4, days: 3, months: 2 }))
     await page
       .locator(`#setup-dialog input[type="number"][data-k="${key}"]`)
@@ -311,8 +306,8 @@ try {
   assert.equal(created.snapshot.teams[0].name, "Browser stewards");
   assert.equal(created.snapshot.teams[0].policy, "builder");
   assert.equal(created.snapshot.teams[0].builder.harvest, 4);
-  assert.equal(await page.evaluate(() => amoeboids.ix.s.settings.respawnDelay), -1);
-  assert.equal(await page.locator(".plaque").count(), 5);
+  assert.equal(await page.evaluate(() => amoeboids.ix.s.settings.votingTokens), 6);
+  assert.equal(await page.locator(".plaque").count(), 4);
   await page.click("#menu-button");
   await page.click('[data-action="to-meteor"]');
   await page.waitForFunction(() => amoeboids.ix.s.meteor, null, { timeout: 30000 });
@@ -367,7 +362,7 @@ try {
     (id) => window.amoeboids?.pb.id === id && amoeboids.ix?.s.agents.length === 300,
     initialRunId,
   );
-  assert.equal(await page.locator(".plaque").count(), 7);
+  assert.equal(await page.locator(".plaque").count(), 6);
   assert.equal(await page.locator("canvas#world").isVisible(), true);
   await page.goto(origin);
   await page.waitForFunction(

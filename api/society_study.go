@@ -20,7 +20,25 @@ func (s *societyRun) snapshotAt(i int) (*society.Snapshot, error) {
 		return nil, e
 	}
 	snap := new(society.Snapshot)
-	return snap, json.Unmarshal(b, snap)
+	if err := json.Unmarshal(b, snap); err != nil {
+		return nil, err
+	}
+	if snap.Version < society.ReplayVersion {
+		var old struct {
+			Agents []struct {
+				Deaths    int `json:"deaths"`
+				Influence int `json:"influence"`
+			}
+		}
+		if err := json.Unmarshal(b, &old); err != nil {
+			return nil, err
+		}
+		for i, a := range old.Agents {
+			snap.Agents[i].Exclusions = a.Deaths
+			snap.Agents[i].VotingWeight = a.Influence
+		}
+	}
+	return snap, nil
 }
 
 // study summarises the run up to and including frame upto: every nightfall,

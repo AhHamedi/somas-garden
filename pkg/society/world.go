@@ -7,7 +7,7 @@ import (
 	"sort"
 )
 
-var Phases = []string{"environment", "movement", "harvest", "proposals", "voting", "transfers", "eating", "close"}
+var Phases = []string{"environment", "harvest_order", "harvest", "proposals", "voting", "transfers", "eating", "close"}
 
 func New(settings Settings, teams []Team, seed int64) (*World, error) {
 	if len(teams) == 0 {
@@ -55,10 +55,8 @@ func (w *World) resetMonth() {
 	w.weather = nil
 	w.weatherSources = nil
 	w.Plots = nil
-	w.Federations = []*Federation{}
 	w.Proposals = []*Proposal{}
 	w.Pending = nil
-	w.Offers = nil
 	w.political = nil
 	w.reads = map[int][]Event{}
 	w.receipts = map[int][]Event{}
@@ -90,12 +88,12 @@ func (w *World) resetMonth() {
 		weather := r.Intn(3)
 		w.weather = append(w.weather, r)
 		w.weatherSources = append(w.weatherSources, source)
-		w.Plots = append(w.Plots, &Plot{ID: i, Name: fmt.Sprintf("Plot %c", 'A'+i), Capacity: k, Stock: int(float64(k) * w.Settings.StartingStock), ReserveCapacity: int(float64(k)/w.Settings.ProductiveCapacity) * w.Settings.ReservePerResident, Weather: weather, Regeneration: w.Settings.WeatherRates[weather], Rules: map[string]Rule{}, Officers: map[int]Office{}, Federation: -1, Residents: []int{}})
+		w.Plots = append(w.Plots, &Plot{ID: i, Name: fmt.Sprintf("Plot %c", 'A'+i), Capacity: k, Stock: int(float64(k) * w.Settings.StartingStock), Weather: weather, Regeneration: w.Settings.WeatherRates[weather], Rules: map[string]Rule{}, Roles: map[string]int{}, Residents: []int{}})
 	}
 	for _, a := range w.Agents {
 		memory := a.Memory
 		id, t, name := a.ID, a.Team, a.Name
-		*a = Agent{ID: id, Team: t, Name: name, Plot: -1, Alive: true, Body: w.Settings.BodyCapacity, Mind: w.Settings.StartingMind, Memory: memory, Pledges: map[string]float64{}, Permits: map[string]int{}}
+		*a = Agent{ID: id, Team: t, Name: name, Plot: -1, Alive: true, Body: w.Settings.BodyCapacity, Mind: w.Settings.StartingMind, Memory: memory, Pledges: map[string]float64{}}
 	}
 }
 func (w *World) Step() error {
@@ -119,8 +117,8 @@ func (w *World) Step() error {
 	switch w.Phase {
 	case "environment":
 		w.environment()
-	case "movement":
-		w.movement(w.decisions("movement"))
+	case "harvest_order":
+		w.rankHarvest(w.decisions("harvest_order"))
 	case "harvest":
 		w.harvest(w.decisions("harvest"))
 	case "proposals":
@@ -159,21 +157,14 @@ type indexedDecision struct {
 }
 
 func (w *World) environment() {
+	if w.Day == 1 {
+		w.place(w.decisions("placement"))
+		w.updateResidents()
+	}
 	w.policyBoundary()
-	respawned := map[int]bool{}
+	w.grantVotingTokens()
 	for _, a := range w.Agents {
-		a.Harvested = 0
-		a.Eaten = 0
-		if !a.Alive && a.RespawnAt > 0 && w.AbsoluteDay >= a.RespawnAt {
-			a.Alive = true
-			a.Body = w.Settings.BodyCapacity
-			a.Mind = w.Settings.StartingMind
-			a.Food = 0
-			a.Plot = -1
-			a.RespawnAt = 0
-			respawned[a.ID] = true
-			w.event("respawn", a.ID, -1, "Returns outside all plots with private memory", 0)
-		}
+		a.Harvested, a.Eaten = 0, 0
 	}
 	if w.Day > 1 {
 		for i, p := range w.Plots {
@@ -184,24 +175,21 @@ func (w *World) environment() {
 			p.Regeneration = w.Settings.WeatherRates[p.Weather]
 		}
 		for _, a := range w.Agents {
-			if a.Alive && !respawned[a.ID] {
-				rate := w.Settings.OutsideMind
-				if a.Plot >= 0 {
-					rate = w.Plots[a.Plot].Regeneration
-				}
+			if a.Alive && a.Plot >= 0 {
+				rate := w.Plots[a.Plot].Regeneration
 				a.Mind = roundMind(math.Min(w.Settings.MindCapacity, a.Mind+rate))
 			}
 		}
 	}
-	w.fundServices()
-	w.executePending()
 	for _, p := range w.Plots {
-		n := len(w.residents(p.ID))
+		n := len(p.Residents)
 		if p.Stock <= 0 {
 			p.GrowthRemainder = 0
+			w.cropEvent(p)
 			continue
 		}
 		if n == 0 {
+			w.cropEvent(p)
 			continue
 		}
 		growth := w.Settings.Growth * math.Min(float64(n), float64(p.Capacity)/w.Settings.ProductiveCapacity) * float64(p.Stock) / float64(p.Capacity)
@@ -215,6 +203,7 @@ func (w *World) environment() {
 		if grown > 0 {
 			w.event("growth", -1, p.ID, fmt.Sprintf("%d carrots grew in the field", grown), float64(grown))
 		}
+		w.cropEvent(p)
 	}
 }
 func (w *World) closeDay() {
@@ -233,8 +222,8 @@ func (w *World) closeDay() {
 		for _, a := range w.Agents {
 			result.Scores[a.ID] = a.Score
 			result.Teams[a.Team].Score += a.Score
-			result.Teams[a.Team].Deaths += a.Deaths
-			result.Deaths += a.Deaths
+			result.Teams[a.Team].Exclusions += a.Exclusions
+			result.Exclusions += a.Exclusions
 		}
 		for i := range result.Teams {
 			result.Teams[i].Mean = result.Teams[i].Score / float64(w.Settings.Copies)
@@ -272,8 +261,11 @@ func (w *World) residents(plot int) []*Agent {
 }
 func (w *World) updateResidents() {
 	for _, p := range w.Plots {
-		p.Residents = []int{}
-		for _, a := range w.residents(p.ID) {
+		p.Residents = p.Residents[:0]
+	}
+	for _, a := range w.Agents {
+		if a.Alive && a.Plot >= 0 {
+			p := w.Plots[a.Plot]
 			p.Residents = append(p.Residents, a.ID)
 		}
 	}
@@ -294,19 +286,19 @@ func spend(a *Agent, cost float64) bool {
 	return true
 }
 func roundMind(x float64) float64 { return math.Round(x*1e6) / 1e6 }
-func (w *World) event(kind string, actor, plot int, message string, amount float64) Event {
+func (w *World) event(kind string, actor, plot int, message string, amount float64, members ...int) Event {
 	w.nextEvent++
-	e := Event{ID: w.nextEvent, Month: w.Month, Day: w.Day, AbsoluteDay: w.AbsoluteDay, Phase: w.Phase, Kind: kind, Actor: actor, Plot: plot, Message: message, Amount: amount}
+	e := Event{ID: w.nextEvent, Month: w.Month, Day: w.Day, AbsoluteDay: w.AbsoluteDay, Phase: w.Phase, Kind: kind, Actor: actor, Plot: plot, Message: message, Amount: amount, Target: -1, Members: append([]int(nil), members...), Breach: kind == "ration_breach"}
+	if len(members) == 1 && (kind == "gift" || kind == "donation" || kind == "received") {
+		e.Target = members[0]
+	}
 	if actor >= 0 && actor < len(w.Agents) {
 		a := w.Agents[actor]
 		e.Food = a.Food
 		e.Mind = a.Mind
 		a.LastResult = message
 	}
-	if plot >= 0 && plot < len(w.Plots) {
-		e.Recorded = w.Plots[plot].RecordsFunded && has([]string{"harvest", "ration_breach", "pledge", "funding", "gift", "received", "deposit", "collection", "tax", "holding", "distribution", "donation", "sanction_applied", "warning", "officer_order", "dispute_remedy"}, kind)
-	}
-	w.capturePoliticalEvidence(e)
+	e.Recorded = plot >= 0 && plot < len(w.Plots)
 	w.capturePoliticalEvidence(e)
 	w.Events = append(w.Events, e)
 	if actor >= 0 {

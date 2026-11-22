@@ -1,6 +1,5 @@
 // Pure analysis of the study data served by /runs/:id/study. No DOM here, so
 // every figure on the Results page can be checked in tests.
-import { STATUTES, CHARTER } from "./statutes.js";
 
 export const PASSED = ["passed", "approved", "scheduled", "activated"];
 export const passed = (m) => PASSED.includes(m.status);
@@ -72,7 +71,7 @@ export function agentMonths(study, sc) {
         politics: m.politics[id],
         eaten: m.eaten[id],
         harvested: m.harvested[id],
-        deaths: m.deaths[id],
+        exclusions: (m.exclusions || m.deaths)?.[id] ?? 0,
         active: m.active[id],
         days: m.day,
       }),
@@ -90,28 +89,27 @@ export function teamTable(study, sc, teamCount) {
   const months = new Set(sc.months.map((m) => m.month));
   const memberDays = new Array(teamCount).fill(0);
   const dayTotals = Array.from({ length: teamCount }, () => ({
-    wilds: 0,
-    moves: 0,
-    officers: 0,
+    roleDays: 0,
     held: 0,
     mind: 0,
-    influence: 0,
+    votingWeight: 0,
+    votingTokens: 0,
     living: 0,
   }));
   const size = new Array(teamCount).fill(0);
   study.agentTeams.forEach((t) => size[t]++);
-  for (const d of sc.days.filter((d) => months.has(d.month)))
+  for (const d of sc.days.filter((d) => months.has(d.month))) {
     d.teams.forEach((t, i) => {
       const x = dayTotals[i];
-      x.wilds += t.wilds;
-      x.moves += t.moves;
-      x.officers += t.officers;
+      x.roleDays += t.officers ?? 0;
       x.held += t.held * t.alive;
       x.mind += t.mind * t.alive;
-      x.influence += t.influence * t.alive;
+      x.votingWeight += (t.votingWeight ?? t.influence ?? 0) * t.alive;
+      x.votingTokens += (t.votingTokens ?? 0) * t.alive;
       x.living += t.alive;
       memberDays[i] += size[i];
     });
+  }
   const authored = new Array(teamCount).fill(0);
   const yes = new Array(teamCount).fill(0),
     no = new Array(teamCount).fill(0),
@@ -138,14 +136,13 @@ export function teamTable(study, sc, teamCount) {
       politics: per("politics"),
       eaten: per("eaten"),
       harvested: per("harvested"),
-      deaths: per("deaths"),
-      survival: memberDays[i] ? x.living / memberDays[i] : null,
-      wilds: x.living ? x.wilds / x.living : null,
-      moves: perMonth(x.moves),
-      officerDays: perMonth(x.officers),
+      exclusions: per("exclusions"),
+      activeShare: memberDays[i] ? x.living / memberDays[i] : null,
+      roleDays: perMonth(x.roleDays),
       held: x.living ? x.held / x.living : null,
       mind: x.living ? x.mind / x.living : null,
-      influence: x.living ? x.influence / x.living : null,
+      votingWeight: x.living ? x.votingWeight / x.living : null,
+      votingTokens: x.living ? x.votingTokens / x.living : null,
       tabled: perMonth(authored[i]),
       votes: perMonth(yes[i] + no[i] + abstain[i]),
       yesShare: yes[i] + no[i] ? yes[i] / (yes[i] + no[i]) : null,
@@ -175,62 +172,23 @@ export function distributions(study, sc, teamCount) {
 
 // --- subjects of motions --------------------------------------------------
 
-const LOCAL_GROUP = Object.fromEntries(STATUTES.map((s) => [s.key, s.group]));
-const CHARTER_KEYS = new Set(CHARTER.map((c) => c.key));
-
 export const SUBJECTS = [
   { id: "government", name: "Government" },
   { id: "harvest", name: "Harvest" },
-  { id: "treasury", name: "Treasury" },
-  { id: "borders", name: "Borders" },
-  { id: "power", name: "Power" },
-  { id: "federation", name: "Federation ties" },
-  { id: "charter", name: "Charter" },
+  { id: "voting", name: "Voting rules" },
+  { id: "departments", name: "Department roles" },
 ];
 
 export function subjectOf(m) {
-  switch (m.kind) {
-    case "found":
-    case "dissolve":
-      return "government";
-    case "office":
-    case "removeOffice":
-    case "sanction":
-      return "power";
-    case "permitEntry":
-    case "permitExit":
-      return "borders";
-    case "distribution":
-    case "donation":
-      return "treasury";
-    case "federationFound":
-    case "federationJoin":
-    case "federationLeave":
-    case "federationAdmit":
-    case "federationDissolve":
-    case "ratify":
-      return "federation";
-    case "federationPolicy":
-    case "federationRepeal":
-    case "dispute":
-      return "charter";
-  }
-  return LOCAL_GROUP[m.key] || "power";
+  if (m.kind === "elect" || m.kind === "revoke") return "departments";
+  if (["quota", "harvestOrder"].includes(m.key)) return "harvest";
+  if (["threshold", "tokenAllocation"].includes(m.key)) return "voting";
+  return "government";
 }
 
-/** The local law a motion would change, if any. */
+/** The local rule a motion would change, if any. */
 export function statuteKeyOf(m) {
-  if (m.kind === "office" || m.kind === "removeOffice") return "office";
-  if (m.kind === "policy" || m.kind === "repeal") return m.key || null;
-  return null;
-}
-
-/** The charter rule a federation motion would change, if any. */
-export function charterKeyOf(m) {
-  return (m.kind === "federationPolicy" || m.kind === "federationRepeal") &&
-    CHARTER_KEYS.has(m.key)
-    ? m.key
-    : null;
+  return m.kind === "policy" || m.kind === "repeal" ? m.key || null : null;
 }
 
 /** Yes share of yes-or-no votes by team and subject, with the count behind it. */
@@ -337,15 +295,34 @@ export function lawAdoption(sc, statutes) {
 
 /** Share of resident-days each team spent on each plot (rows: teams). */
 export function residence(sc, teamCount, plotCount) {
-  const grid = Array.from({ length: teamCount }, () => new Array(plotCount + 1).fill(0));
+  const grid = Array.from({ length: teamCount }, () => new Array(plotCount).fill(0));
   for (const d of sc.days) {
     d.plots.forEach((p, j) => p.teams.forEach((n, t) => (grid[t][j] += n)));
-    d.teams.forEach((t, i) => (grid[i][plotCount] += t.wilds));
   }
   return grid.map((row) => {
     const total = sum(row);
     return row.map((v) => (total ? v / total : 0));
   });
+}
+
+/** A failed field stays failed until reset. Count the initial failure only. */
+export function cropEvents(days) {
+  const counts = { rescued: 0, failed: 0, bumper: 0 };
+  let previous;
+  for (const day of days) {
+    day.plots.forEach((plot, index) => {
+      if (plot.cropEvent === "failed") {
+        if (
+          previous?.month !== day.month ||
+          previous.plots[index]?.cropEvent !== "failed"
+        )
+          counts.failed++;
+      } else if (plot.cropEvent === "rescued") counts.rescued++;
+      else if (plot.cropEvent === "bumper") counts.bumper++;
+    });
+    previous = day;
+  }
+  return counts;
 }
 
 // --- export -------------------------------------------------------------
@@ -365,8 +342,7 @@ export function csvTeamDays(study, teamNames) {
     "day",
     "absolute_day",
     "team",
-    "alive",
-    "in_wilds",
+    "active_residents",
     "satisfaction_mean",
     "thought_mean",
     "politics_mind_mean",
@@ -374,10 +350,10 @@ export function csvTeamDays(study, teamNames) {
     "eaten_mean",
     "carrots_held_mean",
     "mind_mean",
-    "influence_mean",
-    "officers",
-    "deaths",
-    "moves",
+    "voting_weight_mean",
+    "voting_tokens_remaining_mean",
+    "department_holders",
+    "exclusions",
   ];
   const rows = [head];
   for (const d of study.days)
@@ -388,7 +364,6 @@ export function csvTeamDays(study, teamNames) {
         d.abs,
         teamNames[i],
         t.alive,
-        t.wilds,
         t.score,
         t.thought,
         t.politics,
@@ -396,10 +371,10 @@ export function csvTeamDays(study, teamNames) {
         t.eaten,
         t.held,
         t.mind,
-        t.influence,
+        t.votingWeight ?? t.influence,
+        t.votingTokens,
         t.officers,
-        t.deaths,
-        t.moves,
+        t.exclusions ?? t.deaths,
       ]),
     );
   return csv(rows);
@@ -414,9 +389,11 @@ export function csvPlotDays(study, plotNames, teamNames) {
     "residents",
     "field",
     "capacity",
-    "treasury",
+    "crop_event",
+    "aid_needed",
     "government",
-    "federation",
+    "trade_representative_id",
+    "justice_representative_id",
     "laws",
     "satisfaction_mean",
     "weather",
@@ -433,9 +410,11 @@ export function csvPlotDays(study, plotNames, teamNames) {
         p.residents,
         p.stock,
         p.capacity,
-        p.reserve,
+        p.cropEvent || "",
+        p.aidNeeded || 0,
         p.government ? 1 : 0,
-        p.federation >= 0 ? p.federation : "",
+        p.roles?.trade,
+        p.roles?.justice,
         p.laws.join(" "),
         p.score,
         ["sunny", "cloudy", "dark"][p.weather] || p.weather,
@@ -452,22 +431,26 @@ export function csvMotions(study, plotNames, teamNames) {
     "tabled_day",
     "decided_day",
     "plot",
-    "federation",
     "kind",
     "law",
     "mode",
     "subject",
     "status",
     "passed",
-    "yes",
-    "no",
-    "abstain",
-    "total",
-    "threshold",
-    "electorate",
+    "yes_tally",
+    "no_tally",
+    "abstain_tally",
+    "total_tally",
+    "tally_basis",
+    "threshold_fraction",
+    "eligible_residents",
     "author",
     "author_team",
-    ...teamNames.flatMap((n) => [`${n}_yes`, `${n}_no`, `${n}_abstain`]),
+    ...teamNames.flatMap((n) => [
+      `${n}_residents_yes`,
+      `${n}_residents_no`,
+      `${n}_residents_abstain`,
+    ]),
   ];
   const rows = [head];
   for (const m of study.motions)
@@ -477,7 +460,6 @@ export function csvMotions(study, plotNames, teamNames) {
       m.created,
       m.abs,
       plotNames[m.plot] || m.plot,
-      m.federation >= 0 ? m.federation : "",
       m.kind,
       m.key || "",
       m.mode || "",
@@ -488,7 +470,8 @@ export function csvMotions(study, plotNames, teamNames) {
       m.no,
       m.abstain,
       m.total,
-      m.threshold,
+      m.tallyBasis ?? m.threshold,
+      m.fraction,
       m.electorate,
       study.agentNames?.[m.author] ?? m.author,
       teamNames[m.authorTeam] ?? "",
@@ -509,11 +492,12 @@ export function csvAgents(study, teamNames) {
     "politics_mind",
     "eaten",
     "harvested",
-    "deaths",
+    "exclusions",
     "active_days",
-    "alive_at_end",
-    "influence_at_end",
-    "officer_at_end",
+    "active_at_end",
+    "voting_weight_at_end",
+    "voting_tokens_remaining_at_end",
+    "holds_role_at_end",
   ];
   const rows = [head];
   for (const m of study.months)
@@ -529,11 +513,12 @@ export function csvAgents(study, teamNames) {
         m.politics[id],
         m.eaten[id],
         m.harvested[id],
-        m.deaths[id],
+        (m.exclusions || m.deaths)?.[id],
         m.active[id],
         m.alive[id] ? 1 : 0,
-        m.influence[id],
-        m.office[id] ? 1 : 0,
+        (m.votingWeight || m.influence)?.[id],
+        m.votingTokens?.[id],
+        m.office?.[id] ? 1 : 0,
       ]),
     );
   return csv(rows);

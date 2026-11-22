@@ -39,15 +39,13 @@ export function renderChronicle(app) {
       const before = last.get(d - 1) || pb.frames.find((x) => x && x.month === s.month);
       const deaths =
         f?.stats && before?.stats && d > 1
-          ? f.stats.deaths - before.stats.deaths
-          : f?.stats?.deaths || 0;
+          ? (f.stats.exclusions ?? f.stats.deaths ?? 0) -
+            (before.stats.exclusions ?? before.stats.deaths ?? 0)
+          : (f?.stats?.exclusions ?? f?.stats?.deaths ?? 0);
       const decided = proposals.filter((q) => q.closes === abs && q.status !== "open");
       const passed = decided.filter(passedStatus);
       const failed = decided.filter((q) => !passedStatus(q));
       const founded = passed.filter((q) => q.input?.kind === "found");
-      const fedFounded = (s.federations || []).filter(
-        (x) => x.founded === abs + 1 || x.founded === abs,
-      );
       const notes = app.notables.get(`${s.month}:${d}`) || [];
       const items = [];
       for (const q of founded)
@@ -56,23 +54,11 @@ export function renderChronicle(app) {
           "civic",
           `${plotName(ix, q.plot)} voted to found a government`,
         ]);
-      for (const x of fedFounded)
-        items.push([
-          "federation",
-          "civic",
-          `${x.name} formed by ${x.plots.map((p) => plotLetter(ix.plots.get(p) || { id: p })).join(", ")}`,
-        ]);
       // The same decision taken by several plots reads as one line.
       const same = new Map();
       for (const q of passed.filter((x) => x.input?.kind !== "found")) {
         const i = q.input || {};
-        const key = JSON.stringify([
-          i.kind,
-          i.key,
-          i.rule,
-          [...(i.members || [])].sort(),
-          q.federation >= 0 && i.kind !== "federationFound" ? q.federation : null,
-        ]);
+        const key = JSON.stringify([i.kind, i.key, i.rule, i.target]);
         const g = same.get(key) || { q, plots: new Set() };
         g.plots.add(q.plot);
         same.set(key, g);
@@ -87,35 +73,32 @@ export function renderChronicle(app) {
             : letters.length > 1
               ? `${letters.slice(0, -1).join(", ")} and ${letters.at(-1)}`
               : letters[0];
-        const title =
-          q.input?.kind === "federationFound"
-            ? `agreed to federate (${(q.input.members || []).map((m) => plotLetter(ix.plots.get(m) || { id: m })).join(", ")})`
-            : `passed: ${lcFirst(motionTitle(ix, q))}`;
+        const title = `passed ${lcFirst(motionTitle(ix, q))}`;
         items.push(["ballot", "yes", `${who} ${title}`]);
       }
       if (failed.length)
         items.push(["close", "no", `${plural(failed.length, "motion")} failed`]);
-      for (const n of notes.filter((x) => x.icon === "skull"))
-        items.push(["skull", "no", n.text]);
-      if (deaths && !notes.some((x) => x.icon === "skull"))
-        items.push(["skull", "no", `${plural(deaths, "Amoeboid")} starved`]);
+      for (const n of notes.filter((x) =>
+        ["alert", "sprout", "excluded"].includes(x.icon),
+      ))
+        items.push([n.icon, n.tone, n.text]);
+      if (deaths && !notes.some((x) => x.icon === "excluded"))
+        items.push(["excluded", "no", `${plural(deaths, "Amoeboid")} excluded`]);
       if (f?.stats)
         items.push([
           "carrot",
           "carrot",
-          `${fmt(f.stats.food)} field carrots, ${fmt(f.stats.alive)} alive`,
+          `${fmt(f.stats.food)} field carrots, ${fmt(f.stats.alive)} active`,
         ]);
       const headline = founded.length
         ? `${founded.map((q) => plotLetter(ix.plots.get(q.plot) || { id: q.plot })).join(", ")} ${founded.length === 1 ? "founds a government" : "found governments"}`
-        : fedFounded.length
-          ? "A federation is born"
-          : passed.length
-            ? `${plural(passed.length, "decision")} passed`
-            : deaths >= 10
-              ? "A hungry day"
-              : d === 1
-                ? "The settling"
-                : "A quiet day";
+        : passed.length
+          ? `${plural(passed.length, "decision")} passed`
+          : deaths >= 10
+            ? "A hungry day"
+            : d === 1
+              ? "The settling"
+              : "A quiet day";
       const isCurrent = d === s.day;
       const shown = items.slice(0, 7);
       return `<article class="day-card ${isCurrent ? "current" : ""}"><div class="day-num">Day ${d}<small>${isCurrent ? (s.phase === "close" ? "Today" : "In progress") : ""}</small></div><div><h3>${esc(headline)}</h3><ul>${shown.map(([i, tone, t]) => `<li>${icon(i, tone)}<span>${esc(t)}</span></li>`).join("")}</ul><div class="day-actions"><button class="btn" data-watch="${d}">${icon("play")}Watch</button><button class="btn" data-night="${d}">${icon("night")}Nightfall</button></div></div></article>`;
@@ -127,13 +110,13 @@ export function renderChronicle(app) {
   const months = pb.months || s.months || [];
   const html = `<div class="page-head"><div><h1>Chronicle</h1><p>Month ${s.month}</p></div></div>
     <div class="chron"><div class="days">${cards || `<p class="note">Nothing yet</p>`}</div>
-    <aside><div class="aside-card"><h3>Month ${s.month} so far</h3><dl class="kv"><div><dt>Governments now</dt><dd>${govs}</dd></div><div><dt>Federations</dt><dd>${ix.federations.size}</dd></div><div><dt>Motions tabled</dt><dd>${monthProposals.length}</dd></div><div><dt>Motions passed</dt><dd>${passedAll}</dd></div><div><dt>Deaths</dt><dd>${fmt(s.stats?.deaths || 0)}</dd></div><div><dt>Alive</dt><dd>${fmt(s.stats?.alive || 0)}</dd></div></dl></div>
+    <aside><div class="aside-card"><h3>Month ${s.month} so far</h3><dl class="kv"><div><dt>Governments now</dt><dd>${govs}</dd></div><div><dt>Motions tabled</dt><dd>${monthProposals.length}</dd></div><div><dt>Motions passed</dt><dd>${passedAll}</dd></div><div><dt>Exclusions</dt><dd>${fmt(s.stats?.exclusions ?? s.stats?.deaths ?? 0)}</dd></div><div><dt>Active</dt><dd>${fmt(s.stats?.alive || 0)}</dd></div></dl></div>
     ${
       months.length
-        ? `<div class="aside-card"><h3>Earlier months</h3><table class="table"><thead><tr><th>Month</th><th>Best team</th><th>Deaths</th></tr></thead><tbody>${months
+        ? `<div class="aside-card"><h3>Earlier months</h3><table class="table"><thead><tr><th>Month</th><th>Best team</th><th>Exclusions</th></tr></thead><tbody>${months
             .map((m) => {
               const best = [...m.teams].sort((a, b) => b.mean - a.mean)[0];
-              return `<tr><td>${m.month}</td><td>${esc(best?.name || "")} ${best ? fmt(best.mean, 1) : ""}</td><td>${fmt(m.deaths)}</td></tr>`;
+              return `<tr><td>${m.month}</td><td>${esc(best?.name || "")} ${best ? fmt(best.mean, 1) : ""}</td><td>${fmt(m.exclusions ?? m.deaths)}</td></tr>`;
             })
             .join("")}</tbody></table></div>`
         : ""

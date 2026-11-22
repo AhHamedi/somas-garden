@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   STATUTES,
-  CHARTER,
   DECISIONS,
   fill,
   statute,
@@ -26,7 +25,7 @@ const catalogue = [
 }));
 
 test("every catalogue policy has a statute with every engine option", () => {
-  assert.ok(catalogue.length >= 28, "catalogue parsed");
+  assert.ok(catalogue.length === 4, "catalogue parsed");
   for (const def of catalogue) {
     const st = statute(def.key, def.scope);
     assert.ok(st, `${def.scope} ${def.key} is in the statute book`);
@@ -36,15 +35,11 @@ test("every catalogue policy has a statute with every engine option", () => {
     for (const mode of modes)
       if (mode) assert.ok(def.modes.includes(mode), `${def.key} does not invent ${mode}`);
   }
-  assert.equal(
-    STATUTES.length + CHARTER.length,
-    catalogue.length,
-    "no statute without an engine policy",
-  );
+  assert.equal(STATUTES.length, catalogue.length, "no statute without an engine policy");
 });
 
 test("options only name parameters the statute defines", () => {
-  for (const st of [...STATUTES, ...CHARTER])
+  for (const st of STATUTES)
     for (const o of st.options)
       for (const p of o.params || [])
         assert.ok(st.params[p], `${st.key}.${o.mode} parameter ${p}`);
@@ -59,39 +54,16 @@ test("one-off decisions are engine proposal kinds", async () => {
 });
 
 test("settings fill placeholders and motions map to their law", () => {
-  assert.equal(
-    fill("up to {harvestLimit} a day, {proposalCost} mind", {
-      harvestLimit: 4,
-      proposalCost: 1,
-    }),
-    "up to 4 a day, 1 mind",
-  );
+  assert.equal(fill("{votingTokens} daily", { votingTokens: 6 }), "6 daily");
   assert.equal(fill("{missing}", {}), "{missing}");
   assert.equal(
-    statuteOfMotion({ input: { kind: "policy", key: "quota:12" } }).key,
-    "quota",
+    statuteOfMotion({ input: { kind: "policy", key: "harvestOrder" } }).key,
+    "harvestOrder",
   );
-  assert.equal(statuteOfMotion({ input: { kind: "office", target: 3 } }).key, "office");
   assert.equal(
-    statuteOfMotion({ input: { kind: "federationPolicy", key: "gifts" } }).scope,
-    "federation",
+    statuteOfMotion({ input: { kind: "repeal", key: "tokenAllocation" } }).key,
+    "tokenAllocation",
   );
-  assert.equal(statuteOfMotion({ input: { kind: "found" } }), null);
-});
-
-test("the influence basis lists every source the engine counts", async () => {
-  const go = await readFile(
-    new URL("../pkg/society/contributions.go", import.meta.url),
-    "utf8",
-  );
-  const struct = go.match(/type ContributionDay struct \{([^}]*)\}/)[1];
-  const fields = [...struct.matchAll(/json:"(\w+)/g)]
-    .map((m) => m[1])
-    .filter((f) => f !== "agent" && f !== "day");
-  const rows = statute("influenceBasis").points.earn;
-  assert.deepEqual(
-    rows.map((r) => r[2]).filter(Boolean),
-    fields,
-    "one row per ledger field, in the engine's order",
-  );
+  assert.equal(statuteOfMotion({ input: { kind: "elect", key: "trade" } }), null);
+  assert.equal(statute("tax"), null);
 });

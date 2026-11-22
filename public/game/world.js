@@ -2,7 +2,7 @@
 // the day, with every Amoeboid drawn and choreographed from the events of the
 // frame being shown. Presentation only: nothing here feeds back into the engine.
 
-import { teamColor, plotLetter } from "/game/model.js";
+import { teamColor, plotLetter, cropStatus, esc } from "/game/model.js";
 
 const TW = 32; // tile width in pixels at zoom 1
 const TH = 16;
@@ -31,8 +31,6 @@ const C = {
   wallShade: "#d8c9a8",
   roof: "#3d6a74",
   roofShade: "#2f555e",
-  granary: "#ecdcb4",
-  granaryRoof: "#b9673b",
   trunk: "#6b4a33",
   canopy: "#4c8b48",
   canopyLight: "#69a85b",
@@ -44,7 +42,7 @@ const C = {
 const LIGHT = {
   ready: ["#ffe9d0", 0.1],
   environment: ["#ffc9a8", 0.26],
-  movement: ["#fff3dd", 0.08],
+  harvest_order: ["#fff3dd", 0.08],
   harvest: ["#ffffff", 0],
   proposals: ["#fff1d6", 0.08],
   voting: ["#ffd79a", 0.2],
@@ -315,9 +313,6 @@ export class World {
     for (const r of this.layout.rects.values())
       if (x >= r.x && x <= r.x + r.side && y >= r.y && y <= r.y + r.side)
         return { plot: r.id };
-    const w = this.layout.wilds;
-    if (x >= w.x - 0.6 && x <= w.x + w.w + 0.6 && y >= w.y && y <= w.y + w.h)
-      return { plot: -1 };
     return null;
   }
 
@@ -402,11 +397,7 @@ export class World {
     const ballotsToday = (s.proposals || []).filter(
       (p) => p.closes === s.absoluteDay && p.status !== "open",
     );
-    const assemblyPlots = new Set(
-      ballotsToday
-        .filter((p) => p.federation < 0 || p.input?.kind === "found")
-        .map((p) => p.plot),
-    );
+    const assemblyPlots = new Set(ballotsToday.map((p) => p.plot));
     const proposers = new Set(
       (s.proposals || []).filter((p) => p.created === s.absoluteDay).map((p) => p.author),
     );
@@ -416,18 +407,18 @@ export class World {
       const before = prevAgents?.get(a.id);
       const evs = byActor.get(a.id) || [];
       if (!a.alive) {
-        if (before?.alive && s.phase === "eating")
+        if (before?.alive)
           actors.push({
             a: before,
             from: this.home(before),
             to: this.home(before),
-            act: "die",
+            act: "excluded",
             delay: hash(a.id, 7) * 0.4,
           });
         continue;
       }
       const to = this.home(a);
-      const from = before?.alive ? this.home(before) : to;
+      const from = before?.alive && before.plot === a.plot ? this.home(before) : to;
       const actor = { a, from, to, act: null, delay: hash(a.id, 11) * 0.3 };
       if (!before?.alive && prev) actor.act = "spawn";
       else if (s.phase === "movement" && before && before.plot !== a.plot)
@@ -482,14 +473,12 @@ export class World {
       actor.delay = 0.28 + hash(actor.a.id, 15) * 0.38;
     }
 
-    // Field and treasury flows.
-    const fieldFrom = new Map(),
-      reserveFrom = new Map();
-    for (const p of s.plots) {
-      const old = prev?.plots.find((q) => q.id === p.id);
-      fieldFrom.set(p.id, old ? old.stock : p.stock);
-      reserveFrom.set(p.id, old ? old.reserve : p.reserve);
-    }
+    const fieldFrom = new Map(
+      s.plots.map((p) => [
+        p.id,
+        prev?.plots.find((old) => old.id === p.id)?.stock ?? p.stock,
+      ]),
+    );
     for (const e of events) {
       if (e.kind === "growth" && e.amount > 0) {
         const [x, y] = this.plotPoint(e.plot, 0.5, 0.3);
@@ -503,27 +492,17 @@ export class World {
           t1: 0.85,
         });
       }
-      if (e.kind === "collection" && e.amount > 0) {
-        for (let k = 0; k < Math.min(6, e.amount); k++)
+      if ((e.kind === "gift" || e.kind === "donation") && e.amount > 0) {
+        const from = this.ix.agents.get(e.actor);
+        const to = this.ix.agents.get(e.target);
+        if (from && to)
           particles.push({
             kind: "carrot",
-            from: this.plotPoint(e.plot, 0.3 + k * 0.08, 0.35),
-            to: this.plotPoint(e.plot, 0.84, 0.6),
-            z: 22,
-            t0: 0.55 + k * 0.03,
-            t1: 0.85 + k * 0.02,
-          });
-      }
-      if (e.kind === "distribution" && e.amount > 0 && e.actor >= 0) {
-        const a = s.agents.find((x) => x.id === e.actor);
-        if (a?.alive)
-          particles.push({
-            kind: "carrot",
-            from: this.plotPoint(e.plot, 0.84, 0.6),
-            to: this.home(a),
-            z: 26,
-            t0: 0.3 + hash(e.id, 2) * 0.3,
-            t1: 0.75 + hash(e.id, 3) * 0.2,
+            from: this.home(from),
+            to: this.home(to),
+            z: 25,
+            t0: 0.25,
+            t1: 0.85,
           });
       }
     }
@@ -544,10 +523,10 @@ export class World {
         t1: 1,
       });
     }
-    if (s.phase === "eating") {
+    if (actors.some((a) => a.act === "excluded")) {
       const deaths = new Map();
       for (const actor of actors)
-        if (actor.act === "die")
+        if (actor.act === "excluded")
           deaths.set(actor.a.plot, (deaths.get(actor.a.plot) || 0) + 1);
       for (const [plot, n] of deaths) {
         const [x, y] =
@@ -558,14 +537,14 @@ export class World {
           x,
           y,
           z: 40,
-          text: `${n} starved`,
+          text: `${n} excluded`,
           color: "#ffb3b6",
           t0: 0.35,
           t1: 1,
         });
       }
     }
-    // Federation founding and government formation appear as construction.
+    // Animate the hall when the government forms or dissolves.
     const built = new Map();
     for (const p of s.plots) {
       const old = prev?.plots.find((q) => q.id === p.id);
@@ -577,7 +556,6 @@ export class World {
       particles,
       texts,
       fieldFrom,
-      reserveFrom,
       built,
       assemblyPlots,
       ballotsToday,
@@ -588,7 +566,7 @@ export class World {
   buildPlaques(s) {
     this.plaqueLayer.innerHTML = "";
     this.plaques.clear();
-    for (const p of [...s.plots, { id: -1, name: "The wilds" }]) {
+    for (const p of s.plots) {
       const b = document.createElement("button");
       b.className = "plaque";
       b.dataset.plot = p.id;
@@ -606,31 +584,19 @@ export class World {
       if (!b) continue;
       const n = (ix.residents.get(p.id) || []).length;
       const weather = ["sun", "cloud", "rain"][p.weather];
-      const fed = p.federation >= 0;
+      const crop = cropStatus(p);
       const motions = (s.proposals || []).filter(
         (q) =>
           q.plot === p.id && (q.created === s.absoluteDay || q.closes === s.absoluteDay),
       ).length;
-      const html = `<span class="plaque-letter">${plotLetter(p)}</span><span class="plaque-body"><span class="plaque-row"><svg class="i"><use href="#i-${weather}"/></svg><b>${n}</b>${p.government ? `<svg class="i civic" aria-label="Governed"><use href="#i-hall"/></svg>` : ""}${fed ? `<svg class="i fed" aria-label="In a federation"><use href="#i-federation"/></svg>` : ""}${motions ? `<span class="plaque-motions" title="${motions} ${motions === 1 ? "motion" : "motions"} before the assembly today"><svg class="i"><use href="#i-ballot"/></svg>${motions}</span>` : ""}</span><span class="plaque-meter"><i style="width:${Math.round(clamp(p.stock / Math.max(1, p.capacity)) * 100)}%"></i></span></span>`;
+      const html = `<span class="plaque-letter">${plotLetter(p)}</span><span class="plaque-body"><span class="plaque-row"><svg class="i"><use href="#i-${weather}"/></svg><b>${n}</b>${p.government ? `<svg class="i civic" aria-label="Governed"><use href="#i-hall"/></svg>` : ""}${crop ? `<span title="${esc(crop)}"><svg class="i"><use href="#i-${p.cropEvent === "bumper" ? "sprout" : "alert"}"/></svg></span>` : ""}${motions ? `<span class="plaque-motions" title="${motions} ${motions === 1 ? "motion" : "motions"} before the assembly today"><svg class="i"><use href="#i-ballot"/></svg>${motions}</span>` : ""}</span><span class="plaque-meter"><i style="width:${Math.round(clamp(p.stock / Math.max(1, p.capacity)) * 100)}%"></i></span></span>`;
       if (b.dataset.html !== html) {
         b.innerHTML = html;
         b.dataset.html = html;
       }
       b.setAttribute(
         "aria-label",
-        `${p.name}: ${n} residents, ${p.stock} of ${p.capacity} field carrots, ${["sunny", "cloudy", "dark"][p.weather]}${p.government ? ", governed" : ""}${motions ? `, ${motions} motions today` : ""}`,
-      );
-    }
-    const wild = this.plaques.get(-1);
-    const n = (ix.residents.get(-1) || []).length;
-    const waiting = s.agents.filter((a) => !a.alive).length;
-    const html = `<span class="plaque-letter wild"><svg class="i"><use href="#i-tent"/></svg></span><span class="plaque-body"><span class="plaque-row"><b>${n}</b> in the wilds</span>${waiting ? `<span class="plaque-sub">${waiting} awaiting return</span>` : ""}</span>`;
-    if (wild && wild.dataset.html !== html) {
-      wild.innerHTML = html;
-      wild.dataset.html = html;
-      wild.setAttribute(
-        "aria-label",
-        `The wilds: ${n} outside every plot, ${waiting} awaiting return`,
+        `${p.name}: ${n} residents, ${p.stock} of ${p.capacity} field carrots, ${["sunny", "cloudy", "dark"][p.weather]}${p.government ? ", governed" : ""}${crop ? ", " + crop : ""}${motions ? `, ${motions} motions today` : ""}`,
       );
     }
   }
@@ -679,7 +645,6 @@ export class World {
     this.drawIsland(ctx);
     for (const r of this.layout.rects.values()) this.drawPlotGround(ctx, r);
     this.drawWildsGround(ctx);
-    this.drawFederations(ctx);
     const sprites = [];
     this.collectScenery(sprites);
     for (const r of this.layout.rects.values()) this.collectPlot(sprites, r);
@@ -891,36 +856,6 @@ export class World {
     }
   }
 
-  drawFederations(ctx) {
-    const z = this.camera.zoom;
-    const t = this.reduced ? 0 : this.time / 1000;
-    for (const f of this.s.federations || []) {
-      if (f.dissolved) continue;
-      const pts = f.plots.map((id) => this.plotPoint(id, 0.83, 0.79)).filter(Boolean);
-      ctx.save();
-      ctx.lineCap = "round";
-      for (let i = 0; i < pts.length; i++)
-        for (let j = i + 1; j < pts.length; j++) {
-          const a = this.project(...pts[i], 40),
-            b = this.project(...pts[j], 40);
-          const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 40 * z];
-          ctx.strokeStyle = "rgba(196,163,255,0.22)";
-          ctx.lineWidth = 7 * z;
-          ctx.beginPath();
-          ctx.moveTo(...a);
-          ctx.quadraticCurveTo(...mid, ...b);
-          ctx.stroke();
-          ctx.strokeStyle = "rgba(225,206,255,0.85)";
-          ctx.lineWidth = 1.6 * z;
-          ctx.setLineDash([6 * z, 9 * z]);
-          ctx.lineDashOffset = -t * 30 * z;
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-      ctx.restore();
-    }
-  }
-
   collectScenery(list) {
     const L = this.layout;
     const z = this.camera.zoom;
@@ -1049,7 +984,7 @@ export class World {
         draw: (ctx) => this.drawPlant(ctx, x, y, lift, z, sl.k),
       });
     }
-    // Hall and granary only exist with a government; a fire marks a plot without one.
+    // A hall marks a governed plot. Other plots gather around a fire.
     const [hx, hy] = this.plotPoint(p.id, 0.83, 0.79);
     const build = plan.built.get(p.id);
     if (p.government || build === "fall") {
@@ -1063,11 +998,6 @@ export class World {
       list.push({
         depth: hx + hy + size,
         draw: (ctx) => this.drawHall(ctx, hx, hy, size, rise, p),
-      });
-      const [gx, gy] = this.plotPoint(p.id, 0.86, 0.58);
-      list.push({
-        depth: gx + gy,
-        draw: (ctx) => this.drawGranary(ctx, gx, gy, z, rise, p),
       });
     } else {
       list.push({
@@ -1191,10 +1121,10 @@ export class World {
     // Roof.
     const ridgeA = up(this.project(x - s, y, lift), h + 14 * rise);
     const ridgeB = up(this.project(x + s, y, lift), h + 14 * rise);
-    const roof = p.federation >= 0 ? "#6d5a9c" : C.roof;
+    const roof = C.roof;
     this.poly(ctx, [up(base[3], h), up(base[2], h), ridgeB, ridgeA], roof);
     this.poly(ctx, [up(base[1], h), up(base[2], h), ridgeB], shade(roof, -0.08));
-    // Flag on a pole; its colour marks federation membership.
+    // A violet flag marks an occupied Trade role.
     const [fx, fy] = up(this.project(x + s * 0.9, y - s * 0.9, lift), 0);
     ctx.strokeStyle = "#5c4a3a";
     ctx.lineWidth = 1.2 * z;
@@ -1203,7 +1133,7 @@ export class World {
     ctx.lineTo(fx, fy - (h + 26) * z);
     ctx.stroke();
     const wave = this.reduced ? 0 : Math.sin(this.time / 300 + p.id) * 1.5 * z;
-    ctx.fillStyle = p.federation >= 0 ? "#c9a8ff" : "#f6efe0";
+    ctx.fillStyle = p.roles?.trade != null ? "#c9a8ff" : "#f6efe0";
     ctx.beginPath();
     ctx.moveTo(fx, fy - (h + 26) * z);
     ctx.quadraticCurveTo(
@@ -1222,41 +1152,6 @@ export class World {
       ctx.fill();
     }
   }
-  drawGranary(ctx, x, y, z, rise, p) {
-    if (rise <= 0) return;
-    const [px, py] = this.project(x, y, 3);
-    const r = 6 * z,
-      h = 16 * z * rise;
-    ctx.fillStyle = "rgba(20,40,30,0.2)";
-    ctx.beginPath();
-    ctx.ellipse(px, py, r * 1.3, r * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = C.granary;
-    ctx.fillRect(px - r, py - h, r * 2, h);
-    ctx.beginPath();
-    ctx.ellipse(px, py, r, r * 0.45, 0, 0, Math.PI);
-    ctx.fill();
-    // Fill gauge: carrots stored against treasury capacity.
-    const from = this.plan.reserveFrom.get(p.id) ?? p.reserve;
-    const fill = clamp(
-      lerp(from, p.reserve, ease(span(this.progress, 0.3, 0.9))) /
-        Math.max(1, p.reserveCapacity),
-    );
-    if (fill > 0) {
-      ctx.fillStyle = C.carrot;
-      const fh = Math.max(1.5 * z, (h - 3 * z) * fill);
-      ctx.fillRect(px - r * 0.45, py - 2 * z - fh, r * 0.9, fh);
-    }
-    ctx.fillStyle = C.granaryRoof;
-    ctx.beginPath();
-    ctx.moveTo(px - r * 1.25, py - h);
-    ctx.lineTo(px, py - h - 9 * z * rise);
-    ctx.lineTo(px + r * 1.25, py - h);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // ---------------------------------------------------------------- agents
   agentPosition(actor, p) {
     const { from, to } = actor;
     switch (actor.act) {
@@ -1328,7 +1223,7 @@ export class World {
         y = pos.y + wy;
       const r = roles.get(a.id) || [];
       const sel = this.selection.agent === a.id;
-      if (actor.act !== "die" || p < actor.delay + 0.3) {
+      if (actor.act !== "excluded" || p < actor.delay + 0.3) {
         const [gx, gy] = this.project(x, y, 3);
         this.shadows.push({
           x: gx,
@@ -1345,16 +1240,13 @@ export class World {
           let alpha = 1,
             scale = 1,
             tint = null;
-          if (actor.act === "die") {
+          if (actor.act === "excluded") {
             const d = span(p, actor.delay, actor.delay + 0.45);
             alpha = 1 - span(p, actor.delay + 0.3, actor.delay + 0.6);
             tint = d;
             if (alpha <= 0) return;
           }
           if (actor.act === "spawn") scale = Math.max(0.01, pos.pop ?? 1);
-          // Voting influence shows as size: the influential stand taller.
-          if (a.influence !== 1)
-            scale *= a.influence <= 0 ? 0.85 : 1 + Math.min(4, a.influence - 1) * 0.09;
           const asleep = actor.act === "sleep" && night > 0.4;
           this.drawAmoeboid(ctx, sx, sy, gy, z * scale, teamColor(a.team), {
             id: a.id,
@@ -1363,8 +1255,8 @@ export class World {
             asleep,
             walking: pos.walking,
             weak: a.body < (this.s.settings.bodyCapacity || 2),
-            officer: r.some((x) => x.kind === "officer"),
-            representative: r.some((x) => x.kind === "representative"),
+            officer: r.some((x) => x.kind === "justice"),
+            representative: r.some((x) => x.kind === "trade"),
             selected: sel,
           });
           // Activity props.
@@ -1393,7 +1285,7 @@ export class World {
             if (m > 0 && m < 1)
               this.drawThought(ctx, sx, sy - 10 * z - m * 22 * z, z, 1 - m);
           }
-          if (actor.act === "die")
+          if (actor.act === "excluded")
             this.drawWisp(ctx, sx, sy, z, span(p, actor.delay + 0.1, actor.delay + 0.8));
           if (asleep && !this.reduced && hash(a.id, 61) < 0.35) {
             const k = (t * 0.5 + hash(a.id, 62)) % 1;

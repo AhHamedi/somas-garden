@@ -14,12 +14,12 @@ export function setHTML(el, html) {
 }
 
 export function avatar(a, roles = [], cls = "") {
-  const officer = roles.some((r) => r.kind === "officer");
-  const rep = roles.some((r) => r.kind === "representative");
+  const officer = roles.some((r) => r.kind === "justice");
+  const rep = roles.some((r) => r.kind === "trade");
   const role = officer
-    ? `<svg class="i role" aria-label="Officer"><use href="#i-crown"/></svg>`
+    ? `<svg class="i role" aria-label="Justice"><use href="#i-crown"/></svg>`
     : rep
-      ? `<svg class="i role rep" aria-label="Representative"><use href="#i-flag"/></svg>`
+      ? `<svg class="i role rep" aria-label="Trade representative"><use href="#i-flag"/></svg>`
       : "";
   return `<span class="avatar ${cls} ${a.alive ? "" : "dead"}" style="background:${teamColor(a.team)}">${role}</span>`;
 }

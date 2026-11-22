@@ -1,7 +1,7 @@
 package society
 
 // A checkpoint is private server state, never an observer replay. In particular
-// it includes individual memories, record permissions and random-generator state.
+// it includes individual memories, pending record queries and random-generator state.
 import (
 	"encoding/json"
 	"errors"
@@ -9,7 +9,10 @@ import (
 	"math/rand"
 )
 
-const checkpointVersion = 1
+const checkpointVersion = 2
+
+// Old worlds can be replayed, but their rules and phase sequence cannot be resumed.
+var ErrArchivedCheckpoint = errors.New("checkpoint uses the previous MVP rules")
 
 // Keep the original math/rand stream exactly, including Source64 behavior.
 // Sources reset at each meteor, so restoring only skips draws within one month.
@@ -49,22 +52,9 @@ func restoreRandom(c randomCheckpoint) (*rand.Rand, *countedSource) {
 	return r, source
 }
 
-type agentPrivateState struct {
-	Memory  json.RawMessage
-	Permits map[string]int
-}
-type plotPrivateState struct {
-	GrowthRemainder float64
-	Rotation        []int
-	Records         []Event
-}
 type queryCheckpoint struct {
 	Actor, Month, Plot, Subject, From, To, Size, Total, Number int
 	Rows                                                       []Event
-}
-type ballotCheckpoint struct {
-	Electorate, RepresentativePlots map[int]int
-	Votes, PlotVotes                map[int]string
 }
 type cursorCheckpoint struct {
 	Query, Index, Offset int
@@ -72,35 +62,32 @@ type cursorCheckpoint struct {
 }
 
 type worldCheckpoint struct {
-	Version                                     int
-	Settings                                    Settings
-	Teams                                       []Team
-	TeamTokens                                  []string
-	Seed                                        int64
-	Agents                                      []*Agent
-	AgentPrivate                                []agentPrivateState
-	Plots                                       []*Plot
-	PlotPrivate                                 []plotPrivateState
-	Federations                                 []*Federation
-	Proposals                                   []*Proposal
-	Ballots                                     []ballotCheckpoint
-	Pending                                     []Pending
-	Events                                      []Event
-	Offers                                      []Offer
-	Month, Day, AbsoluteDay                     int
-	Phase                                       string
-	Done, Meteor                                bool
-	Months                                      []MonthlyResult
-	Political                                   *politicalState
-	Random                                      randomCheckpoint
-	Weather                                     []randomCheckpoint
-	PhaseIndex                                  int
-	Advance                                     bool
-	EventStart, NextEvent, NextOffer, NextQuery int
-	Reads, Receipts                             map[int][]Event
-	RecordPages                                 map[int][]RecordPage
-	Queries                                     map[int]queryCheckpoint
-	Cursors                                     map[string]cursorCheckpoint
+	Version                          int
+	Settings                         Settings
+	Teams                            []Team
+	TeamTokens                       []string
+	Seed                             int64
+	Agents                           []*Agent
+	Memories                         []json.RawMessage
+	Plots                            []*Plot
+	GrowthRemainders                 []float64
+	Proposals                        []*Proposal
+	Pending                          []Pending
+	Events                           []Event
+	Month, Day, AbsoluteDay          int
+	Phase                            string
+	Done, Meteor                     bool
+	Months                           []MonthlyResult
+	Political                        *politicalState
+	Random                           randomCheckpoint
+	Weather                          []randomCheckpoint
+	PhaseIndex                       int
+	Advance                          bool
+	EventStart, NextEvent, NextQuery int
+	Reads, Receipts                  map[int][]Event
+	RecordPages                      map[int][]RecordPage
+	Queries                          map[int]queryCheckpoint
+	Cursors                          map[string]cursorCheckpoint
 }
 
 // Checkpoint records all state needed to continue at a phase boundary. The host
@@ -111,12 +98,12 @@ func (w *World) Checkpoint() ([]byte, error) {
 	}
 	c := worldCheckpoint{
 		Version: checkpointVersion, Settings: w.Settings, Teams: w.Teams, Seed: w.Seed,
-		Agents: w.Agents, Plots: w.Plots, Federations: w.Federations, Proposals: w.Proposals,
-		Pending: w.Pending, Events: w.Events, Offers: w.Offers,
+		Agents: w.Agents, Plots: w.Plots, Proposals: w.Proposals,
+		Pending: w.Pending, Events: w.Events,
 		Month: w.Month, Day: w.Day, AbsoluteDay: w.AbsoluteDay, Phase: w.Phase,
 		Done: w.Done, Meteor: w.Meteor, Months: w.Months, Political: w.political,
 		Random: randomState(w.rngSource), PhaseIndex: w.phaseIndex, Advance: w.advance,
-		EventStart: w.eventStart, NextEvent: w.nextEvent, NextOffer: w.nextOffer, NextQuery: w.nextQuery,
+		EventStart: w.eventStart, NextEvent: w.nextEvent, NextQuery: w.nextQuery,
 		Reads: w.reads, Receipts: w.receipts, RecordPages: w.recordPages,
 		Queries: map[int]queryCheckpoint{}, Cursors: map[string]cursorCheckpoint{},
 	}
@@ -124,16 +111,13 @@ func (w *World) Checkpoint() ([]byte, error) {
 		c.TeamTokens = append(c.TeamTokens, t.Token)
 	}
 	for _, a := range w.Agents {
-		c.AgentPrivate = append(c.AgentPrivate, agentPrivateState{a.Memory, a.Permits})
+		c.Memories = append(c.Memories, a.Memory)
 	}
 	for _, p := range w.Plots {
-		c.PlotPrivate = append(c.PlotPrivate, plotPrivateState{p.GrowthRemainder, p.Rotation, p.Records})
+		c.GrowthRemainders = append(c.GrowthRemainders, p.GrowthRemainder)
 	}
 	for _, r := range w.weatherSources {
 		c.Weather = append(c.Weather, randomState(r))
-	}
-	for _, p := range w.Proposals {
-		c.Ballots = append(c.Ballots, ballotCheckpoint{p.Electorate, p.RepresentativePlots, p.Votes, p.PlotVotes})
 	}
 	for token, cursor := range w.recordCursors {
 		q := cursor.query
@@ -146,6 +130,13 @@ func (w *World) Checkpoint() ([]byte, error) {
 // RestoreCheckpoint consumes trusted private persistence, not uploaded replays.
 // Keeping this separate from Snapshot prevents private data reaching observers.
 func RestoreCheckpoint(data []byte) (*World, error) {
+	var header struct{ Version int }
+	if err := json.Unmarshal(data, &header); err != nil {
+		return nil, fmt.Errorf("invalid checkpoint: %w", err)
+	}
+	if header.Version == 1 {
+		return nil, ErrArchivedCheckpoint
+	}
 	var c worldCheckpoint
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("invalid checkpoint: %w", err)
@@ -156,16 +147,16 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 	if err := c.Settings.Validate(len(c.Teams)); err != nil {
 		return nil, fmt.Errorf("invalid checkpoint settings: %w", err)
 	}
-	if len(c.Agents) != len(c.Teams)*c.Settings.Copies || len(c.AgentPrivate) != len(c.Agents) || len(c.TeamTokens) != len(c.Teams) || len(c.Plots) != c.Settings.Plots || len(c.PlotPrivate) != len(c.Plots) || len(c.Weather) != len(c.Plots) || len(c.Ballots) != len(c.Proposals) || c.PhaseIndex < 0 || c.PhaseIndex >= len(Phases) || c.EventStart < 0 || c.EventStart > len(c.Events) {
+	if len(c.Agents) != len(c.Teams)*c.Settings.Copies || len(c.Memories) != len(c.Agents) || len(c.TeamTokens) != len(c.Teams) || len(c.Plots) != c.Settings.Plots || len(c.GrowthRemainders) != len(c.Plots) || len(c.Weather) != len(c.Plots) || c.PhaseIndex < 0 || c.PhaseIndex >= len(Phases) || c.EventStart < 0 || c.EventStart > len(c.Events) {
 		return nil, errors.New("checkpoint state is incomplete")
 	}
 	w := &World{
 		Settings: c.Settings, Teams: c.Teams, Seed: c.Seed, Agents: c.Agents, Plots: c.Plots,
-		Federations: c.Federations, Proposals: c.Proposals, Pending: c.Pending,
-		Events: c.Events, Offers: c.Offers, Month: c.Month, Day: c.Day, AbsoluteDay: c.AbsoluteDay,
+		Proposals: c.Proposals, Pending: c.Pending,
+		Events: c.Events, Month: c.Month, Day: c.Day, AbsoluteDay: c.AbsoluteDay,
 		Phase: c.Phase, Done: c.Done, Meteor: c.Meteor, Months: c.Months, political: c.Political,
 		phaseIndex: c.PhaseIndex, advance: c.Advance, eventStart: c.EventStart,
-		nextEvent: c.NextEvent, nextOffer: c.NextOffer, nextQuery: c.NextQuery,
+		nextEvent: c.NextEvent, nextQuery: c.NextQuery,
 		reads: c.Reads, receipts: c.Receipts, recordPages: c.RecordPages,
 		recordCursors: map[string]*recordCursor{}, Deciders: map[int]Decider{},
 	}
@@ -176,20 +167,24 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 		if a == nil || a.ID != i || a.Team < 0 || a.Team >= len(w.Teams) {
 			return nil, errors.New("invalid checkpoint individual")
 		}
-		a.Memory, a.Permits = c.AgentPrivate[i].Memory, c.AgentPrivate[i].Permits
+		a.Memory = c.Memories[i]
 	}
 	for i, p := range w.Plots {
 		if p == nil || p.ID != i {
 			return nil, errors.New("invalid checkpoint plot")
 		}
-		p.GrowthRemainder, p.Rotation, p.Records = c.PlotPrivate[i].GrowthRemainder, c.PlotPrivate[i].Rotation, c.PlotPrivate[i].Records
+		p.GrowthRemainder = c.GrowthRemainders[i]
 	}
-	for i, p := range w.Proposals {
+	for _, event := range w.Events {
+		if event.Recorded && event.Plot >= 0 && event.Plot < len(w.Plots) {
+			p := w.Plots[event.Plot]
+			p.Records = append(p.Records, event)
+		}
+	}
+	for _, p := range w.Proposals {
 		if p == nil {
 			return nil, errors.New("invalid checkpoint proposal")
 		}
-		p.Electorate, p.RepresentativePlots = c.Ballots[i].Electorate, c.Ballots[i].RepresentativePlots
-		p.Votes, p.PlotVotes = c.Ballots[i].Votes, c.Ballots[i].PlotVotes
 	}
 	w.rng, w.rngSource = restoreRandom(c.Random)
 	for _, state := range c.Weather {

@@ -38,7 +38,7 @@ func (w *World) cursor(q *recordSnapshot, index, offset int) string {
 	return token
 }
 
-// ReadRecordsPage opens one paid immutable query or resumes a free continuation.
+// ReadRecordsPage opens a free immutable query or resumes its continuation.
 // An opaque cursor is bound to its reader and month. Access is rechecked every
 // time; possession of a cursor never grants record access by itself.
 func (w *World) ReadRecordsPage(actor int, in RecordQuery) (RecordPage, error) {
@@ -74,12 +74,9 @@ func (w *World) ReadRecordsPage(actor int, in RecordQuery) (RecordPage, error) {
 				return RecordPage{}, errors.New("record subject must be an individual ID")
 			}
 		}
-		a, p, err := w.recordAccess(actor, in.Plot, subject, in.From, in.To)
+		_, p, err := w.recordAccess(actor, in.Plot, subject, in.From, in.To)
 		if err != nil {
 			return RecordPage{}, err
-		}
-		if !w.govSpend(a, w.Settings.ReadCost) {
-			return RecordPage{}, errors.New("not enough unpledged mind")
 		}
 		w.nextQuery++
 		q := &recordSnapshot{actor: actor, month: w.Month, plot: in.Plot, subject: subject, from: in.From, to: in.To, size: size, number: w.nextQuery, rows: p.Records[:len(p.Records):len(p.Records)]}

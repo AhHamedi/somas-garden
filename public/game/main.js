@@ -288,7 +288,7 @@ app.actions = {
     UI.renderLedger(app);
     wireLedger();
     updateInsets();
-    world.focusPlot(id);
+    if (id >= 0) world.focusPlot(id);
   },
   selectAgent(id) {
     const a = app.ix.agents.get(id);
@@ -627,7 +627,10 @@ function bind() {
         if (a === "guide") setup.openGuide();
         if (a === "export" && pb.id) location.href = `/api/society/runs/${pb.id}/export`;
         if (a === "to-meteor")
-          fastForward((f) => f.meteor, (app.ix.s.settings.days - app.ix.s.day + 1) * 8);
+          fastForward(
+            (f) => f.meteor,
+            (app.ix.s.settings.days - app.ix.s.day + 1) * PHASES.length,
+          );
       }),
   );
   menu.insertAdjacentHTML(
@@ -636,7 +639,10 @@ function bind() {
   );
   menu.querySelector('[data-action="to-meteor"]').onclick = () => {
     closeMenu();
-    fastForward((f) => f.meteor, (app.ix.s.settings.days - app.ix.s.day + 1) * 8);
+    fastForward(
+      (f) => f.meteor,
+      (app.ix.s.settings.days - app.ix.s.day + 1) * PHASES.length,
+    );
   };
   // Keyboard.
   document.addEventListener("keydown", (e) => {
