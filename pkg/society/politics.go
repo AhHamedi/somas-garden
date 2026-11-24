@@ -12,7 +12,7 @@ import (
 
 func (w *World) politicalState() *politicalState {
 	if w.political == nil {
-		w.political = &politicalState{Evidence: map[int]evidenceRecord{}, Sanctioned: map[int]bool{}, Aligned: map[int]int{}}
+		w.political = &politicalState{Evidence: map[int]evidenceRecord{}, Sanctioned: map[int]bool{}, VoteCredits: map[int]int{}}
 	}
 	return w.political
 }
@@ -158,7 +158,13 @@ func validateRule(key string, r Rule) error {
 		if r.Amount < 1 || r.Amount > 10000 || r.Amount != math.Trunc(r.Amount) {
 			return errors.New("daily base grant must be 1 to 10,000 whole tokens")
 		}
-		if r.Mode == "equal" || ((r.Mode == "productivity" || r.Mode == "alignment") && r.Limit > 0) {
+		if r.Mode == "equal" {
+			return nil
+		}
+		if r.Mode == "restraint" && (r.Limit < 1 || r.Limit > 10000) {
+			return errors.New("harvest restraint bonus limit must be 1 to 10,000")
+		}
+		if has([]string{"restraint", "participation", "productivity", "alignment"}, r.Mode) && r.Limit > 0 {
 			return nil
 		}
 	default:
@@ -170,7 +176,7 @@ func validateRule(key string, r Rule) error {
 // Canonical inputs contain only the fields that actually affect a decision.
 // Two ballots proposing the same change can therefore never conflict merely
 // because one included irrelevant metadata.
-func normaliseProposal(in ProposalInput) ProposalInput {
+func (w *World) normaliseProposal(in ProposalInput) ProposalInput {
 	switch in.Kind {
 	case "found", "dissolve":
 		return ProposalInput{Kind: in.Kind}
@@ -189,6 +195,19 @@ func normaliseProposal(in ProposalInput) ProposalInput {
 			}
 		}
 		if in.Key == "tokenAllocation" && r.Mode != "equal" {
+			// Accept the earlier API spellings from existing team strategies.
+			switch r.Mode {
+			case "productivity", "restraint":
+				r.Mode = "restraint"
+				if w.legacyRules {
+					r.Mode = "productivity"
+				}
+			case "alignment", "participation":
+				r.Mode = "participation"
+				if w.legacyRules {
+					r.Mode = "alignment"
+				}
+			}
 			r.Limit = in.Rule.Limit
 		}
 		return ProposalInput{Kind: in.Kind, Key: in.Key, Rule: r}
@@ -265,6 +284,13 @@ func title(in ProposalInput) string {
 
 func (w *World) governancePhase(decisions map[int]Decision) {
 	ps := w.politicalState()
+	// Inputs have been validated and reduced to their enactable fields before indexing.
+	type motionKey struct {
+		plot, target, limit int
+		kind, key, mode     string
+		amount              float64
+	}
+	ballots := make(map[motionKey]*Proposal)
 	for _, a := range w.Agents {
 		if !a.Alive {
 			continue
@@ -274,17 +300,32 @@ func (w *World) governancePhase(decisions map[int]Decision) {
 			w.setPledges(a, d.Pledge)
 		}
 		for _, input := range d.Proposals {
-			in := normaliseProposal(input)
+			in := w.normaliseProposal(input)
 			if err := w.validateProposal(a, in); err != nil {
 				w.event("proposal_rejected", a.ID, a.Plot, err.Error(), 0)
+				continue
+			}
+			key := motionKey{a.Plot, in.Target, in.Rule.Limit, in.Kind, in.Key, in.Rule.Mode, in.Rule.Amount}
+			p := ballots[key]
+			// Each resident's submissions are processed together.
+			if p != nil && p.Sponsors[len(p.Sponsors)-1] == a.ID {
 				continue
 			}
 			if !spend(a, w.Settings.ProposalCost) {
 				w.event("proposal_rejected", a.ID, a.Plot, "Insufficient unpledged mind", 0)
 				continue
 			}
+			if p != nil {
+				p.Sponsors = append(p.Sponsors, a.ID)
+				w.event("proposal", a.ID, a.Plot, "Co-sponsored "+p.Title, w.Settings.ProposalCost)
+				continue
+			}
 			ps.NextProposal++
-			p := &Proposal{ID: fmt.Sprintf("m%d-p%d", w.Month, ps.NextProposal), Author: a.ID, Plot: a.Plot, Input: in, Title: title(in), Status: "open", Created: w.AbsoluteDay, Closes: w.AbsoluteDay}
+			p = &Proposal{ID: fmt.Sprintf("m%d-p%d", w.Month, ps.NextProposal), Author: a.ID, Plot: a.Plot, Input: in, Title: title(in), Status: "open", Created: w.AbsoluteDay, Closes: w.AbsoluteDay}
+			if !w.legacyRules {
+				p.Sponsors = []int{a.ID}
+				ballots[key] = p
+			}
 			w.Proposals = append(w.Proposals, p)
 			w.event("proposal", a.ID, a.Plot, p.Title, w.Settings.ProposalCost)
 		}
@@ -355,6 +396,10 @@ func (w *World) castVote(a *Agent, p *Proposal, c VoteChoice) {
 	}
 	if tokens < 1 || (p.TallyBasis == "voters" && tokens != 1) || tokens > a.VotingTokens {
 		w.event("vote_rejected", a.ID, a.Plot, "Invalid token spend on "+p.ID, 0)
+		return
+	}
+	if !spend(a, w.Settings.VoteCost) {
+		w.event("vote_rejected", a.ID, a.Plot, "Insufficient unpledged mind for "+p.ID, 0)
 		return
 	}
 	a.VotingTokens -= tokens
@@ -430,10 +475,11 @@ func (w *World) votingPhase(decisions map[int]Decision) {
 			continue
 		}
 		passed := tally(p)
-		for id, choice := range p.Votes {
-			if (passed && choice == "yes") || (!passed && choice == "no") {
-				w.politicalState().Aligned[id]++
+		for id := range p.TokenSpends {
+			if w.legacyRules && ((p.Votes[id] == "yes") != passed) {
+				continue
 			}
+			w.politicalState().VoteCredits[id]++
 		}
 		if p.Input.Kind == "found" {
 			foundingPlots[p.Plot] = true
@@ -501,14 +547,18 @@ func (w *World) grantVotingTokens() {
 			if r, ok := p.Rules["tokenAllocation"]; ok {
 				grant = int(r.Amount)
 				switch r.Mode {
-				case "productivity":
+				case "restraint":
+					if w.Day > 1 {
+						grant += r.Limit / max(1, a.Harvested)
+					}
+				case "productivity": // Prior runs rewarded harvest.
 					grant += a.Harvested / r.Limit
-				case "alignment":
-					grant += ps.Aligned[a.ID] / r.Limit
+				case "participation", "alignment":
+					grant += ps.VoteCredits[a.ID] / r.Limit
 				}
 			}
 		}
 		a.VotingWeight, a.VotingTokens = grant, grant
 	}
-	ps.Aligned = map[int]int{}
+	ps.VoteCredits = map[int]int{}
 }

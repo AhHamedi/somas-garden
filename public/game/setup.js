@@ -22,7 +22,7 @@ const CTL = {
   capacityPerAgent: ["Field per Amoeboid", 1, 50, 1, 1000, "carrots"],
   startingStock: ["Starting stock", 0, 1, 0.05, 1, "%", 100],
   dailyGrowthPercent: ["Daily growth", 0, 100, 1, 100, "%"],
-  overeatingReward: ["First extra carrot", 0, 10, 0.1, 100, "points"],
+  overeatingReward: ["Each extra carrot", 0, 10, 0.1, 100, "points"],
   thinkingReward: ["Each mind spent thinking", 0, 10, 0.1, 100, "points"],
   representativeCapacity: ["Trade representative’s store", 2, 150, 1, 100000, "carrots"],
   blightChance: ["Blight chance", 0, 1, 0.01, 1, "%", 100],
@@ -35,6 +35,7 @@ const CTL = {
   "weatherRates.1": ["Cloudy", 0, 40, 1, 10000, "mind"],
   "weatherRates.2": ["Dark", 0, 40, 1, 10000, "mind"],
   weatherPersistence: ["Persistence", 0, 1, 0.05, 1, "%", 100],
+  voteCost: ["Cast a Yes or No ballot", 0, 5, 0.1, 100000, "mind"],
   proposalCost: ["Table a motion", 0, 5, 0.1, 100, "mind"],
   justiceCost: ["Justice order", 0, 2, 0.01, 100, "mind"],
   governmentCost: ["Found a government", 0, 100, 1, 1000, "mind"],
@@ -78,7 +79,7 @@ function mealChart(set, W) {
     L = 8,
     step = (W - L - 8) / (max + 1),
     bw = Math.min(30, step - 6);
-  const top = set.overeatingReward * Math.log2(1 + Math.max(1, max - need)) || 1;
+  const top = set.overeatingReward * Math.max(1, max - need) || 1;
   const bars = [];
   for (let e = 0; e <= max; e++) {
     const x = L + e * step + (step - bw) / 2;
@@ -95,7 +96,7 @@ function mealChart(set, W) {
         `<rect x="${x}" y="${base}" width="${bw}" height="${h}" rx="3" fill="var(--body)" opacity="${excluded ? 1 : 0.55}"/>${label ? `<text x="${x + bw / 2}" y="${base + h + 13}" text-anchor="middle" class="cv">${label}</text>` : ""}`,
       );
     } else {
-      const v = set.overeatingReward * Math.log2(1 + e - need);
+      const v = set.overeatingReward * (e - need);
       const h = (v / top) * 92;
       bars.push(
         `<rect x="${x}" y="${base - Math.max(2, h)}" width="${bw}" height="${Math.max(2, h)}" rx="3" fill="var(--joy)" opacity="${v ? 1 : 0.4}"/>${v ? `<text x="${x + bw / 2}" y="${base - h - 5}" text-anchor="middle" class="cv">${fmt(v, 1)}</text>` : ""}`,
@@ -120,9 +121,9 @@ function growthExample(set) {
 }
 
 function rewardExample(set) {
-  const food = 2 * set.overeatingReward;
+  const food = 3 * set.overeatingReward;
   const thought = 3 * set.thinkingReward;
-  return `<p class="note">Each extra carrot earns less than the previous one. Eating 3 above the daily need earns ${fmt(food, 2)} points. Thinking with 3 mind earns ${fmt(thought, 2)}.</p>`;
+  return `<p class="note">Eating 3 above the daily need earns ${fmt(food, 2)} points. Thinking with 3 mind earns ${fmt(thought, 2)}.</p>`;
 }
 
 function weatherChart(set, W) {
@@ -215,7 +216,7 @@ export class Setup {
         copy(previous.teams || this.app.config.teams),
         this.app.config.teams,
       ),
-      seed: previous.seed ?? 42,
+      seed: saved?.version >= 5 || (saved && saved.seed !== 42) ? saved.seed : undefined,
     };
     this.tab = tab;
     this.picking = null;
@@ -252,7 +253,7 @@ export class Setup {
   }
   num(key) {
     const [label, min, , step, hardMax, unit = ""] = CTL[key];
-    return `<label class="num"><span>${esc(label)}</span><span class="ctl-v"><input type="number" data-k="${key}" data-scale="1" min="${min}" max="${hardMax}" step="${step}" value="${this.get(key)}"/>${unit ? `<small>${esc(unit)}</small>` : ""}</span></label>`;
+    return `<label class="num"><span>${esc(label)}</span><span class="ctl-v"><input type="number" data-k="${key}" data-scale="1" min="${min}" max="${hardMax}" step="${step}" value="${this.get(key)}" aria-label="${esc(label)}"/>${unit ? `<small>${esc(unit)}</small>` : ""}</span></label>`;
   }
   charts() {
     const set = this.draft.settings;
@@ -348,7 +349,7 @@ export class Setup {
           ${card("Time", `${this.ctl("months")}${this.ctl("days")}`)}
           ${card("Land", this.ctl("plots"), c.plots)}
           ${card("Satisfaction", `${this.ctl("overeatingReward")}${this.ctl("thinkingReward")}${c.rewards}`)}
-          ${card("Seed", `<div class="seed-row"><input type="number" data-k="seed" data-scale="1" min="0" max="2147483647" value="${this.draft.seed}" aria-label="Random seed"/><button type="button" class="btn" data-dice>${icon("spark")}Random</button></div>`)}
+          ${card("Seed", `<div class="seed-row"><input type="number" data-k="seed" data-scale="1" min="0" max="2147483647" value="${this.draft.seed ?? ""}" placeholder="Random each run" aria-label="Random seed"/><button type="button" class="btn" data-dice>${icon("spark")}Auto</button></div>`)}
         </div>`;
       }
       case "teams":
@@ -368,7 +369,7 @@ export class Setup {
         </div>`;
       case "politics":
         return `<div class="cfg-grid">
-          ${card("Mind costs", ["proposalCost", "justiceCost", "governmentCost"].map((k) => this.num(k)).join(""))}
+          ${card("Mind costs", ["proposalCost", "voteCost", "justiceCost", "governmentCost"].map((k) => this.num(k)).join(""))}
           ${card("Voting weight", `${this.ctl("votingTokens")}<p class="cfg-key">Residents can vote to change how their plot allocates its daily tokens.</p>`)}
           ${card("Rule ballots", `<label class="field"><span>Count support by</span><select data-threshold aria-label="Rule threshold basis"><option value="voters" ${set.ruleThreshold === "voters" ? "selected" : ""}>Eligible residents</option><option value="tokens" ${set.ruleThreshold === "tokens" ? "selected" : ""}>Tokens cast for or against</option></select></label>${this.ctl("ruleFraction")}<p class="cfg-key">Support must exceed the chosen share. At 100%, everyone counted must agree. Elections use a majority of eligible residents.</p>`)}
         </div>`;
@@ -434,8 +435,11 @@ export class Setup {
     dlg.querySelectorAll("input[data-k]").forEach(
       (el) =>
         (el.oninput = () => {
-          if (el.value === "") return;
           const key = el.dataset.k;
+          if (el.value === "") {
+            if (key === "seed") this.draft.seed = undefined;
+            return;
+          }
           const value = Number(el.value) / Number(el.dataset.scale || 1);
           this.set(key, value);
           // Keep the slider and its number box together.
@@ -453,7 +457,7 @@ export class Setup {
       this.draft.settings.ruleThreshold = e.target.value;
     });
     dlg.querySelector("[data-dice]")?.addEventListener("click", () => {
-      this.draft.seed = Math.floor(Math.random() * 1e6);
+      this.draft.seed = undefined;
       this.drawBody();
     });
     dlg
@@ -520,7 +524,7 @@ export class Setup {
       try {
         localStorage.setItem(
           "amoeboids.setup.v2",
-          JSON.stringify({ ...this.draft, version: 4 }),
+          JSON.stringify({ ...this.draft, version: 5 }),
         );
       } catch {}
       const button = dlg.querySelector('button[type="submit"]');
@@ -614,7 +618,7 @@ export class Setup {
             `<label class="field"><span>${label}</span><input type="number" data-b="${k}" value="${b[k] ?? (k === "voteTokens" ? 1 : 0)}" min="${min}" ${max === null ? "" : `max="${max}"`} step="${step}"/><small>${help}</small></label>`,
         )
         .join("")}
-        <label class="field"><span>Default vote</span><select data-b="vote">${["yes", "no", "abstain"].map((v) => `<option ${b.vote === v ? "selected" : ""}>${v}</option>`).join("")}</select><small>Yes and no spend tokens. Abstaining is free.</small></label>
+        <label class="field"><span>Default vote</span><select data-b="vote">${["yes", "no", "abstain"].map((v) => `<option ${b.vote === v ? "selected" : ""}>${v}</option>`).join("")}</select><small>Each Yes or No costs tokens and ${fmt(this.draft.settings.voteCost, 2)} mind. Abstaining is free.</small></label>
         <label class="field"><span>Found a government</span><select data-b="government"><option value="true" ${b.government ? "selected" : ""}>Propose when possible</option><option value="false" ${!b.government ? "selected" : ""}>Never propose</option></select></label>
         <label class="field"><span>Harvest ranking</span><input id="harvest-ranking" value="${esc((b.harvestRanking || []).join(", "))}" placeholder="e.g. 2, 0, 1"/><small>List every active resident of the plot in preferred order. Leave blank to abstain.</small></label></div>`;
     if (this.mode === "rules")
@@ -648,7 +652,7 @@ export class Setup {
         )}</div><button type="button" class="btn" id="add-rule">${icon("plus")}Add a rule</button>
         <label class="field wide" style="margin-top:18px"><span>Standing proposals</span><textarea class="code" id="standing" style="min-height:110px" spellcheck="false">${esc(JSON.stringify(b.proposals || [], null, 2))}</textarea><small>Proposal inputs submitted in the Motions phase, using the policy catalogue's keys.</small></label>`;
     if (this.mode === "go")
-      body = `<p class="note" style="margin-bottom:12px">Import a phase-aware Go behaviour. The server checks and compiles it before it is used; each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
+      body = `<p class="note" style="margin-bottom:12px">Import your team’s Go file into this workspace. For a shared match, give the organiser the same file to import. Each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
     dlg.innerHTML = `<div class="dlg-head"><h2 id="strategy-title">${esc(t.name)}</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div>
       <div class="dlg-tabs">${modes.map(([id, n]) => `<button data-mode="${id}" class="${this.mode === id ? "active" : ""}">${n}</button>`).join("")}</div>
       <div class="dlg-body">${body}</div>
@@ -847,8 +851,9 @@ export class Setup {
 
   openGuide() {
     const dlg = $("guide-dialog");
+    const earlierRules = this.app.ix?.s.version === 6;
     dlg.innerHTML = `<div class="dlg-head"><h2 id="guide-title">How to watch</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div><div class="dlg-body guide">
-      <p>You are the observer. Teams of Amoeboids choose plots at the start of each month. Each resident decides how much to harvest and eat, which rules to propose and where to spend its voting tokens.</p>
+      <p>You are the observer. ${earlierRules ? "Amoeboids choose plots simultaneously at the start of each month." : "At the start of each month, Amoeboids choose plots in a shuffled order. Each sees the residents who have already settled on every plot."} Each resident decides how much to harvest and eat, which rules to propose and where to spend its voting tokens.</p>
       <h3>Controls</h3><dl>
         <dt><kbd>Space</kbd></dt><dd>Play or pause. Play continues until you stop it.</dd>
         <dt><kbd>→</kbd></dt><dd>Advance one phase.</dd>
@@ -860,7 +865,7 @@ export class Setup {
       <p>Select a plot to inspect its residents, harvest order and crop conditions. Each resident stays on that plot for the month. A blight puts the plot at risk. Its Trade representative receives donations from other plots and can send carrots to residents. The Extra carrots event adds up to one daily meal per resident, if the field has room.</p>
       <h3>Rules of the world</h3>
       <p>Residents can submit their preferred order for the whole harvest queue. Every active resident may propose rules, elect a representative for Trade or Justice, and vote to revoke either role. Justice handles sanctions. Rule ballots count either residents or tokens, as the plot’s threshold specifies.</p>
-      <p>Eating meets a resident’s daily need. Extra food earns diminishing satisfaction. Set the rewards for extra food and thinking under New world → World → Satisfaction. An excluded resident’s carrots disappear. The meteor resets plots and roles each month, and residents keep their private memories.</p>
+      <p>Eating meets a resident’s daily need. ${earlierRules ? "Extra food earns diminishing satisfaction in this saved world." : "Each carrot above that need earns the configured satisfaction reward."} Set the rewards for extra food and thinking under New world → World → Satisfaction. An excluded resident’s carrots disappear. The meteor resets plots and roles each month, and residents keep their private memories.</p>
       <p><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the Go agent example</a></p></div>`;
     dlg.querySelector("[data-close]").onclick = () => dlg.close();
     dlg.showModal();

@@ -156,6 +156,7 @@ func main() {
 	debug.SetMemoryLimit(64 << 20)
 	reader := json.NewDecoder(bufio.NewReader(os.Stdin))
 	writer := bufio.NewWriter(os.Stdout)
+	fmt.Fprintln(os.Stdout, "ready")
 	for {
 		var v View
 		if err := reader.Decode(&v); err != nil {
@@ -318,7 +319,32 @@ func (w *strategyWorker) start() error {
 	}
 	w.output = bufio.NewReader(out)
 	w.cmd.Stderr = io.Discard
-	return w.cmd.Start()
+	if err := w.cmd.Start(); err != nil {
+		w.closeLocked()
+		return err
+	}
+	// Loading the executable belongs to world setup, outside the first ballot
+	// or placement decision's budget. No agent callback runs during this handshake.
+	ready := make(chan error, 1)
+	go func(reader *bufio.Reader) {
+		var marker [6]byte
+		_, err := io.ReadFull(reader, marker[:])
+		if err == nil && string(marker[:]) != "ready\n" {
+			err = errors.New("unexpected strategy startup response")
+		}
+		ready <- err
+	}(w.output)
+	select {
+	case err := <-ready:
+		if err != nil {
+			w.closeLocked()
+		}
+		return err
+	case <-time.After(5 * time.Second):
+		w.closeLocked()
+		<-ready
+		return errors.New("strategy worker timed out during startup")
+	}
 }
 func (w *strategyWorker) closeLocked() {
 	if w.cmd != nil && w.cmd.Process != nil {

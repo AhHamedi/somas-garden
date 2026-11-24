@@ -163,7 +163,11 @@ func TestUnequalTeamSizes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(w.Agents) != 6 || w.Agents[2].Team != 1 || w.Plots[0].Capacity != 6*s.CapacityPerAgent {
+	var counts [2]int
+	for _, a := range w.Agents {
+		counts[a.Team]++
+	}
+	if counts != [2]int{2, 4} || w.Plots[0].Capacity != 6*s.CapacityPerAgent {
 		t.Fatal("wrong team sizes or field capacity")
 	}
 	b, err := w.Checkpoint()

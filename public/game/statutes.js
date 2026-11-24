@@ -73,6 +73,37 @@ export const STATUTES = [
     options: [
       { mode: "equal", label: "Equal daily grant", params: ["amount"] },
       {
+        mode: "restraint",
+        label: "Reward harvesting less",
+        short:
+          "Divide the bonus limit by yesterday’s harvest, using 1 for a zero harvest. Round down.",
+        params: ["amount", "limit"],
+      },
+      {
+        mode: "participation",
+        label: "Reward participation",
+        short: "Every Yes or No ballot counts once, whichever side wins.",
+        params: ["amount", "limit"],
+      },
+    ],
+    params: {
+      amount: ["Base grant", "1 to 10,000 tokens per resident"],
+      limit: [
+        "Bonus rate",
+        "For harvest restraint, the maximum bonus (1–10,000). For participation, the number of ballots per bonus token (at least 1).",
+      ],
+    },
+  },
+].map((rule) => ({ ...rule, scope: "local" }));
+
+// Replays and resumable v6 worlds keep the laws they were created with.
+export function statuteForVersion(st, version) {
+  if (st?.key !== "tokenAllocation" || version !== 6) return st;
+  return {
+    ...st,
+    options: [
+      st.options[0],
+      {
         mode: "productivity",
         label: "Reward productivity",
         short: "Previous day's harvest",
@@ -86,14 +117,11 @@ export const STATUTES = [
       },
     ],
     params: {
-      amount: ["Base grant", "1 to 10,000 tokens per resident"],
-      limit: [
-        "Bonus rate",
-        "Positive whole units of harvest or aligned votes per additional token",
-      ],
+      ...st.params,
+      limit: ["Bonus rate", "Whole carrots or aligned votes per additional token"],
     },
-  },
-].map((rule) => ({ ...rule, scope: "local" }));
+  };
+}
 
 export const DECISIONS = [
   {

@@ -132,7 +132,7 @@ func (w *World) leaving(a *Agent, plot int) {
 	}
 	a.Pledges = map[string]float64{}
 	a.VotingWeight, a.VotingTokens, a.LastPlaceUntil = 0, 0, 0
-	delete(w.politicalState().Aligned, a.ID)
+	delete(w.politicalState().VoteCredits, a.ID)
 }
 
 // Every active individual may audit every plot's public actions for the month.

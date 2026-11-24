@@ -115,7 +115,9 @@ export function teamTable(study, sc, teamCount) {
     no = new Array(teamCount).fill(0),
     abstain = new Array(teamCount).fill(0);
   for (const m of sc.motions.filter((m) => months.has(m.month))) {
-    if (m.authorTeam >= 0) authored[m.authorTeam]++;
+    if (m.sponsors?.length) {
+      for (const id of m.sponsors) authored[study.agentTeams[id]]++;
+    } else if (m.authorTeam >= 0) authored[m.authorTeam]++;
     m.teamYes.forEach((v, i) => (yes[i] += v));
     m.teamNo.forEach((v, i) => (no[i] += v));
     m.teamAbstain.forEach((v, i) => (abstain[i] += v));
@@ -446,6 +448,7 @@ export function csvMotions(study, plotNames, teamNames) {
     "eligible_residents",
     "author",
     "author_team",
+    "sponsor_ids",
     ...teamNames.flatMap((n) => [
       `${n}_residents_yes`,
       `${n}_residents_no`,
@@ -475,6 +478,7 @@ export function csvMotions(study, plotNames, teamNames) {
       m.electorate,
       study.agentNames?.[m.author] ?? m.author,
       teamNames[m.authorTeam] ?? "",
+      (m.sponsors || [m.author]).join(" "),
       ...teamNames.flatMap((_, i) => [m.teamYes[i], m.teamNo[i], m.teamAbstain[i]]),
     ]);
   return csv(rows);

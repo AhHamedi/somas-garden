@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -185,11 +186,78 @@ func TestDownloadableStrategyRunsThroughWorker(t *testing.T) {
 		{ID: 0, Residents: []int{0, 8}, Roles: map[string]int{"trade": 8}},
 		{ID: 1, Residents: []int{4}, Roles: map[string]int{"trade": 4}, AidNeeded: 2},
 	}}
+	placement := v
+	placement.Phase = "placement"
+	placement.Self.Plot = -1
+	if got := worker.Decide(placement); got.PlotChoice == nil || *got.PlotChoice != 1 {
+		t.Fatalf("uploaded example did not choose the less crowded field: %+v", got)
+	}
 	if got := worker.Decide(v); !slices.Equal(got.HarvestRanking, []int{8, 0}) {
 		t.Fatalf("example ranking = %+v", got)
 	}
 	v.Phase = "transfers"
 	if got := worker.Decide(v); got.Gift == nil || got.Gift.To != 4 || got.Gift.Amount != 2 {
 		t.Fatalf("example gift = %+v", got)
+	}
+}
+
+func TestTwoImportedTeamsSeeEarlierPlacements(t *testing.T) {
+	t.Setenv("SELFORG_ENGINE_SECRET", "test-society-secret")
+	t.Setenv("SOCIETY_DATA_DIR", t.TempDir())
+	binary := "go"
+	if runtime.GOOS == "windows" {
+		binary = "go.exe"
+	}
+	t.Setenv("GO_BINARY", filepath.Join(runtime.GOROOT(), "bin", binary))
+	var teams []society.Team
+	for plot, name := range []string{"A", "B"} {
+		source := fmt.Sprintf(`package main
+import "encoding/json"
+func Decide(v View) Action {
+	if v.Phase != "placement" { return Action{} }
+	plot := %d
+	seen := len(v.Plots[0].Residents) + len(v.Plots[1].Residents)
+	memory,_ := json.Marshal(seen)
+	return Action{PlotChoice:&plot, Memory:memory}
+}`, plot)
+		body, _ := json.Marshal(map[string]string{"name": name, "source": source})
+		code, res := societyRequest(t, "POST", "strategies", string(body))
+		if code != 201 {
+			t.Fatalf("upload %s: %d %s", name, code, res["error"])
+		}
+		var id string
+		if err := json.Unmarshal(res["id"], &id); err != nil {
+			t.Fatal(err)
+		}
+		teams = append(teams, society.Team{Name: name, StrategyID: id})
+	}
+	body, _ := json.Marshal(map[string]any{"teams": teams, "seed": 42, "settings": map[string]int{"copies": 50, "plots": 2}})
+	code, res := societyRequest(t, "POST", "runs", string(body))
+	if code != 201 {
+		t.Fatalf("shared run: %d %s", code, res["error"])
+	}
+	var id string
+	if err := json.Unmarshal(res["id"], &id); err != nil {
+		t.Fatal(err)
+	}
+	defer forgetSocietyRun(id)
+	code, res = societyRequest(t, "POST", "runs/"+id+"/step", `{"count":1}`)
+	if code != 200 {
+		t.Fatalf("placements: %d %s", code, res["error"])
+	}
+	run, err := loadRun(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[int]bool{}
+	for _, a := range run.World.Agents {
+		var n int
+		if err := json.Unmarshal(a.Memory, &n); err != nil || a.Plot != a.Team || a.Error != "" || n < 0 || n >= 100 || seen[n] {
+			t.Fatalf("resident %d: plot %d team %d memory %s error %s", a.ID, a.Plot, a.Team, a.Memory, a.Error)
+		}
+		seen[n] = true
+	}
+	if len(seen) != 100 {
+		t.Fatalf("saw %d placement turns", len(seen))
 	}
 }

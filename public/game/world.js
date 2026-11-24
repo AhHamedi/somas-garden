@@ -399,7 +399,9 @@ export class World {
     );
     const assemblyPlots = new Set(ballotsToday.map((p) => p.plot));
     const proposers = new Set(
-      (s.proposals || []).filter((p) => p.created === s.absoluteDay).map((p) => p.author),
+      (s.proposals || [])
+        .filter((p) => p.created === s.absoluteDay)
+        .flatMap((p) => p.sponsors || [p.author]),
     );
     const seatCounters = new Map();
 

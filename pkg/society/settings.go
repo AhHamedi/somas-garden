@@ -15,7 +15,7 @@ func DefaultSettings() Settings {
 		PersonalCapacity: 12, RepresentativeCapacity: 60,
 		WeatherRates: []float64{12, 8, 4}, WeatherPersistence: .6, BlightChance: .04, BumperChance: .04,
 		VotingTokens: 6, RuleThreshold: "voters", RuleFraction: .5,
-		ProposalCost: 1, JusticeCost: .2, GovernmentCost: 10,
+		VoteCost: 1, ProposalCost: 1, JusticeCost: .2, GovernmentCost: 10,
 		DecisionMS: 100, MemoryBytes: 1 << 20,
 	}
 }
@@ -30,7 +30,7 @@ func (s *Settings) UnmarshalJSON(b []byte) error {
 	if cost, ok := fields["officerCost"]; ok && fields["justiceCost"] == nil {
 		fields["justiceCost"] = cost
 	}
-	for _, k := range []string{"officerCost", "foundingWindow", "harvestLimit", "reservePerResident", "outsideMind", "respawnDelay", "startingInfluence", "maxInfluence", "voteCost", "readCost", "offerCost", "federationCost", "joiningCost", "enforcementCost", "recordsCost", "federationRunningCost", "disputeWindow", "immigrationLookback"} {
+	for _, k := range []string{"officerCost", "foundingWindow", "harvestLimit", "reservePerResident", "outsideMind", "respawnDelay", "startingInfluence", "maxInfluence", "readCost", "offerCost", "federationCost", "joiningCost", "enforcementCost", "recordsCost", "federationRunningCost", "disputeWindow", "immigrationLookback"} {
 		delete(fields, k)
 	}
 	b, err := json.Marshal(fields)
@@ -59,7 +59,7 @@ func (s Settings) validatePopulation(teams, population int) error {
 	if s.CapacityPerAgent < 1 || s.CapacityPerAgent > 1000 || s.Plots > population*s.CapacityPerAgent || s.PersonalCapacity < 1 || s.PersonalCapacity > 10000 || s.RepresentativeCapacity <= s.PersonalCapacity || s.RepresentativeCapacity > 100000 {
 		return fmt.Errorf("invalid storage or harvest capacity")
 	}
-	vals := []float64{s.StartingStock, s.Growth, s.ProductiveCapacity, s.OvereatingReward, s.ThinkingReward, s.BodyCapacity, s.MindCapacity, s.StartingMind, s.WeatherPersistence, s.BlightChance, s.BumperChance, s.RuleFraction, s.ProposalCost, s.JusticeCost, s.GovernmentCost}
+	vals := []float64{s.StartingStock, s.Growth, s.ProductiveCapacity, s.OvereatingReward, s.ThinkingReward, s.BodyCapacity, s.MindCapacity, s.StartingMind, s.WeatherPersistence, s.BlightChance, s.BumperChance, s.RuleFraction, s.VoteCost, s.ProposalCost, s.JusticeCost, s.GovernmentCost}
 	for _, v := range vals {
 		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 100000 {
 			return fmt.Errorf("settings must be finite nonnegative numbers")

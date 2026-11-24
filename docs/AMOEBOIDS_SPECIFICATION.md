@@ -1,10 +1,10 @@
 # Amoeboids MVP specification
 
-Revised 22 November 2026
+Revised 24 November 2026
 
 ## The game and its clock
 
-Six teams each supply a strategy. Fifty individuals run each strategy independently in the default experiment. At the beginning of each month, every Amoeboid chooses a plot. It stays there while active. Its daily choices concern how to use that plot’s crop, how to vote and whether to help others. It can choose another plot at the next monthly reset.
+Six teams each supply a strategy. Fifty individuals run each strategy independently in the default experiment. Each new run assigns individual IDs in a seeded shuffle across teams. IDs stay fixed across months. At each monthly reset, individuals choose plots in a fresh random order. Each choice takes effect immediately, so the next individual sees the IDs already settled on every plot. Residents stay on their chosen plots until exclusion or the next reset. Each day they decide how to use the crop, how to vote and whether to help others.
 
 The objective is individual satisfaction. Extra food and thinking add to the score. Team results report the performance of all copies of that strategy. A representative’s carrot holdings and a resident’s voting tokens have no score of their own.
 
@@ -49,22 +49,22 @@ The result is **B, A, C**, on 5, 3 and 1 points respectively. Suppose the field 
 
 At dawn, each occupied plot grows a percentage of its remaining carrots, up to field capacity. The default is 40%. A field with 10 carrots and room to grow adds 4. Fractions carry over to the next day. Empty fields cannot regrow unaided. Worlds saved under the previous rules keep their original growth model.
 
-New world settings give independent rewards for the first extra carrot and each mind spent thinking. Both default to 1 and either can be zero. Meal satisfaction is `overeating reward × log2(1 + carrots eaten above daily need)`. Thinking earns `thinking reward × mind spent`. With the defaults and a daily need of two, a meal of five earns two points. The body changes by the amount eaten minus daily need, up to body capacity. If it reaches zero the individual is excluded. An active individual can then spend available mind on thinking. With six mind spent, the five-carrot meal and thinking give eight satisfaction that day.
+New world settings give independent rewards for each extra carrot and each mind spent thinking. Both default to 1 and either can be zero. Meal satisfaction is `overeating reward × carrots eaten above daily need`. Thinking earns `thinking reward × mind spent`. With the defaults and a daily need of two, a meal of five earns three points. The body changes by the amount eaten minus daily need, up to body capacity. If it reaches zero the individual is excluded. An active individual can then spend available mind on thinking. With six mind spent, the five-carrot meal and thinking give nine satisfaction that day.
 
 ## Proposals, rule thresholds and voting tokens
 
-Any active resident may submit a local proposal, including a motion to found a government. Founding takes a strict majority of eligible residents and a collective mind pledge of 10 by default. Once founded, the government lets residents adopt, amend or repeal a rule and elect or revoke a department holder. Proposing a valid motion costs one mind by default. Approved decisions take effect the following morning. If conflicting motions pass on the same subject, the one with the most Yes support wins. A tie between different outcomes leaves the current arrangement in place.
+Any active resident may submit a local proposal, including a motion to found a government. Founding takes a strict majority of eligible residents and a collective mind pledge of 10 by default. Once founded, the government lets residents adopt, amend or repeal a rule and elect or revoke a department holder. Identical substantive proposals on the same plot and day open one ballot. Each distinct sponsor pays the proposal cost once (one mind by default). Different candidates, rule values, plots and days remain separate. Sponsoring a motion does not cast a vote. Approved decisions take effect the following morning. If conflicting motions pass on the same subject, the one with the most Yes support wins. A tie between different outcomes leaves the current arrangement in place.
 
-**Voting weight** is the number of voting tokens granted to an individual for the day. Its **balance** is how many it still has to spend. The daily grant replaces the previous balance. A token committed to one ballot cannot also count on a second ballot. Counting residents costs one token per Yes or No. In a token-counted rule vote a resident chooses how many remaining tokens to commit to Yes or No. Abstaining costs zero.
+**Voting weight** is the number of voting tokens granted to an individual for the day. Its **balance** is how many it still has to spend. The daily grant replaces the previous balance. A token committed to one ballot cannot also count on a second ballot. Each accepted Yes or No costs the configured vote cost in unpledged mind (one by default), once per ballot. Counting residents also costs one token per Yes or No. In a token-counted rule vote a resident chooses how many remaining tokens to commit to Yes or No. Abstaining costs zero.
 
-| Rule a plot can change | Available choices                                                         |
-| ---------------------- | ------------------------------------------------------------------------- |
-| Harvest order          | Ranked resident ballots or random order                                   |
-| Harvest quota          | An advisory quantity or unrestricted harvesting                           |
-| Rule threshold         | Count eligible residents or tokens cast, and choose the fraction required |
-| Token allocation       | Equal daily grant, or a base grant plus a productivity or alignment bonus |
+| Rule a plot can change | Available choices                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| Harvest order          | Ranked resident ballots or random order                                            |
+| Harvest quota          | An advisory quantity or unrestricted harvesting                                    |
+| Rule threshold         | Count eligible residents or tokens cast, and choose the fraction required          |
+| Token allocation       | Equal daily grant, or a base grant plus a harvest restraint or participation bonus |
 
-For **productivity**, the input is the previous day’s carrots harvested. For **alignment**, it is the previous day’s votes that agreed with the ballot outcome. For either formula, divide the input by the enacted units per bonus token and round down, then add the base grant. For example, a base of four and one bonus for every three harvested carrots gives a resident who harvested eight a daily voting weight of six. The default grant is six equal tokens per resident.
+The default grant is six equal tokens per resident. Under **harvest restraint**, add `floor(limit / max(1, yesterday’s harvest))` to the base. With a base of four and a limit of six, harvesting zero or one gives ten tokens tomorrow, harvesting two gives seven, and harvesting eight gives four. The limit caps the bonus and can be set from 1 to 10,000. Only the base is available without a previous day. Under **participation**, add one token per enacted number of Yes or No ballots cast yesterday. Either side earns the same credit, once per ballot. Abstention earns none.
 
 ### The same rule under two thresholds
 

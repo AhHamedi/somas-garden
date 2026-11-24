@@ -88,21 +88,33 @@ try {
   assert.match(await setup.locator("#setup-summary").innerText(), /300/);
   await page.setViewportSize({ width: 1440, height: 900 });
   await setup.locator('[data-stab="world"]').click();
-  await setup.getByRole("spinbutton", { name: "First extra carrot" }).fill("1.5");
+  assert.equal(
+    await setup.getByRole("spinbutton", { name: "Random seed" }).inputValue(),
+    "",
+  );
+  await setup.getByRole("spinbutton", { name: "Random seed" }).fill("42");
+  await setup.getByRole("spinbutton", { name: "Each extra carrot" }).fill("1.5");
   await setup.getByRole("spinbutton", { name: "Each mind spent thinking" }).fill("0");
   assert.match(
     await setup.locator('[data-chart="rewards"]').innerText(),
-    /earns 3 points.*earns 0/s,
+    /earns 4.5 points.*earns 0/s,
   );
   await setup.getByRole("button", { name: "Food", exact: true }).click();
   await setup.getByRole("spinbutton", { name: "Daily growth", exact: true }).fill("45");
   assert.match(await setup.locator('[data-chart="growth"]').innerText(), /grow 4.5 more/);
+  await setup.getByRole("button", { name: "Politics", exact: true }).click();
+  await setup.getByRole("spinbutton", { name: "Cast a Yes or No ballot" }).fill("0.5");
   await page.click('#setup-dialog button[type="submit"]');
   await page.waitForFunction(() => window.amoeboids?.ix, null, { timeout: 30000 });
   const settings = await page.evaluate(() => amoeboids.ix.s.settings);
   assert.deepEqual(
-    [settings.overeatingReward, settings.thinkingReward, settings.dailyGrowthPercent],
-    [1.5, 0, 45],
+    [
+      settings.overeatingReward,
+      settings.thinkingReward,
+      settings.dailyGrowthPercent,
+      settings.voteCost,
+    ],
+    [1.5, 0, 45, 0.5],
   );
   const initialRunId = await page.evaluate(() => amoeboids.pb.id);
 

@@ -1,6 +1,6 @@
 # Amoeboids
 
-Amoeboids is a programmable society game. Each individual chooses a carrot plot at the start of the month and shares its harvest with the same neighbours until the reset. Residents rank one another for harvest, spend voting tokens on decisions and elect representatives. A blighted plot needs food from another plot’s Trade representative by the end of the day.
+Amoeboids is a programmable society game. Each individual chooses a carrot plot at the start of the month and shares its harvest with the same neighbours until the reset. Residents rank one another for harvest, spend mind and voting tokens on decisions and elect representatives. A blighted plot needs food from another plot’s Trade representative by the end of the day.
 
 The default run has six teams of 50 individuals, six plots and twelve 30-day months. Each individual chooses how much to harvest, eat and think. Extra food and thinking earn satisfaction. Private memory lets a strategy use its experience when the next month begins.
 
@@ -42,13 +42,19 @@ Open **New world → Choose Amoeboids** to add or swap a preset, set individual 
 | Tinkerers     | Try four strategies across months and use their own scores to choose the next one. |
 | Locusts       | Rank themselves first and try to fill their stores.                                |
 | Envoys        | Elect Trade representatives and direct spare carrots toward blighted plots.        |
-| Barons        | Support productivity-based voting tokens and eat spare carrots for satisfaction.   |
+| Barons        | Support a voting bonus for harvesting less and eat spare carrots for satisfaction. |
 | Sunchasers    | Choose a promising plot for sunlight at reset and spend mind on thinking.          |
 | Minimalists   | Gather only enough for today and save their mind.                                  |
 | Stockpilers   | Store up to three meals, eat one and spend spare mind on thinking.                 |
 | Feasters      | Fill their store, eat everything and skip thinking.                                |
 
 All residents can observe public actions. The observer interface lets the person running the experiment inspect decisions, outcomes and monthly results while the agents make their own choices.
+
+## Submitting a team for the shared game
+
+Each team can test its Go strategy in its own browser workspace. For the final match, send the organiser the same `.go` file and the team name. The organiser opens **New world → Choose Amoeboids → Edit behaviour → Go code**, imports one file for each team, checks the sizes and creates a single world containing the whole roster. Uploads in separate browser workspaces stay separate.
+
+Teams who want version control can fork this repository, push their team branch to their fork and open a pull request here. A merge into main is optional for running the match.
 
 ## Reproducible experiments
 
@@ -64,7 +70,7 @@ For a smaller run, adjust the number of copies, plots, days and months.
 go run ./cmd/society -copies 5 -plots 3 -days 10 -months 2 -seed 42
 ```
 
-`-config setup.json` accepts an object containing `settings` and `teams`. The headless command runs built-in and visual-builder policies. Imported Go strategies run through the local application service, which compiles them and transports private memory between callbacks. Hold settings and seed fixed to compare replay outcomes. To study adaptation, compare strategies with and without retained memory across several seeds.
+`-config setup.json` accepts an object containing `settings` and `teams`. The headless command runs built-in and visual-builder policies. Imported Go strategies run through the local application service, which compiles them and transports private memory between callbacks. New runs pick a fresh seed by default. Enter a seed to repeat the roster shuffle and monthly placement draws. Hold settings and seed fixed to compare replay outcomes. To study adaptation, compare strategies with and without retained memory across several seeds.
 
 ## Development and verification
 

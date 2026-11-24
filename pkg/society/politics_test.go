@@ -57,8 +57,8 @@ func TestFoundingHasNoPoliciesAndDuplicatesChargeOnce(t *testing.T) {
 		a.Pledges["local"] = 1
 	}
 	w.governancePhase(map[int]Decision{0: {Proposals: []ProposalInput{{Kind: "found"}, {Kind: "found", Plot: 99}}}})
-	if len(w.Proposals) != 2 {
-		t.Fatalf("proposals %d", len(w.Proposals))
+	if len(w.Proposals) != 1 || w.Agents[0].Mind != 11 {
+		t.Fatalf("expected one ballot and one proposal charge: %d, %v", len(w.Proposals), w.Agents[0].Mind)
 	}
 	w.votingPhase(yesVotes(w))
 	if w.Plots[0].Government {
@@ -223,21 +223,22 @@ func TestAllResidentsCanChangeTokenAllocationNextDay(t *testing.T) {
 	govern(w, 0)
 	w.Agents[0].VotingTokens = 0
 	w.Agents[1].Harvested = 5
+	w.Agents[2].Harvested = 1
 	w.governancePhase(map[int]Decision{0: {Proposals: []ProposalInput{{Kind: "policy", Key: "tokenAllocation", Rule: Rule{Mode: "productivity", Amount: 3, Limit: 2}}}}})
 	if len(w.Proposals) != 1 {
 		t.Fatal("a zero-balance resident could not propose")
 	}
 	w.votingPhase(yesVotes(w))
 	tomorrow(w)
-	if a := w.Agents[1]; a.VotingWeight != 5 || a.VotingTokens != 5 {
+	if a := w.Agents[1]; a.VotingWeight != 3 || a.VotingTokens != 3 || w.Agents[0].VotingWeight != 5 || w.Agents[2].VotingWeight != 5 || w.Plots[0].Rules["tokenAllocation"].Mode != "restraint" {
 		t.Fatalf("previous harvest grant = %d/%d", a.VotingWeight, a.VotingTokens)
 	}
 	w.governancePhase(map[int]Decision{1: {Proposals: []ProposalInput{{Kind: "policy", Key: "tokenAllocation", Rule: Rule{Mode: "alignment", Amount: 2, Limit: 1}}}}})
 	id := w.Proposals[1].ID
 	w.votingPhase(map[int]Decision{0: {Votes: map[string]string{id: "no"}}, 1: {Votes: map[string]string{id: "yes"}}, 2: {Votes: map[string]string{id: "yes"}}})
 	tomorrow(w)
-	if w.Agents[0].VotingTokens != 2 || w.Agents[1].VotingTokens != 3 || w.Agents[2].VotingTokens != 3 {
-		t.Fatal("alignment rule did not use yesterday's outcomes")
+	if w.Agents[0].VotingTokens != 3 || w.Agents[1].VotingTokens != 3 || w.Agents[2].VotingTokens != 3 || w.Plots[0].Rules["tokenAllocation"].Mode != "participation" {
+		t.Fatal("participation must count both sides equally")
 	}
 }
 
@@ -321,5 +322,74 @@ func TestJusticeCannotSanctionAnInventedOrSpentBreach(t *testing.T) {
 	w.justicePhase(map[int]Decision{0: {Orders: []Order{order}}})
 	if len(w.Pending) != 0 {
 		t.Fatal("same evidence reused")
+	}
+}
+
+func TestSameMotionHasOneBallotAndIndependentPlotAndDay(t *testing.T) {
+	w := politicalWorld(t, 51, 2)
+	w.Agents[50].Plot = 1
+	govern(w, 0)
+	govern(w, 1)
+	w.Settings.RuleThreshold = "tokens"
+	motion := ProposalInput{Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 3}}
+	submissions := map[int]Decision{}
+	for _, a := range w.Agents {
+		variant := motion
+		variant.Target, variant.Plot, variant.Rule.Source = a.ID, 42, "irrelevant metadata"
+		submissions[a.ID] = Decision{Proposals: []ProposalInput{motion, variant}}
+	}
+	w.governancePhase(submissions)
+	if len(w.Proposals) != 2 || len(w.Proposals[0].Sponsors) != 50 || len(w.Proposals[1].Sponsors) != 1 {
+		t.Fatal("motions should merge within each plot")
+	}
+	for _, a := range w.Agents {
+		if a.Mind != 11 {
+			t.Fatalf("resident %d paid more than once", a.ID)
+		}
+	}
+	p := w.Proposals[0]
+	votes := map[int]Decision{}
+	for _, id := range p.Sponsors {
+		choice := "no"
+		if id == 0 {
+			choice = "yes"
+		}
+		votes[id] = Decision{Votes: map[string]string{p.ID: choice}}
+	}
+	w.votingPhase(votes)
+	if p.Yes != 1 || p.No != 49 || p.Status != "failed" || len(w.Pending) != 0 {
+		t.Fatalf("split ballot loophole: %+v", p)
+	}
+	tomorrow(w)
+	w.governancePhase(submissions)
+	if len(w.Proposals) != 4 || w.Proposals[2].ID == p.ID {
+		t.Fatal("a new day's ballot was lost")
+	}
+}
+
+func TestVoteMindAndTokensAreDebitedTogether(t *testing.T) {
+	w := politicalWorld(t, 4, 1)
+	govern(w, 0)
+	w.Settings.RuleThreshold = "tokens"
+	w.Settings.VoteCost = .5
+	w.governancePhase(map[int]Decision{3: {Proposals: []ProposalInput{{Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 1}}, {Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 2}}}}})
+	p, q := w.Proposals[0], w.Proposals[1]
+	a := w.Agents[0]
+	a.Mind, a.Pledges["local"] = 1.5, 1
+	w.Plots[0].Rules["tokenAllocation"] = Rule{Mode: "participation", Amount: 2, Limit: 1}
+	w.votingPhase(map[int]Decision{
+		0: {OrderedVotes: []VoteChoice{{p.ID, "no", 3}, {q.ID, "yes", 1}}},
+		1: {OrderedVotes: []VoteChoice{{p.ID, "yes", 7}, {q.ID, "abstain", 0}}},
+		2: {OrderedVotes: []VoteChoice{{p.ID, "yes", 2}}},
+	})
+	if a.Mind != 1 || a.PoliticalMind != .5 || a.VotingTokens != 3 || q.Votes[0] != "" || p.TokenSpends[0] != 3 {
+		t.Fatal("ordered votes spent pledged mind or partially debited a rejected vote")
+	}
+	if w.Agents[1].VotingTokens != 6 || w.Agents[1].Mind != 12 || q.Votes[1] != "abstain" {
+		t.Fatal("invalid vote or abstention cost resources")
+	}
+	tomorrow(w)
+	if w.Agents[0].VotingTokens != 3 || w.Agents[2].VotingTokens != 3 || w.Agents[1].VotingTokens != 2 {
+		t.Fatal("turnout should count accepted ballots on either side once")
 	}
 }

@@ -34,12 +34,12 @@ func TestDailyMealAndThinking(t *testing.T) {
 	a.Food = 9
 	a.Mind = 8.9
 	w.eating(map[int]Decision{0: {Eat: 5, Think: 6}})
-	if !a.Alive || a.Body != 2 || a.Food != 4 || a.Score != 8 || a.Mind != 2.9 {
+	if !a.Alive || a.Body != 2 || a.Food != 4 || a.Score != 9 || a.Mind != 2.9 {
 		t.Fatalf("bad accounting: %+v", a)
 	}
 	w.eating(map[int]Decision{0: {Eat: 3}})
-	if a.Score != 9 {
-		t.Fatalf("daily diminishing return did not reset: %v", a.Score)
+	if a.Score != 10 {
+		t.Fatalf("extra carrot did not earn one more point: %v", a.Score)
 	}
 }
 func TestWorldRewardSettings(t *testing.T) {
@@ -49,7 +49,7 @@ func TestWorldRewardSettings(t *testing.T) {
 		a := resident(w, 0)
 		a.Food, a.Mind = 5, 6
 		w.eating(map[int]Decision{0: {Eat: 5, Think: 3}})
-		want := 2*test.food + 3*test.mind
+		want := 3*test.food + 3*test.mind
 		snap := w.Snapshot()
 		people := SummariseAgents(&snap, 0)
 		day := SummariseDay(&snap, 0, nil)

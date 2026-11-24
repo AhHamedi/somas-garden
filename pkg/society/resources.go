@@ -7,15 +7,27 @@ import (
 )
 
 // Placement is requested once per month, after the meteor has cleared residency.
-func (w *World) place(decisions map[int]Decision) {
+func (w *World) place() {
 	if w.Day != 1 {
 		return
 	}
-	for _, a := range w.Agents {
+	order := w.Agents
+	var simultaneous map[int]Decision
+	if w.legacyRules {
+		simultaneous = w.decisions("placement")
+	} else {
+		order = append([]*Agent(nil), order...)
+		w.rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
+	}
+	for _, a := range order {
 		if !a.Alive || a.Plot >= 0 {
 			continue
 		}
-		choice := decisions[a.ID].PlotChoice
+		decision := simultaneous[a.ID]
+		if !w.legacyRules {
+			decision = w.decide(a, "placement")
+		}
+		choice := decision.PlotChoice
 		if choice != nil && *choice >= 0 && *choice < len(w.Plots) {
 			a.Plot = *choice
 		} else {
@@ -25,9 +37,10 @@ func (w *World) place(decisions map[int]Decision) {
 			// Distribute abstaining agents over the available fields.
 			a.Plot = a.ID % len(w.Plots)
 		}
+		p := w.Plots[a.Plot]
+		p.Residents = append(p.Residents, a.ID)
 		w.event("placement", a.ID, a.Plot, fmt.Sprintf("Settled on %s for the month", w.Plots[a.Plot].Name), 0)
 	}
-	w.updateResidents()
 }
 
 func (w *World) rankHarvest(decisions map[int]Decision) {
@@ -220,8 +233,13 @@ func (w *World) transferFood(from, to *Agent, requested int, kind string) {
 	}
 	from.Food -= n
 	to.Food += carried
-	w.event(kind, from.ID, from.Plot, fmt.Sprintf("Gave %d carrots to %s on %s", n, to.Name, w.Plots[to.Plot].Name), float64(n), to.ID)
-	w.event("received", to.ID, to.Plot, fmt.Sprintf("Received %d carrots from %s on %s", n, from.Name, w.Plots[from.Plot].Name), float64(n), from.ID)
+	// Transfer receipts are public to strategies. Only the observer sees team names.
+	fromLabel, toLabel := fmt.Sprintf("resident ID %d", from.ID), fmt.Sprintf("resident ID %d", to.ID)
+	if w.legacyRules {
+		fromLabel, toLabel = from.Name, to.Name
+	}
+	w.event(kind, from.ID, from.Plot, fmt.Sprintf("Gave %d carrots to %s on %s", n, toLabel, w.Plots[to.Plot].Name), float64(n), to.ID)
+	w.event("received", to.ID, to.Plot, fmt.Sprintf("Received %d carrots from %s on %s", n, fromLabel, w.Plots[from.Plot].Name), float64(n), from.ID)
 	if aid > 0 {
 		planted := min(aid, p.Capacity-p.Stock)
 		p.Stock += planted
@@ -272,7 +290,11 @@ func (w *World) eating(ds map[int]Decision) {
 		a.TotalEaten += n
 		a.Body = math.Min(w.Settings.BodyCapacity, a.Body+float64(n-w.Settings.DailyFood))
 		extra := max(0, n-w.Settings.DailyFood)
-		score := w.Settings.OvereatingReward * math.Log2(1+float64(extra))
+		units := float64(extra)
+		if w.legacyRules {
+			units = math.Log2(1 + units)
+		}
+		score := w.Settings.OvereatingReward * units
 		a.Score += score
 		w.event("eat", a.ID, a.Plot, fmt.Sprintf("Ate %d carrots for %.2f satisfaction", n, score), float64(n))
 		if a.Body <= 0 {

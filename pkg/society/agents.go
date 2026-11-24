@@ -55,50 +55,51 @@ func (w *World) decisions(phase string) map[int]Decision {
 		if !a.Alive && phase != "month_end" && phase != "close" {
 			continue
 		}
-		v := w.rawView(a.ID)
-		if w.Deciders[a.ID] != nil {
-			v = detachView(v)
-		}
-		v.Phase = phase
-		v.RandomSeed = w.privateSeed(a.ID, phase)
-		start := time.Now()
-		var d Decision
-		func() {
-			defer func() {
-				if recover() != nil {
-					d = Decision{Error: "Agent panicked while deciding"}
-				}
-			}()
-			if custom := w.Deciders[a.ID]; custom != nil {
-				d = custom(v)
-			} else {
-				if w.Teams[a.Team].StrategyID != "" {
-					d = Decision{Error: "Uploaded strategy is unavailable"}
-				} else {
-					d = builtinDecision(v, w.Teams[a.Team])
-				}
-			}
-		}()
-		if time.Since(start) > time.Duration(w.Settings.DecisionMS)*time.Millisecond && w.Deciders[a.ID] != nil && d.Error == "" {
-			d = Decision{Error: "Agent exceeded its decision time budget"}
-		}
-		if d.Error != "" {
-			a.Error = d.Error
-			w.reject(a, d.Error)
-			out[a.ID] = Decision{}
-			continue
-		}
-		a.Error = ""
-		if len(d.Memory) > 0 {
-			if len(d.Memory) <= w.Settings.MemoryBytes && json.Valid(d.Memory) {
-				a.Memory = append(json.RawMessage{}, d.Memory...)
-			} else {
-				w.reject(a, "Memory update is invalid or exceeds its configured capacity")
-			}
-		}
-		out[a.ID] = d
+		out[a.ID] = w.decide(a, phase)
 	}
 	return out
+}
+
+func (w *World) decide(a *Agent, phase string) Decision {
+	v := w.rawView(a.ID)
+	if w.Deciders[a.ID] != nil {
+		v = detachView(v)
+	}
+	v.Phase = phase
+	v.RandomSeed = w.privateSeed(a.ID, phase)
+	start := time.Now()
+	var d Decision
+	func() {
+		defer func() {
+			if recover() != nil {
+				d = Decision{Error: "Agent panicked while deciding"}
+			}
+		}()
+		if custom := w.Deciders[a.ID]; custom != nil {
+			d = custom(v)
+		} else if w.Teams[a.Team].StrategyID != "" {
+			d = Decision{Error: "Uploaded strategy is unavailable"}
+		} else {
+			d = builtinDecision(v, w.Teams[a.Team])
+		}
+	}()
+	if time.Since(start) > time.Duration(w.Settings.DecisionMS)*time.Millisecond && w.Deciders[a.ID] != nil && d.Error == "" {
+		d = Decision{Error: "Agent exceeded its decision time budget"}
+	}
+	if d.Error != "" {
+		a.Error = d.Error
+		w.reject(a, d.Error)
+		return Decision{}
+	}
+	a.Error = ""
+	if len(d.Memory) > 0 {
+		if len(d.Memory) <= w.Settings.MemoryBytes && json.Valid(d.Memory) {
+			a.Memory = append(json.RawMessage{}, d.Memory...)
+		} else {
+			w.reject(a, "Memory update is invalid or exceeds its configured capacity")
+		}
+	}
+	return d
 }
 func field(v Observation, name string) float64 {
 	switch name {
@@ -195,6 +196,9 @@ func builtinDecision(v Observation, t Team) Decision {
 		case "voting":
 			balance := v.Self.VotingTokens
 			for _, p := range v.Proposals {
+				if float64(len(d.OrderedVotes)+1)*v.Settings.VoteCost > available(&v.Self)+1e-7 {
+					break
+				}
 				tokens := 1
 				if p.TallyBasis == "tokens" {
 					tokens = max(1, b.VoteTokens)

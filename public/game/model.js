@@ -120,6 +120,10 @@ export function lawValue(ix, key, rule = {}) {
     return `${plural(rule.amount || 0, "carrot")} per resident (advisory)`;
   if (key === "tokenAllocation") {
     const grant = plural(rule.amount || 0, "token");
+    if (mode === "restraint")
+      return `${grant} + ${fmt(rule.limit)} divided by yesterday’s harvest (minimum divisor 1), rounded down`;
+    if (mode === "participation")
+      return `${grant} + 1 per ${plural(rule.limit, "Yes or No ballot")} cast yesterday`;
     if (mode === "productivity")
       return `${grant} + 1 per ${plural(rule.limit || 1, "carrot")} harvested`;
     if (mode === "alignment")
@@ -643,8 +647,8 @@ export function agentDay(events, id) {
   return events.filter((e) => e.actor === id && !ignored.has(e.kind));
 }
 
-export const scoreHelp = (set) =>
-  `Each mind spent thinking earns ${fmt(set?.thinkingReward ?? 1, 2)} points. Each meal earns ${fmt(set?.overeatingReward ?? 1, 2)} × log₂(1 + extra carrots). The meteor resets satisfaction.`;
+export const scoreHelp = ({ settings: set, version }) =>
+  `Each mind spent thinking earns ${fmt(set?.thinkingReward ?? 1, 2)} points. Each meal earns ${fmt(set?.overeatingReward ?? 1, 2)} × ${version < 7 ? "log₂(1 + extra carrots)" : "extra carrots"}. The meteor resets satisfaction.`;
 
 // ---------------------------------------------------------------------------
 // Chamber geometry

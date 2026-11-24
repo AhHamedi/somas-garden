@@ -33,6 +33,7 @@ type Settings struct {
 	PersonalCapacity   int       `json:"personalCapacity"`
 	WeatherRates       []float64 `json:"weatherRates"`
 	WeatherPersistence float64   `json:"weatherPersistence"`
+	VoteCost           float64   `json:"voteCost"`
 	ProposalCost       float64   `json:"proposalCost"`
 	JusticeCost        float64   `json:"justiceCost"`
 	GovernmentCost     float64   `json:"governmentCost"`
@@ -266,6 +267,7 @@ type Snapshot struct {
 type Decider func(Observation) Decision
 
 type World struct {
+	legacyRules   bool // Continue pre-v7 experiments with their original mechanics.
 	recordCursors map[string]*recordCursor
 	recordPages   map[int][]RecordPage
 	nextQuery     int

@@ -109,6 +109,7 @@ type StudyMotion struct {
 	Threshold   string  `json:"threshold"`
 	Electorate  int     `json:"electorate"`
 	Author      int     `json:"author"`
+	Sponsors    []int   `json:"sponsors,omitempty"`
 	AuthorTeam  int     `json:"authorTeam"`
 	TeamYes     []int   `json:"teamYes"`
 	TeamNo      []int   `json:"teamNo"`
@@ -203,7 +204,7 @@ func SummariseDay(s *Snapshot, frame int, prev *StudyDay) StudyDay {
 			if a.Plot < 0 {
 				t.Wilds++
 			}
-			if s.Version < ReplayVersion && a.Plot != before {
+			if s.Version < 6 && a.Plot != before {
 				t.Moves++
 				d.Moves++
 			}
@@ -311,7 +312,7 @@ func SummariseMotions(s *Snapshot) []StudyMotion {
 		if p.Closes != s.AbsoluteDay || p.Status == "open" {
 			continue
 		}
-		m := StudyMotion{TallyBasis: p.TallyBasis, Fraction: p.Fraction, ID: p.ID, Month: s.Month, Created: p.Created, Abs: p.Closes, Plot: p.Plot, Federation: p.Federation, Kind: p.Input.Kind, Key: LawKey(p.Input.Key), Mode: p.Input.Rule.Mode, Status: p.Status, Yes: p.Yes, No: p.No, Abstain: p.Abstain, Total: p.Total, Threshold: p.Threshold, Electorate: len(p.Electorate), Author: p.Author, AuthorTeam: -1, TeamYes: make([]int, teams), TeamNo: make([]int, teams), TeamAbstain: make([]int, teams)}
+		m := StudyMotion{TallyBasis: p.TallyBasis, Fraction: p.Fraction, ID: p.ID, Month: s.Month, Created: p.Created, Abs: p.Closes, Plot: p.Plot, Federation: p.Federation, Kind: p.Input.Kind, Key: LawKey(p.Input.Key), Mode: p.Input.Rule.Mode, Status: p.Status, Yes: p.Yes, No: p.No, Abstain: p.Abstain, Total: p.Total, Threshold: p.Threshold, Electorate: len(p.Electorate), Sponsors: p.Sponsors, Author: p.Author, AuthorTeam: -1, TeamYes: make([]int, teams), TeamNo: make([]int, teams), TeamAbstain: make([]int, teams)}
 		if p.Author >= 0 && p.Author < len(s.Agents) {
 			m.AuthorTeam = s.Agents[p.Author].Team
 		}

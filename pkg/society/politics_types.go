@@ -36,6 +36,7 @@ type ProposalInput struct {
 type Proposal struct {
 	EvidenceReceipt     *Event         `json:"evidenceReceipt,omitempty"`
 	ID                  string         `json:"id"`
+	Sponsors            []int          `json:"sponsors,omitempty"`
 	Author              int            `json:"author"`
 	Plot                int            `json:"plot"`
 	Federation          int            `json:"federation,omitempty"`
@@ -106,7 +107,7 @@ func Catalogue() []PolicyDefinition {
 		{"harvestOrder", "Harvest order", "Use residents’ complete rankings or a seeded shuffle to set the harvest queue.", "local", []string{"ranked", "random"}, nil, 1},
 		{"quota", "Advisory harvest quota", "Publish a daily allowance. Taking more creates a public breach for Justice to review.", "local", []string{"limited", "unlimited"}, []string{"amount"}, 1},
 		{"threshold", "Rule voting threshold", "Count eligible residents or tokens spent on Yes and No. The required fraction applies only to rule changes.", "local", []string{"voters", "tokens"}, []string{"amount"}, 1},
-		{"tokenAllocation", "Voting token allocation", "Choose a daily base grant and optionally award a bonus from yesterday’s harvest or aligned ballots.", "local", []string{"equal", "productivity", "alignment"}, []string{"amount", "limit"}, 1},
+		{"tokenAllocation", "Voting token allocation", "Choose a daily base grant and optionally reward harvesting fewer carrots or casting Yes or No ballots yesterday.", "local", []string{"equal", "restraint", "participation"}, []string{"amount", "limit"}, 1},
 	}
 }
 
@@ -114,7 +115,7 @@ type politicalState struct {
 	NextProposal int
 	Evidence     map[int]evidenceRecord
 	Sanctioned   map[int]bool
-	Aligned      map[int]int
+	VoteCredits  map[int]int `json:"Aligned"` // v2 checkpoints stored votes matching the outcome here.
 }
 
 type evidenceRecord struct {

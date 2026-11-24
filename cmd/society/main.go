@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"runtime"
 	"selforg-garden/pkg/society"
@@ -14,7 +15,7 @@ import (
 func main() {
 	cfg := society.DefaultSettings()
 	teams := society.DefaultTeams()
-	seed := flag.Int64("seed", 42, "world random seed")
+	seed := flag.Int64("seed", int64(rand.Int32()), "world seed (random when omitted)")
 	flag.IntVar(&cfg.Copies, "copies", cfg.Copies, "independent individuals per team")
 	flag.IntVar(&cfg.Plots, "plots", cfg.Plots, "plots")
 	flag.IntVar(&cfg.Days, "days", cfg.Days, "days per month")

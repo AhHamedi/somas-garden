@@ -13,7 +13,8 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 	if len(teams) == 0 {
 		teams = DefaultTeams()
 	}
-	if _, err := settings.rosterSize(teams); err != nil {
+	population, err := settings.rosterSize(teams)
+	if err != nil {
 		return nil, err
 	}
 	for i := range teams {
@@ -35,10 +36,14 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 		}
 	}
 	w := &World{Settings: settings, Teams: teams, Seed: seed, Month: 1, Day: 1, AbsoluteDay: 1, Phase: "ready", Deciders: map[int]Decider{}, receipts: map[int][]Event{}, reads: map[int][]Event{}}
+	rosterRNG, _ := newCountedRandom(w.privateSeed(0, "roster"))
+	ids := rosterRNG.Perm(population)
+	w.Agents = make([]*Agent, population)
 	for t := range teams {
 		for n := 0; n < teams[t].size(settings.Copies); n++ {
-			id := len(w.Agents)
-			w.Agents = append(w.Agents, &Agent{ID: id, Team: t, Name: fmt.Sprintf("%s %02d", teams[t].Name, n+1), Memory: json.RawMessage(`{}`)})
+			id := ids[0]
+			ids = ids[1:]
+			w.Agents[id] = &Agent{ID: id, Team: t, Name: fmt.Sprintf("%s %02d", teams[t].Name, n+1), Memory: json.RawMessage(`{}`)}
 		}
 	}
 	w.resetMonth()
@@ -158,7 +163,7 @@ type indexedDecision struct {
 
 func (w *World) environment() {
 	if w.Day == 1 {
-		w.place(w.decisions("placement"))
+		w.place()
 		w.updateResidents()
 	}
 	w.policyBoundary()

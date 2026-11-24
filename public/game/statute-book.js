@@ -10,6 +10,7 @@ import {
   STATUTE_GROUPS,
   fill,
   statuteOfMotion,
+  statuteForVersion,
 } from "/game/statutes.js";
 
 export const DEFAULT_MODE = {
@@ -26,7 +27,7 @@ function defaultRule(ix, key) {
 }
 function motionsAbout(s, plot, st) {
   return (s.proposals || []).filter(
-    (q) => q.plot === plot.id && statuteOfMotion(q) === st,
+    (q) => q.plot === plot.id && statuteOfMotion(q)?.key === st.key,
   );
 }
 export function statuteStatus(ix, plot, st) {
@@ -108,7 +109,8 @@ function motionChip(ix, q) {
   return `<button class="mchip ${tone}" data-motion="${esc(q.id)}" title="${esc(q.status)}">${icon(tone === "no" ? "close" : "ballot")}<span>${esc(day)}</span>${q.status === "open" ? "<b>today</b>" : `<b>${fmt(t.yes)}–${fmt(t.no)}</b>`}</button>`;
 }
 
-function expanded(ix, plot, st, stt) {
+function expanded(ix, plot, currentStatute, stt) {
+  const st = statuteForVersion(currentStatute, ix.s.version);
   const set = ix.s.settings;
   const current = stt.general?.mode;
   const opts = st.options

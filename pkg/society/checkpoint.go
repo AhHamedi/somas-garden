@@ -9,7 +9,7 @@ import (
 	"math/rand"
 )
 
-const checkpointVersion = 2
+const checkpointVersion = 3
 
 // Old worlds can be replayed, but their rules and phase sequence cannot be resumed.
 var ErrArchivedCheckpoint = errors.New("checkpoint uses the previous MVP rules")
@@ -107,6 +107,9 @@ func (w *World) Checkpoint() ([]byte, error) {
 		Reads: w.reads, Receipts: w.receipts, RecordPages: w.recordPages,
 		Queries: map[int]queryCheckpoint{}, Cursors: map[string]cursorCheckpoint{},
 	}
+	if w.legacyRules {
+		c.Version = 2
+	}
 	for _, t := range w.Teams {
 		c.TeamTokens = append(c.TeamTokens, t.Token)
 	}
@@ -141,8 +144,11 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("invalid checkpoint: %w", err)
 	}
-	if c.Version != checkpointVersion {
+	if c.Version != 2 && c.Version != checkpointVersion {
 		return nil, fmt.Errorf("unsupported checkpoint version %d", c.Version)
+	}
+	if c.Version == 2 {
+		c.Settings.VoteCost = 0
 	}
 	population, err := c.Settings.rosterSize(c.Teams)
 	if err != nil {
@@ -152,7 +158,7 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 		return nil, errors.New("checkpoint state is incomplete")
 	}
 	w := &World{
-		Settings: c.Settings, Teams: c.Teams, Seed: c.Seed, Agents: c.Agents, Plots: c.Plots,
+		legacyRules: c.Version == 2, Settings: c.Settings, Teams: c.Teams, Seed: c.Seed, Agents: c.Agents, Plots: c.Plots,
 		Proposals: c.Proposals, Pending: c.Pending,
 		Events: c.Events, Month: c.Month, Day: c.Day, AbsoluteDay: c.AbsoluteDay,
 		Phase: c.Phase, Done: c.Done, Meteor: c.Meteor, Months: c.Months, political: c.Political,

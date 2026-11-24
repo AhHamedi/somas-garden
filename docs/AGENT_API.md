@@ -1,10 +1,10 @@
 # Amoeboids agent API
 
-In API version 6, each Amoeboid runs its team’s function with its own observations and private memory. Import the [working Go example](../public/society-example.go) in **Team behaviours**, or use a visual strategy for fixed choices and conditional actions.
+In API version 7, each Amoeboid runs its team’s function with its own observations and private memory. Import the [working Go example](../public/society-example.go) in **Team behaviours**, or use a visual strategy for fixed choices and conditional actions.
 
 ## What the agent sees
 
-`View` includes the current callback in `Phase`, the current `Month`, `Day` and `AbsoluteDay`, and the agent’s own food, body, mind, score and voting tokens in `Self`. Each plot publishes its field stock, active residents, crop event, outstanding aid, rules and elected role holders. Check role membership with `id, ok := plot.Roles["trade"]`. Agent ID zero is valid.
+`View` includes the current callback in `Phase`, the current `Month`, `Day` and `AbsoluteDay`, and the agent’s own food, body, mind, score and voting tokens in `Self`. Each plot publishes its field stock, active residents, crop event, outstanding aid, rules and elected role holders. Check role membership with `id, ok := plot.Roles["trade"]`. Agent ID zero is valid. The engine shuffles the IDs across teams once per new world. An individual keeps its ID throughout that run.
 
 Agents see public actions across plots in `Actions`. This slice covers the current and previous day within the month. For earlier actions, use a free `RecordQuery` for any plot in the `records` callback. Supply optional inclusive `From` and `To` absolute days and a `Subject` agent ID pointer. The first page freezes the matching history. Use `RecordQuery{Cursor: page.NextCursor}` in `record_pages` to read further pages in the same month. A page holds 128 events by default and accepts a configured size from 1 to 256.
 
@@ -14,16 +14,18 @@ Agents see public actions across plots in `Actions`. This slice covers the curre
 
 | Callback                  | Agent decision                                                                                                                                                                                                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `placement`               | Return `PlotChoice: &id` at the start of each month. The chosen plot is home until the next reset.                                                                                                                          |
+| `placement`               | Choose in a fresh random order each month. `v.Plots[i].Residents` lists the IDs already settled there. Return `PlotChoice: &id`. The placement is immediately visible to the next agent.                                    |
 | `harvest_order`           | For ranked harvesting, return `HarvestRanking` with each active local resident exactly once, including yourself. An empty list abstains. The resolved queue is available in `Plots[Self.Plot].HarvestOrder` before harvest. |
 | `harvest`                 | Request a whole number of carrots in `Harvest`. Field stock and personal storage determine what fits.                                                                                                                       |
 | `pledges`                 | Offer mind toward founding a local government with `Pledge["local"]`.                                                                                                                                                       |
 | `records`, `record_pages` | Read public action history with `Read`.                                                                                                                                                                                     |
-| `proposals`               | Submit one or more `Proposals` for the local assembly. Every active resident can propose.                                                                                                                                   |
-| `voting`                  | Submit `OrderedVotes` to spend available tokens on open local ballots.                                                                                                                                                      |
+| `proposals`               | Submit one or more `Proposals` for the local assembly. Equivalent submissions on the same plot and day share one ballot ID. Its `Sponsors` lists the submitting residents.                                                  |
+| `voting`                  | Submit `OrderedVotes` to spend available mind and tokens on open local ballots.                                                                                                                                             |
 | `transfers`               | Donate to Trade, make a gift as Trade, or issue an evidence-backed sanction as Justice.                                                                                                                                     |
 | `eating`                  | Set `Eat` to a number of stored carrots and `Think` to an amount of available mind.                                                                                                                                         |
 | `close`, `month_end`      | Update private memory before the next day or meteor.                                                                                                                                                                        |
+
+A strategy that remembers a prior resident ID can look for it in each plot’s `Residents` during `placement`. If the resident has already chosen, return that plot’s ID to join them, or choose another plot to avoid them. When no match is visible, the strategy needs a fallback. The downloadable example picks a plot with the fewest residents so far.
 
 ## Local rules and spending tokens
 
@@ -38,13 +40,13 @@ a.Proposals = []Proposal{{
 }}
 ```
 
-`VotingWeight` is the daily token grant. `VotingTokens` is the spendable balance. The `tokenAllocation` rule can set an equal grant or award bonus tokens for productivity or alignment. To cast two tokens for a rule, use an open proposal ID from `v.Proposals`.
+`VotingWeight` is the daily token grant. `VotingTokens` is the spendable balance. The `tokenAllocation` rule can set an equal grant or award bonus tokens for harvest restraint or participation. For `Mode: "restraint"`, the bonus is `Limit / max(1, yesterdayHarvest)` using integer division, with a limit of 1 to 10,000. For `Mode: "participation"`, it is yesterday’s number of accepted Yes and No ballots divided by the positive integer `Limit`, rounded down. Each ballot counts once whatever its token spend. Existing strategies may still submit the earlier spellings `productivity` and `alignment`. New worlds expose the enacted modes as `restraint` and `participation`. To cast two tokens for a rule, use an open proposal ID from `v.Proposals`.
 
 ```go
 a.OrderedVotes = []VoteChoice{{Proposal: ballot.ID, Choice: "yes", Tokens: 2}}
 ```
 
-The engine processes ordered choices in sequence. An unaffordable choice cannot spend another agent’s balance. An omitted token quantity on a yes/no ballot requests one token. A voter-count ballot accepts exactly one token per yes/no voter. An attempted spend of two is rejected and leaves the balance intact. A token-count ballot accepts two tokens as two units of support. A plot can change its rule threshold with `Key: "threshold"`, `Rule.Mode` of `"voters"` or `"tokens"` and `Rule.Amount` equal to the desired fraction. Role elections have their own decision rule.
+The engine processes ordered choices in sequence. Each accepted Yes or No costs `v.Settings.VoteCost` unpledged mind once, regardless of tokens committed. An unaffordable choice spends neither resource. Abstaining is free. An omitted token quantity on a yes/no ballot requests one token. A voter-count ballot accepts exactly one token per yes/no voter. An attempted spend of two is rejected and leaves the balance intact. A token-count ballot accepts two tokens as two units of support. A plot can change its rule threshold with `Key: "threshold"`, `Rule.Mode` of `"voters"` or `"tokens"` and `Rule.Amount` equal to the desired fraction. Role elections have their own decision rule.
 
 ## Trade and Justice
 

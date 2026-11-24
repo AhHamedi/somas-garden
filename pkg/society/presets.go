@@ -19,7 +19,7 @@ func Presets() []PresetInfo {
 		{"tinkerer", "Tinkerers", "Try four strategies across months and use their own scores to choose again"},
 		{"locust", "Locusts", "Collect bonus carrots and rank themselves first at harvest"},
 		{"envoy", "Envoys", "Elect Trade representatives and give spare carrots for blight relief"},
-		{"baron", "Barons", "Back voting tokens for productivity and spend spare carrots on satisfaction"},
+		{"baron", "Barons", "Back a voting bonus for harvesting less and spend spare carrots on satisfaction"},
 		{"sunchaser", "Sunchasers", "Seek a sunnier plot at reset and spend available mind on thinking"},
 		{"minimalist", "Minimalists", "Gather just enough for today’s meal and save their mind"},
 		{"stockpiler", "Stockpilers", "Gather up to three days of food, eat one meal and think with spare mind"},
@@ -123,7 +123,7 @@ func presetAction(v Observation, policy string) Decision {
 	case "pledges":
 		if !plot.Government && policy != "sunchaser" && policy != "locust" {
 			share := v.Settings.GovernmentCost / float64(max(1, len(plot.Residents)))
-			budget := max(0, v.Self.Mind-v.Settings.ProposalCost)
+			budget := max(0, v.Self.Mind-v.Settings.ProposalCost-v.Settings.VoteCost)
 			pledge := min(budget, v.Settings.GovernmentCost, max(1, 2*share))
 			return Decision{Pledge: map[string]float64{"local": pledge}}
 		}
@@ -255,8 +255,8 @@ func presetAgenda(v Observation, p PlotView, policy string) Decision {
 			in = ProposalInput{Kind: "policy", Plot: p.ID, Key: "harvestOrder", Rule: Rule{Mode: "ranked"}}
 		case policy == "warden" && p.Rules["quota"].Mode != "limited":
 			in = ProposalInput{Kind: "policy", Plot: p.ID, Key: "quota", Rule: Rule{Mode: "limited", Amount: float64(max(1, v.Settings.DailyFood))}}
-		case policy == "baron" && p.Rules["tokenAllocation"].Mode != "productivity":
-			in = ProposalInput{Kind: "policy", Plot: p.ID, Key: "tokenAllocation", Rule: Rule{Mode: "productivity", Amount: float64(v.Settings.VotingTokens), Limit: max(1, v.Settings.DailyFood)}}
+		case policy == "baron" && !has([]string{"restraint", "productivity"}, p.Rules["tokenAllocation"].Mode):
+			in = ProposalInput{Kind: "policy", Plot: p.ID, Key: "tokenAllocation", Rule: Rule{Mode: "restraint", Amount: float64(v.Settings.VotingTokens), Limit: max(1, v.Settings.DailyFood)}}
 		default:
 			return Decision{}
 		}
@@ -270,7 +270,10 @@ func presetVotes(v Observation, policy string) Decision {
 	}
 	d := Decision{}
 	for _, q := range v.Proposals {
-		if q.Status != "open" || q.Plot != v.Self.Plot || len(d.OrderedVotes) >= v.Self.VotingTokens {
+		if len(d.OrderedVotes) >= v.Self.VotingTokens || float64(len(d.OrderedVotes)+1)*v.Settings.VoteCost > available(&v.Self)+1e-7 {
+			break
+		}
+		if q.Status != "open" || q.Plot != v.Self.Plot {
 			continue
 		}
 		choice := "yes"

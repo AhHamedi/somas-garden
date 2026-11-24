@@ -191,7 +191,7 @@ export class Council {
       <div class="chamber-detail">
         <div class="change">${change.before ? `<div><span class="lbl">${passed && q.status !== "open" ? "Before" : "Now"}</span><p>${esc(change.before)}</p></div>` : ""}<div class="after"><span class="lbl">${q.status === "open" ? "If passed" : passed ? "After" : "Would have been"}</span><p>${esc(change.after)}</p></div></div>
         ${q.status !== "open" ? `<div class="sides">${sideBox("yes", "For")}${sideBox("no", "Against")}${sideBox("abstain", "Abstained")}</div>` : ""}
-        <div class="facts"><span>Tabled by <b>${esc(agentName(ix, q.author))}</b> ${esc(dayLabel(s, q.created))}</span>${vs.length ? `<span><b>${plural(vs.length, "voter")}</b> in the electorate</span>` : ""}${when ? `<span>${esc(when)}</span>` : ""}</div>
+        <div class="facts"><span>Tabled by <b title="${esc((q.sponsors || [q.author]).map((id) => agentName(ix, id)).join(", "))}">${q.sponsors?.length > 1 ? plural(q.sponsors.length, "resident") : esc(agentName(ix, q.author))}</b> ${esc(dayLabel(s, q.created))}</span>${vs.length ? `<span><b>${plural(vs.length, "voter")}</b> in the electorate</span>` : ""}${when ? `<span>${esc(when)}</span>` : ""}</div>
         <div class="chamber-actions">${law ? `<button class="btn" data-law-sheet="${law.scope}:${law.key}" data-law-plot="${q.plot}">${icon("scroll")}${esc(law.name)} options</button>` : ""}<button class="btn" data-goto-plot="${q.plot}">${icon("world")}Show ${esc(plotName(ix, q.plot))} on the map</button></div>
       </div>`;
   }

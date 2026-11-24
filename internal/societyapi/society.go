@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	randv2 "math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -344,7 +345,7 @@ func SocietyHandler(w http.ResponseWriter, r *http.Request) {
 			Settings society.Settings `json:"settings"`
 			Teams    []society.Team   `json:"teams"`
 			Seed     int64            `json:"seed"`
-		}{Settings: society.DefaultSettings(), Teams: society.DefaultTeams(), Seed: 42}
+		}{Settings: society.DefaultSettings(), Teams: society.DefaultTeams(), Seed: int64(randv2.Int32())}
 		if e := decodeSociety(w, r, &input); e != nil {
 			apiError(w, 400, e)
 			return

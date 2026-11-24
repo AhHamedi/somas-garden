@@ -3,7 +3,13 @@
 // is in force now and what happened to it in this run.
 import { $, icon, setHTML } from "/game/dom.js";
 import { esc, fmt, plural, PHASES } from "/game/model.js";
-import { STATUTES, DECISIONS, STATUTE_GROUPS, fill } from "/game/statutes.js";
+import {
+  STATUTES,
+  DECISIONS,
+  STATUTE_GROUPS,
+  fill,
+  statuteForVersion,
+} from "/game/statutes.js";
 import { statuteStatus, DEFAULT_MODE } from "/game/statute-book.js";
 import { statuteKeyOf, passed } from "/game/study.js";
 import { ensureStudy } from "/game/results.js";
@@ -42,14 +48,16 @@ function resolve(id) {
   return "constitution";
 }
 
-function matches(e, q) {
+function matches(e, q, version) {
   if (!q) return true;
   const hay = [
     e.name,
     e.group,
     textOf(e),
     ...(e.st?.points?.earn || []).map((r) => r[0]),
-    ...(e.st?.options || []).map((o) => `${o.label} ${o.short || ""}`),
+    ...(statuteForVersion(e.st, version)?.options || []).map(
+      (o) => `${o.label} ${o.short || ""}`,
+    ),
     e.d?.short || "",
   ]
     .join(" ")
@@ -74,7 +82,7 @@ function inForce(ix, e) {
 function indexHTML(app) {
   const q = app.ruleQuery || "";
   const ix = app.ix;
-  const shown = ENTRIES.filter((e) => matches(e, q));
+  const shown = ENTRIES.filter((e) => matches(e, q, ix.s.version));
   if (!shown.length) return `<p class="note rb-none">No rule matches “${esc(q)}”.</p>`;
   let group = "";
   let html = "";
@@ -99,13 +107,17 @@ function constitution(app) {
     (p) =>
       `<span class="${p.id === "proposals" ? "tabled" : p.id === "voting" ? "voted" : ""}">${p.name}</span>`,
   ).join("");
-  return `<header class="rb-head"><span class="rb-icon">${icon("ballot")}</span><div><h2>How votes work</h2><p>Any active resident may table a motion in their plot.</p></div></header>
+  return `<header class="rb-head"><span class="rb-icon">${icon("ballot")}</span><div><h2>How votes work</h2><p>Any active resident may table a motion in their plot.${app.ix.s.version >= 7 ? " Identical motions share one ballot per plot each day." : ""}</p></div></header>
     <section class="rb-sec"><h3>Daily sequence</h3><div class="rb-day">${strip}<span class="next">Dawn</span></div></section>
     <section class="rb-sec"><h3>Rules and elections</h3>${facts(
       [
         [
           "Rule changes",
           "The plot chooses the support fraction and whether to count eligible voters or tokens cast.",
+        ],
+        [
+          "Casting a ballot",
+          `Each Yes or No costs ${set.voteCost ?? 0} unpledged mind plus the tokens committed. Abstaining is free.`,
         ],
         [
           "Eligible voters",
@@ -167,7 +179,7 @@ function lawPage(app, e) {
   const ix = app.ix,
     s = ix.s,
     set = s.settings;
-  const st = e.st;
+  const st = statuteForVersion(e.st, s.version);
   const def = st.key === "threshold" ? set.ruleThreshold : DEFAULT_MODE[st.key];
   const defaultIsOption = st.options.some((o) => o.mode === def);
   const opts = [
@@ -276,8 +288,9 @@ function bind(app, el) {
     <div class="rb"><nav class="rb-index" id="rb-index" aria-label="Rules"></nav><article class="rb-page" id="rb-page" tabindex="-1"></article></div>`;
   $("rb-q").addEventListener("input", (e) => {
     app.ruleQuery = e.target.value;
-    const first = ENTRIES.find((x) => matches(x, app.ruleQuery));
-    if (first && !matches(byId.get(app.rule), app.ruleQuery)) app.rule = first.id;
+    const first = ENTRIES.find((x) => matches(x, app.ruleQuery, app.ix.s.version));
+    if (first && !matches(byId.get(app.rule), app.ruleQuery, app.ix.s.version))
+      app.rule = first.id;
     renderRulebook(app, true);
   });
   $("rb-q").addEventListener("keydown", (e) => {

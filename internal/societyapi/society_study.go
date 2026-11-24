@@ -23,7 +23,7 @@ func (s *societyRun) snapshotAt(i int) (*society.Snapshot, error) {
 	if err := json.Unmarshal(b, snap); err != nil {
 		return nil, err
 	}
-	if snap.Version < society.ReplayVersion {
+	if snap.Version < 6 {
 		var old struct {
 			Agents []struct {
 				Deaths    int `json:"deaths"`

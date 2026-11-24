@@ -1,6 +1,6 @@
 //go:build agent
 
-// somas:api=6
+// somas:api=7
 // Import through Team behaviours. Each individual keeps its own memory.
 package main
 
@@ -10,7 +10,15 @@ func Decide(v View) Action {
 	a := Action{}
 	switch v.Phase {
 	case "placement":
-		p := (v.Self.ID + v.Month - 1) % len(v.Plots)
+		// Start at a random plot and choose one of the least crowded fields so far.
+		p := NewRandom(v.RandomSeed).Intn(len(v.Plots))
+		start := p
+		for offset := 1; offset < len(v.Plots); offset++ {
+			other := (start + offset) % len(v.Plots)
+			if len(v.Plots[other].Residents) < len(v.Plots[p].Residents) {
+				p = other
+			}
+		}
 		a.PlotChoice = &p
 	case "harvest_order":
 		// Rotate which resident goes first each day. Submit every resident once.
@@ -24,7 +32,7 @@ func Decide(v View) Action {
 		a.Harvest = max(0, 2*v.Settings.DailyFood-v.Self.Food)
 	case "pledges":
 		if !v.Plots[v.Self.Plot].Government {
-			a.Pledge = map[string]float64{"local": min(2, v.Self.Mind)}
+			a.Pledge = map[string]float64{"local": min(2, max(0, v.Self.Mind-v.Settings.ProposalCost-v.Settings.VoteCost))}
 		}
 	case "proposals":
 		plot := v.Plots[v.Self.Plot]
@@ -38,8 +46,13 @@ func Decide(v View) Action {
 			}
 		}
 	case "voting":
+		budget := v.Self.Mind - v.Self.Pledges["local"]
 		for _, p := range v.Proposals {
+			if budget+1e-7 < v.Settings.VoteCost {
+				break
+			}
 			if p.Plot == v.Self.Plot && p.Status == "open" && len(a.OrderedVotes) < v.Self.VotingTokens {
+				budget -= v.Settings.VoteCost
 				a.OrderedVotes = append(a.OrderedVotes, VoteChoice{Proposal: p.ID, Choice: "yes", Tokens: 1})
 			}
 		}
