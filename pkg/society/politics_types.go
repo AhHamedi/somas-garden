@@ -106,7 +106,7 @@ func Catalogue() []PolicyDefinition {
 	return []PolicyDefinition{
 		{"harvestOrder", "Harvest order", "Use residents’ complete rankings or a seeded shuffle to set the harvest queue.", "local", []string{"ranked", "random"}, nil, 1},
 		{"quota", "Advisory harvest quota", "Publish a daily allowance. Taking more creates a public breach for Justice to review.", "local", []string{"limited", "unlimited"}, []string{"amount"}, 1},
-		{"threshold", "Rule voting threshold", "Count eligible residents or tokens spent on Yes and No. The required fraction applies only to rule changes.", "local", []string{"voters", "tokens"}, []string{"amount"}, 1},
+		{"threshold", "Rule voting threshold", "Set the share of tokens cast that must support a rule change.", "local", []string{"tokens"}, []string{"amount"}, 1},
 		{"tokenAllocation", "Voting token allocation", "Choose a daily base grant and optionally reward harvesting fewer carrots or casting Yes or No ballots yesterday.", "local", []string{"equal", "restraint", "participation"}, []string{"amount", "limit"}, 1},
 	}
 }

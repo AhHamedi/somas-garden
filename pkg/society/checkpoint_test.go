@@ -158,8 +158,8 @@ func TestPreviousCheckpointKeepsItsRulesAcrossRestarts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Snapshot().Version != 6 || w.Settings.VoteCost != 0 {
-		t.Fatal("v6 world switched rules")
+	if snap := w.Snapshot(); snap.Version != ReplayVersion || !snap.LegacyRules || w.Settings.VoteCost != 0 {
+		t.Fatal("v6 world lost its original vote cost or legacy mechanics marker")
 	}
 	govern(w, 0)
 	motion := ProposalInput{Kind: "policy", Key: "tokenAllocation", Rule: Rule{Mode: "productivity", Amount: 3, Limit: 2}}
@@ -188,5 +188,68 @@ func TestPreviousCheckpointKeepsItsRulesAcrossRestarts(t *testing.T) {
 	restarted, err := RestoreCheckpoint(data)
 	if err != nil || !restarted.legacyRules {
 		t.Fatalf("v6 checkpoint failed second restart: %v", err)
+	}
+}
+
+func TestV7CheckpointMigratesOnlyLiveVoting(t *testing.T) {
+	w := politicalWorld(t, 4, 1)
+	govern(w, 0)
+	w.Settings.RuleThreshold = "voters"
+	w.Plots[0].Rules["threshold"] = Rule{Mode: "voters", Amount: .6}
+	change := ProposalInput{Kind: "policy", Key: "threshold", Rule: Rule{Mode: "voters", Amount: .75}}
+	w.Pending = []Pending{{ID: "prior-decision", At: w.AbsoluteDay + 1, Input: change}}
+	tokens := change
+	tokens.Rule.Mode = "tokens"
+	w.Proposals = []*Proposal{
+		{ID: "closed", Status: "failed", TallyBasis: "voters", Threshold: "voters", Input: change, Yes: 2, Abstain: 2, Total: 4, Fraction: .5},
+		{ID: "frozen", Status: "open", TallyBasis: "voters", Threshold: "voters", Fraction: .6, Electorate: map[int]int{0: 1, 1: 1, 2: 1, 3: 1}, Abstain: 4, Total: 4},
+		{ID: "first", Status: "open", Input: change, Sponsors: []int{0, 1}},
+		{ID: "second", Status: "open", Input: tokens, Sponsors: []int{1, 2}},
+	}
+	data, err := w.Checkpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored worldCheckpoint
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatal(err)
+	}
+	stored.Version = 3
+	data, err = json.Marshal(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := RestoreCheckpoint(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Proposals[0], w.Proposals[0]) {
+		t.Fatal("historical ballot changed during migration")
+	}
+	if got.Settings.RuleThreshold != "tokens" || !reflect.DeepEqual(got.Plots[0].Rules["threshold"], Rule{Mode: "tokens", Amount: .6}) || !reflect.DeepEqual(got.Pending[0].Input, tokens) {
+		t.Fatal("world, standing law or pending threshold changed the wrong voting terms")
+	}
+	if len(got.Proposals) != 3 || got.Proposals[2].ID != "first" || !reflect.DeepEqual(got.Proposals[2].Input, tokens) || !reflect.DeepEqual(got.Proposals[2].Sponsors, []int{0, 1, 2}) {
+		t.Fatal("equivalent open ballots were not combined with all sponsors")
+	}
+	frozen := got.Proposals[1]
+	if frozen.TallyBasis != "tokens" || frozen.Threshold != "tokens" || frozen.Fraction != .6 || frozen.Total != 0 {
+		t.Fatal("open ballot kept its headcount or lost its required share")
+	}
+	got.castVote(got.Agents[0], frozen, VoteChoice{Choice: "yes", Tokens: 3})
+	got.castVote(got.Agents[1], frozen, VoteChoice{Choice: "no", Tokens: 1})
+	if !tally(frozen) || frozen.Yes != 3 || frozen.No != 1 || frozen.Total != 4 || frozen.Abstain != 0 {
+		t.Fatal("frozen ballot did not accept weighted votes after restore")
+	}
+	data, err = got.Checkpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := RestoreCheckpoint(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Snapshot(), restarted.Snapshot()) || restarted.Snapshot().LegacyRules {
+		t.Fatal("migrated v7 world changed on its second restart")
 	}
 }

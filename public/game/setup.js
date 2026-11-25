@@ -1,6 +1,7 @@
 // New world, team behaviours, saved worlds and the guide.
 
 import { esc, fmt, plural, teamColor, PHASES, migrateTeams } from "/game/model.js";
+import { hasTokenOnlyVoting, usesLegacyRules } from "/game/statutes.js";
 import { $, icon, toast } from "/game/dom.js";
 
 const copy = (v) => structuredClone(v);
@@ -218,6 +219,8 @@ export class Setup {
       ),
       seed: saved?.version >= 5 || (saved && saved.seed !== 42) ? saved.seed : undefined,
     };
+    // A new world always uses tokens, including when reusing an older saved setup.
+    this.draft.settings.ruleThreshold = "tokens";
     this.tab = tab;
     this.picking = null;
     this.render();
@@ -371,7 +374,7 @@ export class Setup {
         return `<div class="cfg-grid">
           ${card("Mind costs", ["proposalCost", "voteCost", "justiceCost", "governmentCost"].map((k) => this.num(k)).join(""))}
           ${card("Voting weight", `${this.ctl("votingTokens")}<p class="cfg-key">Residents can vote to change how their plot allocates its daily tokens.</p>`)}
-          ${card("Rule ballots", `<label class="field"><span>Count support by</span><select data-threshold aria-label="Rule threshold basis"><option value="voters" ${set.ruleThreshold === "voters" ? "selected" : ""}>Eligible residents</option><option value="tokens" ${set.ruleThreshold === "tokens" ? "selected" : ""}>Tokens cast for or against</option></select></label>${this.ctl("ruleFraction")}<p class="cfg-key">Support must exceed the chosen share. At 100%, everyone counted must agree. Elections use a majority of eligible residents.</p>`)}
+          ${card("Rule ballots", `${this.ctl("ruleFraction")}<p class="cfg-key">Only tokens cast for Yes or No count. Rule changes need more than the chosen share of Yes tokens, or all tokens at 100%. Founding, dissolution and role decisions need more Yes tokens than No tokens.</p>`)}
         </div>`;
       default:
         return `<div class="cfg-grid">${card("Limits", `${this.num("decisionMs")}${this.num("memoryBytes")}`)}</div>`;
@@ -453,9 +456,6 @@ export class Setup {
           this.refresh();
         }),
     );
-    dlg.querySelector("[data-threshold]")?.addEventListener("change", (e) => {
-      this.draft.settings.ruleThreshold = e.target.value;
-    });
     dlg.querySelector("[data-dice]")?.addEventListener("click", () => {
       this.draft.seed = undefined;
       this.drawBody();
@@ -605,11 +605,11 @@ export class Setup {
         ["keepMind", "Mind kept in reserve", 0, 100, 0.1, ""],
         [
           "voteTokens",
-          "Tokens per rule ballot",
+          "Tokens per ballot",
           1,
           null,
           1,
-          "Used when the plot counts tokens cast.",
+          "Tokens to spend on each Yes or No vote.",
         ],
         ["pledge", "Mind to pledge", 0, 100, 0.1, "Funds shared costs such as founding."],
       ]
@@ -851,7 +851,8 @@ export class Setup {
 
   openGuide() {
     const dlg = $("guide-dialog");
-    const earlierRules = this.app.ix?.s.version === 6;
+    const s = this.app.ix?.s;
+    const earlierRules = usesLegacyRules(s);
     dlg.innerHTML = `<div class="dlg-head"><h2 id="guide-title">How to watch</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div><div class="dlg-body guide">
       <p>You are the observer. ${earlierRules ? "Amoeboids choose plots simultaneously at the start of each month." : "At the start of each month, Amoeboids choose plots in a shuffled order. Each sees the residents who have already settled on every plot."} Each resident decides how much to harvest and eat, which rules to propose and where to spend its voting tokens.</p>
       <h3>Controls</h3><dl>
@@ -864,7 +865,7 @@ export class Setup {
       <h3>Reading the island</h3>
       <p>Select a plot to inspect its residents, harvest order and crop conditions. Each resident stays on that plot for the month. A blight puts the plot at risk. Its Trade representative receives donations from other plots and can send carrots to residents. The Extra carrots event adds up to one daily meal per resident, if the field has room.</p>
       <h3>Rules of the world</h3>
-      <p>Residents can submit their preferred order for the whole harvest queue. Every active resident may propose rules, elect a representative for Trade or Justice, and vote to revoke either role. Justice handles sanctions. Rule ballots count either residents or tokens, as the plot’s threshold specifies.</p>
+      <p>Residents can submit their preferred order for the whole harvest queue. Every active resident may propose rules, elect a representative for Trade or Justice, and vote to revoke either role. Justice handles sanctions. ${hasTokenOnlyVoting(s) ? "Every decision, including whether to form a government, counts only the tokens cast for Yes or No. Abstaining or skipping the vote has no effect on the count." : "Rule ballots count either residents or tokens, as the plot’s threshold specifies."}</p>
       <p>Eating meets a resident’s daily need. ${earlierRules ? "Extra food earns diminishing satisfaction in this saved world." : "Each carrot above that need earns the configured satisfaction reward."} Set the rewards for extra food and thinking under New world → World → Satisfaction. An excluded resident’s carrots disappear. The meteor resets plots and roles each month, and residents keep their private memories.</p>
       <p><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the Go agent example</a></p></div>`;
     dlg.querySelector("[data-close]").onclick = () => dlg.close();

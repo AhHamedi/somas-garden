@@ -9,6 +9,9 @@ import {
   STATUTE_GROUPS,
   fill,
   statuteForVersion,
+  hasTokenOnlyVoting,
+  usesLegacyRules,
+  defaultTallyBasis,
 } from "/game/statutes.js";
 import { statuteStatus, DEFAULT_MODE } from "/game/statute-book.js";
 import { statuteKeyOf, passed } from "/game/study.js";
@@ -39,7 +42,6 @@ function entries() {
 }
 const ENTRIES = entries();
 const byId = new Map(ENTRIES.map((e) => [e.id, e]));
-const textOf = (e) => e.st?.description || e.d?.short || "";
 function resolve(id) {
   if (!id) return "constitution";
   if (byId.has(id)) return id;
@@ -48,16 +50,15 @@ function resolve(id) {
   return "constitution";
 }
 
-function matches(e, q, version) {
+function matches(e, q, s) {
   if (!q) return true;
+  const st = statuteForVersion(e.st, s);
   const hay = [
     e.name,
     e.group,
-    textOf(e),
+    st?.description || "",
     ...(e.st?.points?.earn || []).map((r) => r[0]),
-    ...(statuteForVersion(e.st, version)?.options || []).map(
-      (o) => `${o.label} ${o.short || ""}`,
-    ),
+    ...(st?.options || []).map((o) => `${o.label} ${o.short || ""}`),
     e.d?.short || "",
   ]
     .join(" ")
@@ -82,7 +83,7 @@ function inForce(ix, e) {
 function indexHTML(app) {
   const q = app.ruleQuery || "";
   const ix = app.ix;
-  const shown = ENTRIES.filter((e) => matches(e, q, ix.s.version));
+  const shown = ENTRIES.filter((e) => matches(e, q, ix.s));
   if (!shown.length) return `<p class="note rb-none">No rule matches “${esc(q)}”.</p>`;
   let group = "";
   let html = "";
@@ -102,34 +103,48 @@ function facts(rows, set) {
 }
 
 function constitution(app) {
-  const set = app.ix.s.settings;
+  const s = app.ix.s;
+  const set = s.settings;
+  const tokensOnly = hasTokenOnlyVoting(s);
   const strip = PHASES.map(
     (p) =>
       `<span class="${p.id === "proposals" ? "tabled" : p.id === "voting" ? "voted" : ""}">${p.name}</span>`,
   ).join("");
-  return `<header class="rb-head"><span class="rb-icon">${icon("ballot")}</span><div><h2>How votes work</h2><p>Any active resident may table a motion in their plot.${app.ix.s.version >= 7 ? " Identical motions share one ballot per plot each day." : ""}</p></div></header>
+  return `<header class="rb-head"><span class="rb-icon">${icon("ballot")}</span><div><h2>How votes work</h2><p>Any active resident may table a motion in their plot.${!usesLegacyRules(s) ? " Identical motions share one ballot per plot each day." : ""}</p></div></header>
     <section class="rb-sec"><h3>Daily sequence</h3><div class="rb-day">${strip}<span class="next">Dawn</span></div></section>
     <section class="rb-sec"><h3>Rules and elections</h3>${facts(
       [
         [
           "Rule changes",
-          "The plot chooses the support fraction and whether to count eligible voters or tokens cast.",
+          tokensOnly
+            ? "The plot chooses the share of Yes tokens required to adopt or repeal a rule. Yes must exceed that share, or reach it when the threshold is 100%."
+            : "The plot chooses the support fraction and whether to count eligible voters or tokens cast.",
         ],
         [
           "Casting a ballot",
           `Each Yes or No costs ${set.voteCost ?? 0} unpledged mind plus the tokens committed. Abstaining is free.`,
         ],
-        [
-          "Eligible voters",
-          "Each resident can cast one yes or no for one token. Abstentions remain in the denominator.",
-        ],
+        ...(tokensOnly
+          ? []
+          : [
+              [
+                "Eligible voters",
+                "Each resident can cast one Yes or No for one token. Abstentions and skipped ballots count toward the total number of eligible voters.",
+              ],
+            ]),
         [
           "Tokens cast",
-          "Residents allocate tokens across motions. Only tokens spent on yes and no count toward the threshold.",
+          "Only tokens spent on Yes or No count. Abstaining or skipping the vote adds zero tokens. A motion with no tokens cast fails.",
         ],
         [
           "Founding, dissolution and roles",
-          "More than half of eligible residents must support the decision. Each cast vote costs one token.",
+          tokensOnly
+            ? "More Yes tokens than No tokens are required. A tie fails."
+            : "More than half of eligible residents must support the decision. Each cast vote costs one token.",
+        ],
+        [
+          "Founding cost",
+          "The plot must also cover {governmentCost} mind in founding pledges.",
         ],
         [
           "Timing",
@@ -179,8 +194,8 @@ function lawPage(app, e) {
   const ix = app.ix,
     s = ix.s,
     set = s.settings;
-  const st = statuteForVersion(e.st, s.version);
-  const def = st.key === "threshold" ? set.ruleThreshold : DEFAULT_MODE[st.key];
+  const st = statuteForVersion(e.st, s);
+  const def = st.key === "threshold" ? defaultTallyBasis(s) : DEFAULT_MODE[st.key];
   const defaultIsOption = st.options.some((o) => o.mode === def);
   const opts = [
     defaultIsOption
@@ -246,7 +261,7 @@ function lawPage(app, e) {
     "Local rule",
     STATUTE_GROUPS.find((g) => g.id === st.group)?.name,
   ].filter(Boolean);
-  return `<header class="rb-head"><span class="rb-icon">${icon(st.icon)}</span><div><h2>${esc(e.name)}</h2><div class="rb-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div><p>${esc(textOf(e))}</p></div></header>
+  return `<header class="rb-head"><span class="rb-icon">${icon(st.icon)}</span><div><h2>${esc(e.name)}</h2><div class="rb-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div><p>${esc(st.description)}</p></div></header>
     <section class="rb-sec"><h3>On the ballot</h3><ol class="rb-opts">${opts}</ol></section>
     ${paramTable}
     <section class="rb-sec"><h3>Decided</h3>${facts(decided, set)}</section>
@@ -265,8 +280,11 @@ function decisionPage(app, e) {
       "Passes with",
       d.kind === "repeal"
         ? "The current rule threshold"
-        : "More than half of eligible residents",
+        : hasTokenOnlyVoting(s)
+          ? "More Yes tokens than No tokens"
+          : "More than half of eligible residents",
     ],
+    ...(d.kind === "found" ? [["Founding cost", "{governmentCost} pledged mind"]] : []),
     ["Takes effect", "The following dawn"],
   ];
   const data = app.study?.data;
@@ -288,8 +306,8 @@ function bind(app, el) {
     <div class="rb"><nav class="rb-index" id="rb-index" aria-label="Rules"></nav><article class="rb-page" id="rb-page" tabindex="-1"></article></div>`;
   $("rb-q").addEventListener("input", (e) => {
     app.ruleQuery = e.target.value;
-    const first = ENTRIES.find((x) => matches(x, app.ruleQuery, app.ix.s.version));
-    if (first && !matches(byId.get(app.rule), app.ruleQuery, app.ix.s.version))
+    const first = ENTRIES.find((x) => matches(x, app.ruleQuery, app.ix.s));
+    if (first && !matches(byId.get(app.rule), app.ruleQuery, app.ix.s))
       app.rule = first.id;
     renderRulebook(app, true);
   });

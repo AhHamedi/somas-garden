@@ -14,7 +14,7 @@ func DefaultSettings() Settings {
 		DailyFood: 2, BodyCapacity: 2, MindCapacity: 12, StartingMind: 6,
 		PersonalCapacity: 12, RepresentativeCapacity: 60,
 		WeatherRates: []float64{12, 8, 4}, WeatherPersistence: .6, BlightChance: .04, BumperChance: .04,
-		VotingTokens: 6, RuleThreshold: "voters", RuleFraction: .5,
+		VotingTokens: 6, RuleThreshold: "tokens", RuleFraction: .5,
 		VoteCost: 1, ProposalCost: 1, JusticeCost: .2, GovernmentCost: 10,
 		DecisionMS: 100, MemoryBytes: 1 << 20,
 	}

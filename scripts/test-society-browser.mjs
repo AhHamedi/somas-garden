@@ -103,6 +103,8 @@ try {
   await setup.getByRole("spinbutton", { name: "Daily growth", exact: true }).fill("45");
   assert.match(await setup.locator('[data-chart="growth"]').innerText(), /grow 4.5 more/);
   await setup.getByRole("button", { name: "Politics", exact: true }).click();
+  assert.match(await setup.innerText(), /Only tokens cast for Yes or No count/);
+  assert.equal(await setup.locator('option[value="voters"]').count(), 0);
   await setup.getByRole("spinbutton", { name: "Cast a Yes or No ballot" }).fill("0.5");
   await page.click('#setup-dialog button[type="submit"]');
   await page.waitForFunction(() => window.amoeboids?.ix, null, { timeout: 30000 });
@@ -113,8 +115,9 @@ try {
       settings.thinkingReward,
       settings.dailyGrowthPercent,
       settings.voteCost,
+      settings.ruleThreshold,
     ],
-    [1.5, 0, 45, 0.5],
+    [1.5, 0, 45, 0.5, "tokens"],
   );
   const initialRunId = await page.evaluate(() => amoeboids.pb.id);
 

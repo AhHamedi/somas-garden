@@ -43,15 +43,18 @@ func TestPresetsRankOnlyTheirResidents(t *testing.T) {
 
 func TestBuilderSpendsTokensInOrderAndRanks(t *testing.T) {
 	tm := Team{Builder: &Builder{Vote: "yes", VoteTokens: 2, HarvestRanking: []int{4, 0}}}
-	v := Observation{Self: Agent{Plot: 0, VotingTokens: 3}, Phase: "voting", Proposals: []*Proposal{{ID: "first", Status: "open", TallyBasis: "tokens"}, {ID: "second", Status: "open", TallyBasis: "tokens"}}}
+	v := Observation{Self: Agent{Plot: 0, VotingTokens: 3}, Phase: "voting", Proposals: []*Proposal{
+		{ID: "first", Status: "open", Input: ProposalInput{Kind: "found"}, TallyBasis: "tokens"},
+		{ID: "second", Status: "open", Input: ProposalInput{Kind: "policy"}, TallyBasis: "tokens"},
+	}}
 	d := builtinDecision(v, tm)
 	if len(d.OrderedVotes) != 1 || d.OrderedVotes[0].Tokens != 2 || d.OrderedVotes[0].Proposal != "first" {
 		t.Fatalf("budget of three cast %+v", d.OrderedVotes)
 	}
-	v.Proposals[0].TallyBasis = "voters"
+	v.Self.VotingTokens = 4
 	d = builtinDecision(v, tm)
-	if len(d.OrderedVotes) != 2 || d.OrderedVotes[0].Tokens != 1 || d.OrderedVotes[1].Tokens != 2 {
-		t.Fatalf("mixed headcount/token ballots use the wrong amounts: %+v", d.OrderedVotes)
+	if len(d.OrderedVotes) != 2 || d.OrderedVotes[0].Tokens != 2 || d.OrderedVotes[1].Tokens != 2 {
+		t.Fatalf("budget of four cast %+v", d.OrderedVotes)
 	}
 	v.Phase = "harvest_order"
 	if got := builtinDecision(v, tm).HarvestRanking; !slices.Equal(got, tm.Builder.HarvestRanking) {

@@ -1,6 +1,6 @@
 # Amoeboids agent API
 
-In API version 7, each Amoeboid runs its team’s function with its own observations and private memory. Import the [working Go example](../public/society-example.go) in **Team behaviours**, or use a visual strategy for fixed choices and conditional actions.
+In API version 8, each Amoeboid runs its team’s function with its own observations and private memory. Import the [working Go example](../public/society-example.go) in **Team behaviours**, or use a visual strategy for fixed choices and conditional actions.
 
 ## What the agent sees
 
@@ -40,13 +40,15 @@ a.Proposals = []Proposal{{
 }}
 ```
 
-`VotingWeight` is the daily token grant. `VotingTokens` is the spendable balance. The `tokenAllocation` rule can set an equal grant or award bonus tokens for harvest restraint or participation. For `Mode: "restraint"`, the bonus is `Limit / max(1, yesterdayHarvest)` using integer division, with a limit of 1 to 10,000. For `Mode: "participation"`, it is yesterday’s number of accepted Yes and No ballots divided by the positive integer `Limit`, rounded down. Each ballot counts once whatever its token spend. Existing strategies may still submit the earlier spellings `productivity` and `alignment`. New worlds expose the enacted modes as `restraint` and `participation`. To cast two tokens for a rule, use an open proposal ID from `v.Proposals`.
+`VotingWeight` is the daily token grant. `VotingTokens` is the spendable balance. The `tokenAllocation` rule can set an equal grant or award bonus tokens for harvest restraint or participation. For `Mode: "restraint"`, the bonus is `Limit / max(1, yesterdayHarvest)` using integer division, with a limit of 1 to 10,000. For `Mode: "participation"`, it is yesterday’s number of accepted Yes and No ballots divided by the positive integer `Limit`, rounded down. Each ballot counts once whatever its token spend. Existing strategies may still submit the earlier spellings `productivity` and `alignment`. New worlds expose the enacted modes as `restraint` and `participation`. To cast two Yes tokens on any local proposal, use an open proposal ID from `v.Proposals`.
 
 ```go
 a.OrderedVotes = []VoteChoice{{Proposal: ballot.ID, Choice: "yes", Tokens: 2}}
 ```
 
-The engine processes ordered choices in sequence. Each accepted Yes or No costs `v.Settings.VoteCost` unpledged mind once, regardless of tokens committed. An unaffordable choice spends neither resource. Abstaining is free. An omitted token quantity on a yes/no ballot requests one token. A voter-count ballot accepts exactly one token per yes/no voter. An attempted spend of two is rejected and leaves the balance intact. A token-count ballot accepts two tokens as two units of support. A plot can change its rule threshold with `Key: "threshold"`, `Rule.Mode` of `"voters"` or `"tokens"` and `Rule.Amount` equal to the desired fraction. Role elections have their own decision rule.
+The engine processes ordered choices in sequence. Each accepted Yes or No spends the specified tokens and costs `v.Settings.VoteCost` in unpledged mind once per ballot. An omitted token quantity on a Yes or No spends one token. An unaffordable choice spends neither resource. To abstain, omit the proposal from your response or return `Choice: "abstain"` with zero tokens. Both contribute zero to the tally and cost nothing.
+
+Every political ballot counts tokens. `Total` is the sum of Yes and No tokens spent. Founding or dissolving a government, electing a representative and revoking an appointment require more Yes tokens than No tokens. Founding also requires sufficient pledged mind. Rule changes use the plot’s current support fraction, which defaults to 0.5. For example, propose `Key: "threshold"` with `Rule{Mode: "tokens", Amount: 0.75}` to require more than 75% Yes tokens on subsequent rule changes. At 1.0, every token cast must be Yes. A ballot with zero tokens cast fails.
 
 ## Trade and Justice
 
@@ -72,4 +74,4 @@ if len(v.SanctionCases) > 0 {
 
 Go strategies supply `package main` and `func Decide(v View) Action`. The runtime provides aliases for `View`, `Action`, `Rule`, `Proposal`, `Order`, `Offer`, `RecordQuery` and `VoteChoice`. Uploaded strategies run with a time budget and explicit private memory. The nine built-in strategies also work as visual builder fallbacks. The two concrete contracts are [world and agent types](../pkg/society/types.go) and [political types](../pkg/society/politics_types.go).
 
-A visual condition matches one callback and returns its configured action. Use a fixed harvest ranking only when its IDs match the current plot’s residents. For varying rosters, a Go strategy can build the ranking directly from the observed residents as the downloadable example does. The builder spends one token on a voter-count ballot and its configured amount on a token-count ballot while it can afford each choice.
+A visual condition matches one callback and returns its configured action. Use a fixed harvest ranking only when its IDs match the current plot’s residents. For varying rosters, a Go strategy can build the ranking directly from the observed residents as the downloadable example does. The builder spends its configured number of tokens on each Yes or No it can afford.

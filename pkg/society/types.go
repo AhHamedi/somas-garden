@@ -247,6 +247,7 @@ type Stats struct {
 type Snapshot struct {
 	Pending     []Pending       `json:"pending"`
 	Version     int             `json:"version"`
+	LegacyRules bool            `json:"legacyRules,omitempty"` // Pre-v7 placement, scoring and allocation in a resumed world.
 	Seed        int64           `json:"seed"`
 	Settings    Settings        `json:"settings"`
 	Teams       []Team          `json:"teams"`

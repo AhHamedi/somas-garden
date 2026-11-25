@@ -16,6 +16,7 @@ import {
   plotSummary,
   worldSummary,
   plotLaws,
+  foundingRequirement,
   motionTitle,
   motionTally,
   statusOf,
@@ -536,7 +537,7 @@ function plotOverview(app, p, sum) {
             app,
             "laws",
             "Government",
-            `<p class="note">None. Founding needs ${fmt(Math.floor(sum.population / 2) + 1)} of ${fmt(sum.population)} votes and ${fmt(s.settings.governmentCost)} pledged mind.</p>`,
+            `<p class="note">${esc(foundingRequirement(s, sum.population))}</p>`,
           )
     }
     ${p.harvestOrder?.length ? section(app, "harvestQueue", "Harvest order", `<details><summary>${plural(p.harvestOrder.length, "resident")} · first up ${esc(agentName(ix, p.harvestOrder[0]))}</summary><ol>${p.harvestOrder.map((id) => `<li><button class="link" data-agent="${id}">${esc(agentName(ix, id))}</button></li>`).join("")}</ol></details>`) : ""}
@@ -546,7 +547,7 @@ function plotOverview(app, p, sum) {
 
 export function motionCard(app, q) {
   const ix = app.ix;
-  const t = motionTally(q);
+  const t = motionTally(q, ix.s);
   const st = statusOf(q);
   const open = q.status === "open";
   const yesPct = t.total ? (t.yes / t.total) * 100 : 0;
@@ -554,7 +555,7 @@ export function motionCard(app, q) {
   const mark = t.total ? (t.need / t.total) * 100 : 50;
   return `<button class="motion" data-motion="${esc(q.id)}" title="Tabled by ${esc((q.sponsors || [q.author]).map((id) => agentName(ix, id)).join(", "))}">
     <div class="motion-top"><span class="motion-title">${esc(motionTitle(ix, q))}</span>${chip(st.label, st.tone)}</div>
-    ${open ? "" : `<span class="tally"><i class="y" style="width:${yesPct}%"></i><i class="n" style="width:${noPct}%"></i><span class="mark" style="left:${mark}%"></span></span><span class="tally-legend"><span><b>${fmt(t.yes)}</b>–<b>${fmt(t.no)}</b></span><span>${fmt(t.need)} needed</span></span>`}
+    ${open ? "" : `<span class="tally"><i class="y" style="width:${yesPct}%"></i><i class="n" style="width:${noPct}%"></i><span class="mark" style="left:${mark}%"></span></span><span class="tally-legend"><span><b>${fmt(t.yes)}</b>–<b>${fmt(t.no)}</b></span><span>${t.unit === "tokens cast" && !t.total ? "No tokens cast" : `${fmt(t.need)} needed`}</span></span>`}
   </button>`;
 }
 

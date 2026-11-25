@@ -262,9 +262,10 @@ func readFrame(id string, index int) (json.RawMessage, error) {
 }
 func (s *societyRun) response() any {
 	var snap any
-	if s.World != nil {
+	if s.World != nil && !s.World.Done {
 		snap = s.World.Snapshot()
 	} else if len(s.Frames) > 0 {
+		// Finished games show the frame recorded under the rules of that run.
 		snap, _ = readFrame(s.ID, len(s.Frames)-1)
 	}
 	return map[string]any{"id": s.ID, "snapshot": snap, "status": s.Status, "error": s.Error, "frameIndex": len(s.Frames) - 1, "index": len(s.Frames) - 1, "progress": len(s.Frames) - 1}

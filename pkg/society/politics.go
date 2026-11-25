@@ -151,7 +151,7 @@ func validateRule(key string, r Rule) error {
 			return nil
 		}
 	case "threshold":
-		if (r.Mode == "voters" || r.Mode == "tokens") && r.Amount > 0 && r.Amount <= 1 {
+		if r.Mode == "tokens" && r.Amount > 0 && r.Amount <= 1 {
 			return nil
 		}
 	case "tokenAllocation":
@@ -187,7 +187,12 @@ func (w *World) normaliseProposal(in ProposalInput) ProposalInput {
 	case "policy":
 		r := Rule{Mode: in.Rule.Mode}
 		switch in.Key {
-		case "threshold", "tokenAllocation":
+		case "threshold":
+			if r.Mode == "" || r.Mode == "voters" {
+				r.Mode = "tokens"
+			}
+			r.Amount = in.Rule.Amount
+		case "tokenAllocation":
 			r.Amount = in.Rule.Amount
 		case "quota":
 			if r.Mode == "limited" {
@@ -342,11 +347,11 @@ func (w *World) freezeBallots() {
 			p.Status = "cancelled"
 			continue
 		}
-		p.TallyBasis, p.Fraction = "voters", .5
+		p.TallyBasis, p.Fraction = "tokens", .5
 		if p.Input.Kind == "policy" || p.Input.Kind == "repeal" {
-			p.TallyBasis, p.Fraction = w.Settings.RuleThreshold, w.Settings.RuleFraction
+			p.Fraction = w.Settings.RuleFraction
 			if rule, ok := plot.Rules["threshold"]; ok {
-				p.TallyBasis, p.Fraction = rule.Mode, rule.Amount
+				p.Fraction = rule.Amount
 			}
 		}
 		p.Threshold = p.TallyBasis
@@ -355,9 +360,6 @@ func (w *World) freezeBallots() {
 		p.TokenSpends = make(map[int]int)
 		for _, a := range w.residents(plot.ID) {
 			p.Electorate[a.ID] = 1
-		}
-		if p.TallyBasis == "voters" {
-			p.Total = len(p.Electorate)
 		}
 	}
 }
@@ -394,7 +396,7 @@ func (w *World) castVote(a *Agent, p *Proposal, c VoteChoice) {
 	if tokens == 0 {
 		tokens = 1
 	}
-	if tokens < 1 || (p.TallyBasis == "voters" && tokens != 1) || tokens > a.VotingTokens {
+	if tokens < 1 || tokens > a.VotingTokens {
 		w.event("vote_rejected", a.ID, a.Plot, "Invalid token spend on "+p.ID, 0)
 		return
 	}
@@ -409,21 +411,15 @@ func (w *World) castVote(a *Agent, p *Proposal, c VoteChoice) {
 
 func tally(p *Proposal) bool {
 	p.Yes, p.No, p.Abstain = 0, 0, 0
-	for id := range p.Electorate {
-		units := 1
-		if p.TallyBasis == "tokens" {
-			units = p.TokenSpends[id]
-		}
+	for id, tokens := range p.TokenSpends {
 		switch p.Votes[id] {
 		case "yes":
-			p.Yes += units
+			p.Yes += tokens
 		case "no":
-			p.No += units
-		default:
-			p.Abstain += units
+			p.No += tokens
 		}
 	}
-	p.Total = p.Yes + p.No + p.Abstain
+	p.Total = p.Yes + p.No
 	if p.Total == 0 {
 		return false
 	}

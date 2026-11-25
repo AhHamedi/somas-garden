@@ -1,6 +1,6 @@
 # Amoeboids MVP specification
 
-Revised 24 November 2026
+Revised 25 November 2026
 
 ## The game and its clock
 
@@ -53,24 +53,26 @@ New world settings give independent rewards for each extra carrot and each mind 
 
 ## Proposals, rule thresholds and voting tokens
 
-Any active resident may submit a local proposal, including a motion to found a government. Founding takes a strict majority of eligible residents and a collective mind pledge of 10 by default. Once founded, the government lets residents adopt, amend or repeal a rule and elect or revoke a department holder. Identical substantive proposals on the same plot and day open one ballot. Each distinct sponsor pays the proposal cost once (one mind by default). Different candidates, rule values, plots and days remain separate. Sponsoring a motion does not cast a vote. Approved decisions take effect the following morning. If conflicting motions pass on the same subject, the one with the most Yes support wins. A tie between different outcomes leaves the current arrangement in place.
+Any active resident may submit a local proposal, including a motion to found a government. To found a government, more tokens must be cast for Yes than for No, and residents must cover the founding cost with pledged mind (10 mind by default). Once founded, the government lets residents adopt, amend or repeal a rule and elect or revoke a department holder. Identical substantive proposals on the same plot and day open one ballot. Each distinct sponsor pays the proposal cost once (one mind by default). Different candidates, rule values, plots and days remain separate. Sponsoring a motion does not cast a vote. Approved decisions take effect the following morning. If conflicting motions pass on the same subject, the one with the most Yes support wins. A tie between different outcomes leaves the current arrangement in place.
 
-**Voting weight** is the number of voting tokens granted to an individual for the day. Its **balance** is how many it still has to spend. The daily grant replaces the previous balance. A token committed to one ballot cannot also count on a second ballot. Each accepted Yes or No costs the configured vote cost in unpledged mind (one by default), once per ballot. Counting residents also costs one token per Yes or No. In a token-counted rule vote a resident chooses how many remaining tokens to commit to Yes or No. Abstaining costs zero.
+**Voting weight** is the number of voting tokens granted to an individual for the day. Its **balance** is how many it still has to spend. The daily grant replaces the previous balance. A token committed to one ballot cannot also count on a second ballot. Each accepted Yes or No costs the configured vote cost in unpledged mind (one by default), once per ballot. Residents choose how many of their remaining tokens to commit to Yes or No on each proposal. Abstaining or skipping the ballot costs nothing and adds zero tokens to the tally.
 
 | Rule a plot can change | Available choices                                                                  |
 | ---------------------- | ---------------------------------------------------------------------------------- |
 | Harvest order          | Ranked resident ballots or random order                                            |
 | Harvest quota          | An advisory quantity or unrestricted harvesting                                    |
-| Rule threshold         | Count eligible residents or tokens cast, and choose the fraction required          |
+| Rule threshold         | Choose the share of tokens cast that must support a rule change                    |
 | Token allocation       | Equal daily grant, or a base grant plus a harvest restraint or participation bonus |
 
 The default grant is six equal tokens per resident. Under **harvest restraint**, add `floor(limit / max(1, yesterday’s harvest))` to the base. With a base of four and a limit of six, harvesting zero or one gives ten tokens tomorrow, harvesting two gives seven, and harvesting eight gives four. The limit caps the bonus and can be set from 1 to 10,000. Only the base is available without a previous day. Under **participation**, add one token per enacted number of Yes or No ballots cast yesterday. Either side earns the same credit, once per ballot. Abstention earns none.
 
-### The same rule under two thresholds
+### How a ballot is decided
 
-Take a plot with five eligible residents. Two support a quota, two oppose it and one abstains. Under the default rule threshold, the two Yes voters fall short of a strict majority of the five eligible residents. With a token majority instead, suppose those two supporters commit five tokens between them and the two opponents commit one each. Yes has five of seven tokens cast, so the rule passes. Exactly half fails a strict majority. A threshold of 100% requires unanimity on the selected basis.
+Every political ballot counts tokens spent on Yes and No, including the first vote to form a government. For example, on a plot of 50 residents, if one resident spends one Yes token and the other 49 abstain, Yes has 100% of the tokens cast and wins the vote. Founding still needs the mind pledge. If another resident spends one No token, the tally is tied and founding fails. A ballot with zero tokens cast always fails.
 
-Set the initial threshold when configuring a run. The current threshold decides changes to rules, including a proposal to change that threshold. Founding, dissolution, elections and revocations use a fixed resident majority. A large token balance cannot buy additional voices on those ballots. Daily harvest rankings are a separate decision, with one ranked list per resident.
+Founding, dissolution, elections and revocations always require more Yes tokens than No tokens. Rule changes use the support fraction set for the world or subsequently enacted by the plot. The current fraction applies to a proposal to change that fraction. For example, five Yes tokens and two No tokens give about 71% support. This passes the default 50% threshold and falls short of a 75% threshold. Support must exceed the threshold except at 100%, where every token cast must be Yes.
+
+Daily harvest rankings are separate from political proposals. Each resident has one ranked list and spends no voting tokens on that list.
 
 ## Departments, donations and crop shocks
 

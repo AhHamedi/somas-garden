@@ -1,4 +1,12 @@
-import { STATUTES, STATUTE_GROUPS, statute } from "./statutes.js";
+import {
+  STATUTES,
+  STATUTE_GROUPS,
+  defaultTallyBasis,
+  hasTokenOnlyVoting,
+  usesLegacyRules,
+  statute,
+  statuteForVersion,
+} from "./statutes.js";
 
 // Plain-language reading of observer snapshots. Pure functions only: the world
 // renderer and every panel take their words and derived numbers from here, so
@@ -87,6 +95,12 @@ export const absoluteToday = (s) => s.absoluteDay;
 // Laws
 
 export const roleName = (kind) => (kind === "trade" ? "Trade representative" : "Justice");
+export function foundingRequirement(s, residents) {
+  const support = hasTokenOnlyVoting(s)
+    ? "more Yes tokens than No tokens"
+    : `${fmt(Math.floor(residents / 2) + 1)} of ${plural(residents, "resident")}`;
+  return `Founding requires ${support} and ${fmt(s.settings.governmentCost, 2)} pledged mind.`;
+}
 export function cropStatus(p) {
   return (
     {
@@ -114,7 +128,7 @@ export function lawValue(ix, key, rule = {}) {
   const mode = rule.mode;
   if (key === "threshold") {
     const fraction = rule.amount ?? ix.s.settings.ruleFraction;
-    return `${fraction === 1 ? "All" : `Over ${fmt(fraction * 100, 2)}%`} of ${mode === "tokens" ? "tokens cast" : "eligible voters"}`;
+    return `${fraction === 1 ? "All" : `Over ${fmt(fraction * 100, 2)}%`} of ${(mode || defaultTallyBasis(ix.s)) === "tokens" ? "tokens cast" : "eligible voters"}`;
   }
   if (key === "quota" && mode === "limited")
     return `${plural(rule.amount || 0, "carrot")} per resident (advisory)`;
@@ -142,7 +156,7 @@ export function plotLaws(ix, plot) {
     group: statute(key)?.group,
     name: lawName(key),
     value: lawValue(ix, key, rule),
-    sentence: statute(key)?.description || "",
+    sentence: statuteForVersion(statute(key), ix.s)?.description || "",
   }));
 }
 
@@ -195,34 +209,47 @@ export function motionChange(ix, p) {
   }
   return { before: null, after: motionTitle(ix, p) };
 }
-export function motionThreshold(p) {
+export function motionThreshold(p, s = {}) {
   const total = p.total || 0;
-  const fraction = p.fraction || (p.threshold === "twoThirds" ? 2 / 3 : 0.5);
+  const pendingRule =
+    !p.tallyBasis && !p.threshold && ["policy", "repeal"].includes(p.input?.kind);
+  const localRule =
+    pendingRule && s.plots?.find((plot) => plot.id === p.plot)?.rules?.threshold;
+  const twoThirds = !p.tallyBasis && p.threshold === "twoThirds";
+  const pendingFraction = pendingRule && (localRule?.amount || s.settings?.ruleFraction);
+  const fraction = p.fraction || pendingFraction || (twoThirds ? 2 / 3 : 0.5);
+  let basis = p.tallyBasis;
+  if (!basis && !p.threshold) {
+    if (hasTokenOnlyVoting(s)) basis = "tokens";
+    else if (s.version >= 6)
+      basis = (pendingRule && (localRule?.mode || s.settings?.ruleThreshold)) || "voters";
+  }
   let need = Math.floor(total * fraction);
   if (fraction !== 1) {
     // Compare the ratio as the engine does. For example, 50 * 0.58 rounds below 29.
     while (need < total && need / total <= fraction) need++;
   }
-  if (!p.tallyBasis && p.threshold === "twoThirds") need = Math.ceil((total * 2) / 3);
+  if (twoThirds) need = Math.ceil((total * 2) / 3);
   return {
     unit:
-      p.tallyBasis === "tokens"
+      basis === "tokens"
         ? "tokens cast"
-        : p.tallyBasis === "voters" || p.input?.kind === "found"
+        : basis === "voters" || p.input?.kind === "found"
           ? "eligible voters"
           : "voting weight",
     total,
+    fraction,
     need,
     rule:
       fraction === 1
         ? "Unanimity"
-        : !p.tallyBasis && p.threshold === "twoThirds"
+        : twoThirds
           ? "Two thirds"
           : `Over ${fmt(fraction * 100, 2)}%`,
   };
 }
-export function motionTally(p) {
-  const t = motionThreshold(p);
+export function motionTally(p, s) {
+  const t = motionThreshold(p, s);
   return {
     ...t,
     yes: p.yes || 0,
@@ -647,8 +674,8 @@ export function agentDay(events, id) {
   return events.filter((e) => e.actor === id && !ignored.has(e.kind));
 }
 
-export const scoreHelp = ({ settings: set, version }) =>
-  `Each mind spent thinking earns ${fmt(set?.thinkingReward ?? 1, 2)} points. Each meal earns ${fmt(set?.overeatingReward ?? 1, 2)} × ${version < 7 ? "log₂(1 + extra carrots)" : "extra carrots"}. The meteor resets satisfaction.`;
+export const scoreHelp = (s) =>
+  `Each mind spent thinking earns ${fmt(s.settings?.thinkingReward ?? 1, 2)} points. Each meal earns ${fmt(s.settings?.overeatingReward ?? 1, 2)} × ${usesLegacyRules(s) ? "log₂(1 + extra carrots)" : "extra carrots"}. The meteor resets satisfaction.`;
 
 // ---------------------------------------------------------------------------
 // Chamber geometry

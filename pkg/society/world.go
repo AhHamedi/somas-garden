@@ -17,6 +17,8 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Accept saved setups that used headcounts, retaining their required share.
+	settings.RuleThreshold = "tokens"
 	for i := range teams {
 		if teams[i].Name == "" {
 			teams[i].Name = fmt.Sprintf("Team %d", i+1)

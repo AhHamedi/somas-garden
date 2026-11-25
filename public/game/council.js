@@ -101,7 +101,7 @@ export class Council {
     if (earlier.length) groups.push(["Earlier this month", earlier]);
     const item = (x) => {
       const st = statusOf(x);
-      const t = motionTally(x);
+      const t = motionTally(x, s);
       const sub =
         x.status === "open"
           ? "Vote at today's assembly"
@@ -127,7 +127,8 @@ export class Council {
     const ix = this.app.ix,
       s = ix.s;
     const st = statusOf(q);
-    const t = motionTally(q);
+    const t = motionTally(q, s);
+    const tokenVote = t.unit === "tokens cast";
     const vs = voters(q, ix);
     const W = 600,
       H = 300;
@@ -155,14 +156,19 @@ export class Council {
         : `<text class="hemi-center" x="${W / 2}" y="${H - 34}" text-anchor="middle" id="hemi-score">${fmt(t.yes)} – ${fmt(t.no)}</text><text class="hemi-sub" x="${W / 2}" y="${H - 10}" text-anchor="middle">yes – no, ${t.unit}</text>`;
     const yesPct = t.total ? (t.yes / t.total) * 100 : 0;
     const noPct = t.total ? (t.no / t.total) * 100 : 0;
-    const mark = t.total ? (t.need / t.total) * 100 : 50;
+    const mark = t.total ? (t.need / t.total) * 100 : t.fraction * 100;
+    let requirement = `${esc(t.rule)} of ${t.unit}`;
+    if (t.total)
+      requirement = `${esc(t.rule)}: <b>${fmt(t.need)}</b> of ${fmt(t.total)} ${t.unit} needed`;
+    else if (tokenVote && q.status !== "open") requirement = "No tokens cast";
     const change = motionChange(ix, q);
     const passed = passedStatus(q);
-    // Weighted support by team.
+    // For token ballots, show tokens on each side and people who abstained.
     const sides = { yes: new Map(), no: new Map(), abstain: new Map() };
     for (const v of vs) {
       const k = v.vote === "yes" ? "yes" : v.vote === "no" ? "no" : "abstain";
-      sides[k].set(v.team, (sides[k].get(v.team) || 0) + (v.weight || 0));
+      const amount = tokenVote && k === "abstain" ? 1 : v.weight;
+      sides[k].set(v.team, (sides[k].get(v.team) || 0) + amount);
     }
     const sideBox = (k, title) => {
       const entries = [...sides[k].entries()].sort((a, b) => b[1] - a[1]);
@@ -182,15 +188,15 @@ export class Council {
             : "";
     return `<div class="chamber-stage">
         <div class="chamber-title"><div><h2>${esc(motionTitle(ix, q))}</h2><p>${esc(`${plotName(ix, q.plot)} assembly`)}</p></div><span class="verdict ${verdictTone}">${icon(q.status === "open" ? "scroll" : passed ? "ballot" : "close")}${esc(st.label)}</span></div>
-        <svg class="hemicycle" viewBox="-22 -22 ${W + 44} ${H + 44}" role="img" aria-label="${esc(`${vs.length} eligible residents. ${t.yes} yes and ${t.no} no, counted in ${t.unit}.`)}">${empty}${circles}${centre}</svg>
+        <svg class="hemicycle" viewBox="-22 -22 ${W + 44} ${H + 44}" role="img" aria-label="${esc(`${vs.length || ghosts} eligible residents. ${t.yes} yes and ${t.no} no, counted in ${t.unit}.`)}">${empty}${circles}${centre}</svg>
         <div class="vote-bar">
-          <div class="vote-nums"><span class="side yes"><b>${fmt(t.yes)}</b><small>yes</small></span><span class="need">${t.total ? `${esc(t.rule)}: <b>${fmt(t.need)}</b> of ${fmt(t.total)} ${t.unit} needed` : esc(t.rule)}</span><span class="side no"><b>${fmt(t.no)}</b><small>no</small></span></div>
+          <div class="vote-nums"><span class="side yes"><b>${fmt(t.yes)}</b><small>yes</small></span><span class="need">${requirement}</span><span class="side no"><b>${fmt(t.no)}</b><small>no</small></span></div>
           <span class="tally"><i class="y" style="width:${yesPct}%"></i><i class="n" style="width:${noPct}%"></i><span class="mark" style="left:${mark}%" title="Passing line"></span></span>
         </div>
       </div>
       <div class="chamber-detail">
         <div class="change">${change.before ? `<div><span class="lbl">${passed && q.status !== "open" ? "Before" : "Now"}</span><p>${esc(change.before)}</p></div>` : ""}<div class="after"><span class="lbl">${q.status === "open" ? "If passed" : passed ? "After" : "Would have been"}</span><p>${esc(change.after)}</p></div></div>
-        ${q.status !== "open" ? `<div class="sides">${sideBox("yes", "For")}${sideBox("no", "Against")}${sideBox("abstain", "Abstained")}</div>` : ""}
+        ${q.status !== "open" ? `<div class="sides">${sideBox("yes", tokenVote ? "Tokens for" : "For")}${sideBox("no", tokenVote ? "Tokens against" : "Against")}${sideBox("abstain", tokenVote ? "Residents abstaining" : "Abstained")}</div>` : ""}
         <div class="facts"><span>Tabled by <b title="${esc((q.sponsors || [q.author]).map((id) => agentName(ix, id)).join(", "))}">${q.sponsors?.length > 1 ? plural(q.sponsors.length, "resident") : esc(agentName(ix, q.author))}</b> ${esc(dayLabel(s, q.created))}</span>${vs.length ? `<span><b>${plural(vs.length, "voter")}</b> in the electorate</span>` : ""}${when ? `<span>${esc(when)}</span>` : ""}</div>
         <div class="chamber-actions">${law ? `<button class="btn" data-law-sheet="${law.scope}:${law.key}" data-law-plot="${q.plot}">${icon("scroll")}${esc(law.name)} options</button>` : ""}<button class="btn" data-goto-plot="${q.plot}">${icon("world")}Show ${esc(plotName(ix, q.plot))} on the map</button></div>
       </div>`;

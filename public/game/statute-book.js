@@ -2,13 +2,22 @@
 // force, faded at their default, greyed when locked). Selecting a card opens
 // it in place with every option on the ballot and its parameter ranges.
 
-import { esc, fmt, lawValue, motionTally, passedStatus, dayLabel } from "/game/model.js";
+import {
+  esc,
+  fmt,
+  foundingRequirement,
+  lawValue,
+  motionTally,
+  passedStatus,
+  dayLabel,
+} from "/game/model.js";
 import { icon } from "/game/dom.js";
 import {
   STATUTES,
   DECISIONS,
   STATUTE_GROUPS,
   fill,
+  defaultTallyBasis,
   statuteOfMotion,
   statuteForVersion,
 } from "/game/statutes.js";
@@ -21,7 +30,7 @@ export const DEFAULT_MODE = {
 function defaultRule(ix, key) {
   const set = ix.s.settings;
   if (key === "threshold")
-    return { mode: set.ruleThreshold || "voters", amount: set.ruleFraction || 0.5 };
+    return { mode: defaultTallyBasis(ix.s), amount: set.ruleFraction || 0.5 };
   if (key === "tokenAllocation") return { mode: "equal", amount: set.votingTokens };
   return { mode: DEFAULT_MODE[key] };
 }
@@ -103,14 +112,14 @@ function card(ix, st, stt) {
 }
 
 function motionChip(ix, q) {
-  const t = motionTally(q);
+  const t = motionTally(q, ix.s);
   const tone = q.status === "open" ? "open" : passedStatus(q) ? "yes" : "no";
   const day = dayLabel(ix.s, q.closes).replace(/^day /, "Day ");
   return `<button class="mchip ${tone}" data-motion="${esc(q.id)}" title="${esc(q.status)}">${icon(tone === "no" ? "close" : "ballot")}<span>${esc(day)}</span>${q.status === "open" ? "<b>today</b>" : `<b>${fmt(t.yes)}–${fmt(t.no)}</b>`}</button>`;
 }
 
 function expanded(ix, plot, currentStatute, stt) {
-  const st = statuteForVersion(currentStatute, ix.s.version);
+  const st = statuteForVersion(currentStatute, ix.s);
   const set = ix.s.settings;
   const current = stt.general?.mode;
   const opts = st.options
@@ -173,7 +182,7 @@ export function statuteBook(app, plot) {
   const threshold = plot.rules?.threshold || defaultRule(ix, "threshold");
   const strip = plot.government
     ? `<div class="decides"><div><span>Rule threshold</span><b>${esc(lawValue(ix, "threshold", threshold))}</b></div><div><span>Table a motion</span><b>${fmt(s.settings.proposalCost, 2)} mind</b></div></div>`
-    : `<div class="decides"><div><span>No government</span><b>Founding requires ${fmt(Math.floor(residents / 2) + 1)} of ${fmt(residents)} residents and ${fmt(s.settings.governmentCost)} pledged mind.</b></div></div>`;
+    : `<div class="decides"><div><span>No government</span><b>${esc(foundingRequirement(s, residents))}</b></div></div>`;
   const group = (g, items) => {
     const statuses = items.map((st) => [st, statuteStatus(ix, plot, st)]);
     const n = statuses.filter(([, x]) => x.enacted).length;

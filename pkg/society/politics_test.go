@@ -158,10 +158,10 @@ func TestPledgeRoundingConservesExactCharge(t *testing.T) {
 	}
 }
 
-func TestTokensCannotBeSpentTwiceAndRulesCanCountTokens(t *testing.T) {
+func TestTokenBudgetAndFrozenRuleFraction(t *testing.T) {
 	w := politicalWorld(t, 4, 1)
 	govern(w, 0)
-	w.Settings.RuleThreshold = "tokens"
+	w.Settings.RuleFraction = .6
 	w.governancePhase(map[int]Decision{0: {Proposals: []ProposalInput{
 		{Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 2}},
 		{Kind: "policy", Key: "harvestOrder", Rule: Rule{Mode: "random"}},
@@ -170,38 +170,114 @@ func TestTokensCannotBeSpentTwiceAndRulesCanCountTokens(t *testing.T) {
 	p, q, seat := w.Proposals[0], w.Proposals[1], w.Proposals[2]
 	w.freezeBallots()
 	// The configured rule threshold is frozen, and never applies to an election.
-	w.Settings.RuleThreshold = "voters"
+	w.Settings.RuleFraction = 1
 	w.votingPhase(map[int]Decision{
 		0: {OrderedVotes: []VoteChoice{{p.ID, "yes", 5}, {q.ID, "yes", 2}, {seat.ID, "yes", 1}}},
 		1: {OrderedVotes: []VoteChoice{{p.ID, "no", 2}, {seat.ID, "yes", 1}}},
 		2: {OrderedVotes: []VoteChoice{{p.ID, "no", 1}, {q.ID, "yes", 1}, {q.ID, "yes", 1}}},
-		3: {OrderedVotes: []VoteChoice{{p.ID, "abstain", 0}, {seat.ID, "yes", 5}}},
+		3: {OrderedVotes: []VoteChoice{{p.ID, "abstain", 0}, {seat.ID, "no", 5}}},
 	})
-	if p.TallyBasis != "tokens" || p.Yes != 5 || p.No != 3 || p.Total != 8 || p.Status != "scheduled" {
+	if p.Fraction != .6 || p.Yes != 5 || p.No != 3 || p.Total != 8 || p.Status != "scheduled" {
 		t.Fatalf("wrong token tally %+v", p)
 	}
 	if q.Total != 0 || q.Status != "failed" || len(q.TokenSpends) != 0 {
 		t.Fatalf("duplicate or over-budget vote counted: %+v", q)
 	}
-	if seat.Total != 4 || seat.Yes != 2 || seat.Status != "failed" || seat.TallyBasis != "voters" {
-		t.Fatalf("election did not require headcount majority: %+v", seat)
+	if seat.Fraction != .5 || seat.Total != 7 || seat.Yes != 2 || seat.No != 5 || seat.Status != "failed" {
+		t.Fatalf("wrong election tally: %+v", seat)
 	}
-	if w.Agents[0].VotingTokens != 0 || w.Agents[1].VotingTokens != 3 || w.Agents[2].VotingTokens != 5 || w.Agents[3].VotingTokens != 6 {
+	if w.Agents[0].VotingTokens != 0 || w.Agents[1].VotingTokens != 3 || w.Agents[2].VotingTokens != 5 || w.Agents[3].VotingTokens != 1 {
 		t.Fatal("incorrect debits")
+	}
+}
+
+func TestEveryGovernanceBallotCountsOnlyTokensCast(t *testing.T) {
+	for _, input := range []ProposalInput{
+		{Kind: "found"}, {Kind: "dissolve"},
+		{Kind: "elect", Key: "trade", Target: 1}, {Kind: "revoke", Key: "trade", Target: 1},
+		{Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 2}}, {Kind: "repeal", Key: "quota"},
+	} {
+		t.Run(input.Kind, func(t *testing.T) {
+			w := politicalWorld(t, 50, 1)
+			fraction := .5
+			w.Settings.RuleFraction = .95
+			if input.Kind == "found" {
+				w.Agents[49].Pledges["local"] = w.Settings.GovernmentCost
+			} else {
+				govern(w, 0)
+				w.Plots[0].Rules["threshold"] = Rule{Mode: "tokens", Amount: .55}
+			}
+			switch input.Kind {
+			case "revoke":
+				w.Plots[0].Roles["trade"] = input.Target
+			case "repeal":
+				w.Plots[0].Rules["quota"] = Rule{Mode: "limited", Amount: 2}
+				fraction = .55
+			case "policy":
+				fraction = .55
+			}
+			w.governancePhase(map[int]Decision{0: {Proposals: []ProposalInput{input}}})
+			if len(w.Proposals) != 1 {
+				t.Fatal("missing ballot")
+			}
+			p := w.Proposals[0]
+			w.votingPhase(map[int]Decision{
+				0: {OrderedVotes: []VoteChoice{{p.ID, "yes", 3}}},
+				1: {Votes: map[string]string{p.ID: "no"}},
+				2: {Votes: map[string]string{p.ID: "no"}},
+				3: {Votes: map[string]string{p.ID: "abstain"}},
+			})
+			if p.TallyBasis != "tokens" || p.Threshold != "tokens" || p.Fraction != fraction ||
+				p.Yes != 3 || p.No != 2 || p.Abstain != 0 || p.Total != 5 || p.Status != "scheduled" {
+				t.Fatalf("unexpected ballot result: %+v", p)
+			}
+		})
+	}
+}
+
+func TestLegacyThresholdSettingsAndProposalsUseTokens(t *testing.T) {
+	settings := DefaultSettings()
+	if settings.RuleThreshold != "tokens" {
+		t.Fatal("new games should default to tokens")
+	}
+	settings.RuleThreshold, settings.RuleFraction = "voters", .75
+	w, err := New(settings, []Team{{Name: "Test", Policy: "sunchaser"}}, 41)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Settings.RuleThreshold != "tokens" || w.Settings.RuleFraction != .75 {
+		t.Fatalf("legacy settings restored incorrectly: %+v", w.Settings)
+	}
+	govern(w, 0)
+	a := w.Agents[0]
+	a.Plot, a.Mind, a.VotingTokens = 0, 12, 6
+	var motions []ProposalInput
+	for _, mode := range []string{"voters", "tokens", "", "invalid"} {
+		motions = append(motions, ProposalInput{Kind: "policy", Key: "threshold", Rule: Rule{Mode: mode, Amount: .8}})
+	}
+	w.governancePhase(map[int]Decision{a.ID: {Proposals: motions}})
+	if len(w.Proposals) != 1 || w.Proposals[0].Input.Rule.Mode != "tokens" || a.Mind != 11 {
+		t.Fatal("equivalent threshold changes should produce one token ballot")
+	}
+	p := w.Proposals[0]
+	w.votingPhase(map[int]Decision{a.ID: {Votes: map[string]string{p.ID: "yes"}}})
+	tomorrow(w)
+	rule := w.Plots[0].Rules["threshold"]
+	if p.Fraction != .75 || p.Status != "activated" || rule.Mode != "tokens" || rule.Amount != .8 {
+		t.Fatalf("legacy threshold change produced ballot %+v and rule %+v", p, rule)
 	}
 }
 
 func TestRuleThresholdEdgesAndAbstentions(t *testing.T) {
 	for _, test := range []struct {
-		basis      string
 		fraction   float64
 		yes, no, n int
 		pass       bool
 	}{
-		{"voters", .75, 3, 0, 4, false}, {"voters", .75, 4, 0, 4, true}, {"voters", 1, 3, 0, 4, false}, {"voters", 1, 4, 0, 4, true},
-		{"tokens", 1, 3, 0, 5, true}, {"tokens", 1, 3, 1, 5, false}, {"tokens", .5, 0, 0, 5, false},
+		{.5, 1, 0, 50, true}, {.5, 25, 25, 50, false}, {.75, 3, 1, 10, false}, {.75, 4, 1, 10, true},
+		{1, 3, 0, 5, true}, {1, 3, 1, 5, false}, {.5, 0, 0, 5, false},
 	} {
-		p := &Proposal{TallyBasis: test.basis, Fraction: test.fraction, Electorate: map[int]int{}, Votes: map[int]string{}, TokenSpends: map[int]int{}}
+		p := &Proposal{TallyBasis: "tokens", Fraction: test.fraction, Electorate: map[int]int{}, Votes: map[int]string{}, TokenSpends: map[int]int{}}
 		for i := 0; i < test.n; i++ {
 			p.Electorate[i] = 1
 			if i < test.yes {
@@ -210,10 +286,12 @@ func TestRuleThresholdEdgesAndAbstentions(t *testing.T) {
 			} else if i < test.yes+test.no {
 				p.Votes[i] = "no"
 				p.TokenSpends[i] = 1
+			} else if i == test.yes+test.no {
+				p.Votes[i] = "abstain"
 			}
 		}
-		if got := tally(p); got != test.pass {
-			t.Fatalf("tally %+v = %t", test, got)
+		if got := tally(p); got != test.pass || p.Total != test.yes+test.no || p.Abstain != 0 {
+			t.Fatalf("tally %+v = %t with %d total and %d abstaining tokens", test, got, p.Total, p.Abstain)
 		}
 	}
 }
@@ -330,7 +408,6 @@ func TestSameMotionHasOneBallotAndIndependentPlotAndDay(t *testing.T) {
 	w.Agents[50].Plot = 1
 	govern(w, 0)
 	govern(w, 1)
-	w.Settings.RuleThreshold = "tokens"
 	motion := ProposalInput{Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 3}}
 	submissions := map[int]Decision{}
 	for _, a := range w.Agents {
@@ -370,7 +447,6 @@ func TestSameMotionHasOneBallotAndIndependentPlotAndDay(t *testing.T) {
 func TestVoteMindAndTokensAreDebitedTogether(t *testing.T) {
 	w := politicalWorld(t, 4, 1)
 	govern(w, 0)
-	w.Settings.RuleThreshold = "tokens"
 	w.Settings.VoteCost = .5
 	w.governancePhase(map[int]Decision{3: {Proposals: []ProposalInput{{Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 1}}, {Kind: "policy", Key: "quota", Rule: Rule{Mode: "limited", Amount: 2}}}}})
 	p, q := w.Proposals[0], w.Proposals[1]

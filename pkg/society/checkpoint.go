@@ -7,9 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 )
 
-const checkpointVersion = 3
+const checkpointVersion = 4
 
 // Old worlds can be replayed, but their rules and phase sequence cannot be resumed.
 var ErrArchivedCheckpoint = errors.New("checkpoint uses the previous MVP rules")
@@ -63,6 +64,7 @@ type cursorCheckpoint struct {
 
 type worldCheckpoint struct {
 	Version                          int
+	LegacyRules                      bool `json:",omitempty"`
 	Settings                         Settings
 	Teams                            []Team
 	TeamTokens                       []string
@@ -107,9 +109,7 @@ func (w *World) Checkpoint() ([]byte, error) {
 		Reads: w.reads, Receipts: w.receipts, RecordPages: w.recordPages,
 		Queries: map[int]queryCheckpoint{}, Cursors: map[string]cursorCheckpoint{},
 	}
-	if w.legacyRules {
-		c.Version = 2
-	}
+	c.LegacyRules = w.legacyRules
 	for _, t := range w.Teams {
 		c.TeamTokens = append(c.TeamTokens, t.Token)
 	}
@@ -144,11 +144,12 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("invalid checkpoint: %w", err)
 	}
-	if c.Version != 2 && c.Version != checkpointVersion {
+	if c.Version < 2 || c.Version > checkpointVersion {
 		return nil, fmt.Errorf("unsupported checkpoint version %d", c.Version)
 	}
 	if c.Version == 2 {
 		c.Settings.VoteCost = 0
+		c.LegacyRules = true
 	}
 	population, err := c.Settings.rosterSize(c.Teams)
 	if err != nil {
@@ -158,7 +159,7 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 		return nil, errors.New("checkpoint state is incomplete")
 	}
 	w := &World{
-		legacyRules: c.Version == 2, Settings: c.Settings, Teams: c.Teams, Seed: c.Seed, Agents: c.Agents, Plots: c.Plots,
+		legacyRules: c.LegacyRules, Settings: c.Settings, Teams: c.Teams, Seed: c.Seed, Agents: c.Agents, Plots: c.Plots,
 		Proposals: c.Proposals, Pending: c.Pending,
 		Events: c.Events, Month: c.Month, Day: c.Day, AbsoluteDay: c.AbsoluteDay,
 		Phase: c.Phase, Done: c.Done, Meteor: c.Meteor, Months: c.Months, political: c.Political,
@@ -192,6 +193,18 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 		if p == nil {
 			return nil, errors.New("invalid checkpoint proposal")
 		}
+		if p.Status == "open" && p.TallyBasis != "" {
+			// Empty maps are omitted from checkpoints. A frozen ballot still accepts votes.
+			if p.Votes == nil {
+				p.Votes = map[int]string{}
+			}
+			if p.TokenSpends == nil {
+				p.TokenSpends = map[int]int{}
+			}
+		}
+	}
+	if c.Version < checkpointVersion && !w.Done {
+		w.migrateTokenBallots()
 	}
 	w.rng, w.rngSource = restoreRandom(c.Random)
 	for _, state := range c.Weather {
@@ -210,4 +223,53 @@ func RestoreCheckpoint(data []byte) (*World, error) {
 		w.recordCursors[token] = &recordCursor{q, cursor.Index, cursor.Offset, cursor.Delivered}
 	}
 	return w, nil
+}
+
+// Convert live rules and pending actions. Historical ballots retain their recorded tallies.
+func (w *World) migrateTokenBallots() {
+	w.Settings.RuleThreshold = "tokens"
+	for _, plot := range w.Plots {
+		if rule, ok := plot.Rules["threshold"]; ok {
+			rule.Mode = "tokens"
+			plot.Rules["threshold"] = rule
+		}
+	}
+	for i := range w.Pending {
+		input := &w.Pending[i].Input
+		if input.Kind == "policy" && input.Key == "threshold" {
+			input.Rule.Mode = "tokens"
+		}
+	}
+	type thresholdKey struct {
+		plot, closes int
+		fraction     float64
+	}
+	thresholds := map[thresholdKey]*Proposal{}
+	proposals := w.Proposals[:0]
+	for _, p := range w.Proposals {
+		if p.Status == "open" && p.Input.Kind == "policy" && p.Input.Key == "threshold" {
+			p.Input.Rule.Mode = "tokens"
+			p.Title = title(p.Input)
+			// Two v7 proposals could request the same share on different bases.
+			// If voting hasn't started, residents should now see one ballot.
+			if !w.legacyRules && p.TallyBasis == "" {
+				key := thresholdKey{p.Plot, p.Closes, p.Input.Rule.Amount}
+				if first := thresholds[key]; first != nil {
+					for _, sponsor := range p.Sponsors {
+						if !slices.Contains(first.Sponsors, sponsor) {
+							first.Sponsors = append(first.Sponsors, sponsor)
+						}
+					}
+					continue
+				}
+				thresholds[key] = p
+			}
+		}
+		if p.Status == "open" && p.TallyBasis == "voters" {
+			p.TallyBasis, p.Threshold = "tokens", "tokens"
+			tally(p)
+		}
+		proposals = append(proposals, p)
+	}
+	w.Proposals = proposals
 }

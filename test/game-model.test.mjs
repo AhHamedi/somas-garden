@@ -85,6 +85,48 @@ test("rule and role votes display their actual counting basis and threshold", ()
     /4 tokens.*3 aligned votes/,
   );
 });
+test("every new motion shows a token tally before its electorate is frozen", () => {
+  const s = {
+    ...snapshot,
+    version: 8,
+    settings: { ruleFraction: 0.6 },
+    plots: [{ ...plot, rules: { threshold: { mode: "tokens", amount: 0.75 } } }],
+  };
+  for (const kind of ["found", "dissolve", "elect", "revoke", "policy", "repeal"]) {
+    const p = { input: { kind }, status: "open", plot: 0, fraction: 0, tallyBasis: "" };
+    const t = motionTally(p, s);
+    assert.equal(t.unit, "tokens cast", kind);
+    assert.equal(t.total, 0);
+    if (kind === "policy" || kind === "repeal") {
+      assert.equal(t.rule, "Over 75%");
+      assert.equal(motionTally(p, { ...s, plots: [plot] }).rule, "Over 60%");
+    } else {
+      assert.equal(t.rule, "Over 50%");
+    }
+  }
+});
+test("replays keep the recorded numbers and units when voting rules change", () => {
+  const p = { input: { kind: "found" }, yes: 1, no: 0, abstain: 3, total: 4 };
+  for (const version of [6, 7, 8]) {
+    const t = motionTally({ ...p, tallyBasis: "voters", fraction: 0.5 }, { version });
+    assert.deepEqual(
+      [t.unit, t.yes, t.no, t.abstain, t.need],
+      ["eligible voters", 1, 0, 3, 3],
+    );
+  }
+  assert.equal(
+    motionTally({ input: { kind: "found" } }, { version: 7 }).unit,
+    "eligible voters",
+  );
+  const legacy = motionTally(
+    { input: { kind: "policy" }, threshold: "twoThirds", total: 3 },
+    { version: 5 },
+  );
+  assert.deepEqual(
+    [legacy.unit, legacy.rule, legacy.need],
+    ["voting weight", "Two thirds", 2],
+  );
+});
 test("ranking, crop events and relief have an observer readout", () => {
   assert.equal(PHASES[1].id, "harvest_order");
   assert.match(

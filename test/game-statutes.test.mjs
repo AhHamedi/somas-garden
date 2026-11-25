@@ -7,6 +7,8 @@ import {
   fill,
   statute,
   statuteOfMotion,
+  statuteForVersion,
+  defaultTallyBasis,
 } from "../public/game/statutes.js";
 
 // The engine's catalogue is the source of truth for what can be voted on.
@@ -36,6 +38,34 @@ test("every catalogue policy has a statute with every engine option", () => {
       if (mode) assert.ok(def.modes.includes(mode), `${def.key} does not invent ${mode}`);
   }
   assert.equal(STATUTES.length, catalogue.length, "no statute without an engine policy");
+});
+
+test("new and resumed worlds offer only token thresholds, historical frames retain their options", () => {
+  const threshold = statute("threshold");
+  const settings = { ruleThreshold: "voters" };
+  for (const snapshot of [
+    { version: 8, settings },
+    { version: 8, settings, legacyRules: true },
+  ]) {
+    assert.deepEqual(
+      statuteForVersion(threshold, snapshot).options.map((o) => o.mode),
+      ["tokens"],
+    );
+    assert.equal(defaultTallyBasis(snapshot), "tokens");
+  }
+  for (const version of [6, 7]) {
+    const snapshot = { version, settings };
+    assert.deepEqual(
+      statuteForVersion(threshold, snapshot).options.map((o) => o.mode),
+      ["voters", "tokens"],
+    );
+    assert.equal(defaultTallyBasis(snapshot), "voters");
+  }
+  const resumed = { version: 8, legacyRules: true };
+  assert.deepEqual(
+    statuteForVersion(statute("tokenAllocation"), resumed).options.map((o) => o.mode),
+    ["equal", "productivity", "alignment"],
+  );
 });
 
 test("options only name parameters the statute defines", () => {

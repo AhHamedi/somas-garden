@@ -40,14 +40,8 @@ export const STATUTES = [
     name: "Rule threshold",
     defaultValue: "World setting",
     description:
-      "Plots choose how to count support for adopting or repealing a rule. The current threshold applies to the vote that changes it.",
+      "Plots choose what share of the tokens cast must support a rule change. The current threshold also applies to a vote to change the threshold itself.",
     options: [
-      {
-        mode: "voters",
-        label: "Eligible voters",
-        short: "One resident counts once",
-        params: ["amount"],
-      },
       {
         mode: "tokens",
         label: "Tokens cast",
@@ -96,9 +90,30 @@ export const STATUTES = [
   },
 ].map((rule) => ({ ...rule, scope: "local" }));
 
-// Replays and resumable v6 worlds keep the laws they were created with.
-export function statuteForVersion(st, version) {
-  if (st?.key !== "tokenAllocation" || version !== 6) return st;
+export const hasTokenOnlyVoting = (s) => !(s?.version > 0 && s.version < 8);
+export const usesLegacyRules = (s) =>
+  s?.legacyRules === true || (s?.version > 0 && s.version < 7);
+export const defaultTallyBasis = (s) =>
+  hasTokenOnlyVoting(s) ? "tokens" : s.settings?.ruleThreshold || "voters";
+
+// Historical snapshots show the rules that applied when their ballots were cast.
+export function statuteForVersion(st, s) {
+  if (st?.key === "threshold" && !hasTokenOnlyVoting(s))
+    return {
+      ...st,
+      description:
+        "Plots choose what share must support a rule change and whether to count eligible residents or tokens cast.",
+      options: [
+        {
+          mode: "voters",
+          label: "Eligible voters",
+          short: "One resident counts once",
+          params: ["amount"],
+        },
+        ...st.options,
+      ],
+    };
+  if (st?.key !== "tokenAllocation" || !usesLegacyRules(s)) return st;
   return {
     ...st,
     options: [

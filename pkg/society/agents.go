@@ -195,13 +195,10 @@ func builtinDecision(v Observation, t Team) Decision {
 			}
 		case "voting":
 			balance := v.Self.VotingTokens
+			tokens := max(1, b.VoteTokens)
 			for _, p := range v.Proposals {
 				if float64(len(d.OrderedVotes)+1)*v.Settings.VoteCost > available(&v.Self)+1e-7 {
 					break
-				}
-				tokens := 1
-				if p.TallyBasis == "tokens" {
-					tokens = max(1, b.VoteTokens)
 				}
 				if p.Status == "open" && p.Plot == v.Self.Plot && balance >= tokens && (b.Vote == "yes" || b.Vote == "no") {
 					d.OrderedVotes = append(d.OrderedVotes, VoteChoice{Proposal: p.ID, Choice: b.Vote, Tokens: tokens})
