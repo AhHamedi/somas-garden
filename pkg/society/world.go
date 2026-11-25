@@ -33,7 +33,7 @@ func New(settings Settings, teams []Team, seed int64) (*World, error) {
 		if b := teams[i].Builder; b != nil && b.Fallback != "" {
 			b.Fallback = canonicalPolicy(b.Fallback)
 		}
-		if err := settings.validateTeam(teams[i]); err != nil {
+		if err := settings.ValidateBehaviour(teams[i]); err != nil {
 			return nil, err
 		}
 	}

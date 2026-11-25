@@ -9,6 +9,17 @@ import { createHandler } from "../api/controller.mjs";
 import { createLocalStore } from "../lib/storage-local.mjs";
 import { createCloudStore } from "../lib/storage-cloud.mjs";
 import { goBinary } from "./go.mjs";
+import {
+  createCloudGroupStore,
+  createLocalGroupStore,
+  createGroupService,
+  localGroupSecret,
+} from "../lib/society-groups.mjs";
+import {
+  groupRoute,
+  importGroupBehaviour,
+  publicEngineRoute,
+} from "../lib/society-group-runtime.mjs";
 
 const hosted = process.argv.includes("--hosted");
 if (hosted) {
@@ -154,6 +165,21 @@ try {
   if (built.status !== 0)
     throw new Error("The simulation server could not compile. See the Go error above.");
   const engineOrigin = await startEngine(binary, enginePort);
+  const groupDirectory = resolve(
+    process.env.LOCAL_DATA_DIR || ".local/data",
+    "society-groups",
+  );
+  const groups = createGroupService({
+    scope: hosted ? "preview" : "local",
+    secret: hosted
+      ? undefined
+      : process.env.SELFORG_GROUP_KEY_SEED || (await localGroupSecret(groupDirectory)),
+    store: hosted
+      ? createCloudGroupStore("preview")
+      : createLocalGroupStore(groupDirectory),
+    compile: (behaviour) =>
+      importGroupBehaviour({ origin: engineOrigin, token: engineSecret }, behaviour),
+  });
   const store = hosted
     ? createCloudStore()
     : createLocalStore(resolve(process.env.LOCAL_DATA_DIR || ".local/data"));
@@ -168,6 +194,12 @@ try {
     try {
       const url = new URL(req.url, "http://localhost");
       if (url.pathname.startsWith("/api/society/")) {
+        const path = url.pathname.slice("/api/society/".length);
+        if (!groupRoute.test(path) && !publicEngineRoute.test(path)) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Game endpoint not found." }));
+          return;
+        }
         // Keep the internal service secret on the server. Local strategy uploads
         // and simulation mutations must originate from this same application.
         if (
@@ -191,6 +223,33 @@ try {
             return;
           }
           parts.push(chunk);
+        }
+        if (groupRoute.test(path)) {
+          try {
+            const reply = await groups({
+              method: req.method,
+              path,
+              body: Buffer.concat(parts),
+            });
+            res.writeHead(200, {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store",
+            });
+            res.end(JSON.stringify(reply));
+          } catch (error) {
+            const status = error.status >= 400 && error.status < 500 ? error.status : 503;
+            res.writeHead(status, {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store",
+            });
+            res.end(
+              JSON.stringify({
+                error:
+                  status === 503 ? "The group library is unavailable." : error.message,
+              }),
+            );
+          }
+          return;
         }
         const upstream = await fetch(engineOrigin + url.pathname + url.search, {
           method: req.method,

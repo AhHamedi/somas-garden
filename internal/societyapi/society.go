@@ -82,7 +82,10 @@ func apiError(w http.ResponseWriter, code int, e error) {
 	jsonReply(w, code, map[string]string{"error": e.Error()})
 }
 func decodeSociety(w http.ResponseWriter, r *http.Request, v any) error {
-	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20))
+	return decodeSocietyJSON(http.MaxBytesReader(w, r.Body, 2<<20), v)
+}
+func decodeSocietyJSON(input io.Reader, v any) error {
+	d := json.NewDecoder(input)
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {
 		return fmt.Errorf("invalid request: %w", e)

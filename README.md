@@ -52,7 +52,9 @@ All residents can observe public actions. The observer interface lets the person
 
 ## Submitting a team for the shared game
 
-Each team can test its Go strategy in its own browser workspace. For the final match, send the organiser the same `.go` file and the team name. The organiser opens **New world → Choose Amoeboids → Edit behaviour → Go code**, imports one file for each team, checks the sizes and creates a single world containing the whole roster. Uploads in separate browser workspaces stay separate.
+Each of the six coursework groups has a slot in the [group library](https://somas.sites.moonisolutions.net/?groups). Open your group’s private edit link from the organiser, give the behaviour a name, then publish your Go file or visual behaviour. Use the same link from another browser to update it. Each successful publication creates a revision.
+
+For the shared match, open the group library, add the published groups to a new world and check the roster before starting. The world uses the revisions you selected. A group can publish an update while an earlier match continues with its original behaviours.
 
 Teams who want version control can fork this repository, push their team branch to their fork and open a pull request here. A merge into main is optional for running the match.
 

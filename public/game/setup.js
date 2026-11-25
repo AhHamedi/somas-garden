@@ -3,8 +3,22 @@
 import { esc, fmt, plural, teamColor, PHASES, migrateTeams } from "/game/model.js";
 import { hasTokenOnlyVoting, usesLegacyRules } from "/game/statutes.js";
 import { $, icon, toast } from "/game/dom.js";
+import { GroupLibrary } from "/game/group-library.js";
 
 const copy = (v) => structuredClone(v);
+const defaultBuilder = () => ({
+  harvest: 3,
+  eat: 3,
+  think: -1,
+  keepMind: 1,
+  pledge: 1,
+  government: true,
+  vote: "yes",
+  voteTokens: 1,
+  harvestRanking: [],
+  rules: [],
+  proposals: [],
+});
 const spell = (p) =>
   p >= 1
     ? "Weather never changes"
@@ -47,6 +61,7 @@ const CTL = {
 const SECTIONS = [
   ["world", "World", "world"],
   ["teams", "Amoeboids", "people"],
+  ["groups", "Group library", "book"],
   ["food", "Food", "carrot"],
   ["mind", "Mind and weather", "sun"],
   ["politics", "Politics", "hall"],
@@ -180,6 +195,7 @@ export class Setup {
     this.app = app;
     this.tab = "world";
     this.draft = null;
+    this.groups = new GroupLibrary(this);
   }
   get(key) {
     if (key === "seed") return this.draft.seed;
@@ -191,7 +207,7 @@ export class Setup {
     if (b === undefined) this.draft.settings[a] = value;
     else this.draft.settings[a][Number(b)] = value;
   }
-  open(tab = "world") {
+  open(tab = "world", groupLink = null) {
     const s = this.app.ix?.s;
     let saved = null;
     try {
@@ -237,6 +253,7 @@ export class Setup {
       });
     }
     this.observer?.observe($("cfg-body"));
+    if (tab === "groups") this.groups.load(groupLink);
   }
   population() {
     return this.draft.teams.reduce(
@@ -357,6 +374,8 @@ export class Setup {
       }
       case "teams":
         return this.rosterHTML();
+      case "groups":
+        return this.groups.html();
       case "food":
         return `<div class="cfg-grid">
           ${card("One meal", `${this.ctl("dailyFood")}${this.ctl("bodyCapacity")}`, `${c.meal}<p class="cfg-key"><i style="background:var(--joy)"></i>satisfaction<i style="background:var(--body)"></i>body lost</p>`)}
@@ -400,6 +419,7 @@ export class Setup {
     $("setup-summary").innerHTML = this.summary();
     dlg.querySelector('button[type="submit"]').disabled = this.picking !== null;
     this.wire(dlg);
+    if (this.tab === "groups") this.groups.bind();
   }
   refresh() {
     const set = this.draft.settings;
@@ -427,6 +447,7 @@ export class Setup {
             .forEach((n) => n.setAttribute("aria-current", n === b ? "page" : "false"));
           this.drawBody();
           $("cfg-body").scrollTop = 0;
+          if (this.tab === "groups") this.groups.load();
         }),
     );
     dlg.querySelector("[data-defaults]").onclick = () => {
@@ -543,24 +564,21 @@ export class Setup {
   }
 
   // ---------------------------------------------------------------- behaviours
+  openGroupBuilder(name, builder, apply) {
+    this.groupBuilder = { name, apply };
+    this.strategy = copy(builder || defaultBuilder());
+    this.mode = "simple";
+    this.renderStrategy();
+    $("strategy-dialog").showModal();
+    $("strategy-dialog").onclose = () => {
+      if (!$("strategy-dialog").open) this.groupBuilder = null;
+    };
+  }
   async openStrategy(team) {
+    this.groupBuilder = null;
     this.team = team;
     const t = this.draft.teams[team];
-    this.strategy = copy(
-      t.builder || {
-        harvest: 3,
-        eat: 3,
-        think: -1,
-        keepMind: 1,
-        pledge: 1,
-        government: true,
-        vote: "yes",
-        voteTokens: 1,
-        harvestRanking: [],
-        rules: [],
-        proposals: [],
-      },
-    );
+    this.strategy = copy(t.builder || defaultBuilder());
     this.mode = t.strategyId ? "go" : "simple";
     this.renderStrategy();
     $("strategy-dialog").showModal();
@@ -576,15 +594,15 @@ export class Setup {
   renderStrategy() {
     const dlg = $("strategy-dialog");
     const b = this.strategy;
-    const t = this.draft.teams[this.team];
+    const t = this.groupBuilder || this.draft.teams[this.team];
     const modes = [
       ["simple", "Everyday choices"],
       ["rules", "Phase rules"],
-      ["go", "Go code"],
+      ...(this.groupBuilder ? [] : [["go", "Go code"]]),
     ];
     let body = "";
     if (this.mode === "simple")
-      body = `<p class="note" style="margin-bottom:14px">Saving applies these custom choices to this team. Use phase rules for exceptions.</p><div class="field-grid">${[
+      body = `<p class="note" style="margin-bottom:14px">Set this team’s everyday choices here. Use phase rules for exceptions.</p><div class="field-grid">${[
         [
           "harvest",
           "Harvest request",
@@ -615,7 +633,7 @@ export class Setup {
       ]
         .map(
           ([k, label, min, max, step, help]) =>
-            `<label class="field"><span>${label}</span><input type="number" data-b="${k}" value="${b[k] ?? (k === "voteTokens" ? 1 : 0)}" min="${min}" ${max === null ? "" : `max="${max}"`} step="${step}"/><small>${help}</small></label>`,
+            `<label class="field"><span>${label}</span><input type="number" data-b="${k}" value="${esc(b[k] ?? (k === "voteTokens" ? 1 : 0))}" min="${min}" ${max === null ? "" : `max="${max}"`} step="${step}"/><small>${help}</small></label>`,
         )
         .join("")}
         <label class="field"><span>Default vote</span><select data-b="vote">${["yes", "no", "abstain"].map((v) => `<option ${b.vote === v ? "selected" : ""}>${v}</option>`).join("")}</select><small>Each Yes or No costs tokens and ${fmt(this.draft.settings.voteCost, 2)} mind. Abstaining is free.</small></label>
@@ -644,7 +662,7 @@ export class Setup {
                 `<option value="${k}" ${r.op === k ? "selected" : ""}>${n}</option>`,
             )
             .join("")}</select></label>
-          <label class="field"><span>Value</span><input type="number" data-r="value" value="${r.value}" step="any"/></label>
+          <label class="field"><span>Value</span><input type="number" data-r="value" value="${esc(r.value)}" step="any"/></label>
           <label class="field wide"><span>Action</span><textarea class="code" data-r="action" spellcheck="false">${esc(JSON.stringify(r.action || {}, null, 2))}</textarea></label></div></div>`,
         )
         .join(
@@ -652,11 +670,11 @@ export class Setup {
         )}</div><button type="button" class="btn" id="add-rule">${icon("plus")}Add a rule</button>
         <label class="field wide" style="margin-top:18px"><span>Standing proposals</span><textarea class="code" id="standing" style="min-height:110px" spellcheck="false">${esc(JSON.stringify(b.proposals || [], null, 2))}</textarea><small>Proposal inputs submitted in the Motions phase, using the policy catalogue's keys.</small></label>`;
     if (this.mode === "go")
-      body = `<p class="note" style="margin-bottom:12px">Import your team’s Go file into this workspace. For a shared match, give the organiser the same file to import. Each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
+      body = `<p class="note" style="margin-bottom:12px">Import your team’s Go file into this workspace. For a shared match, publish the file through the Group library. Each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
     dlg.innerHTML = `<div class="dlg-head"><h2 id="strategy-title">${esc(t.name)}</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div>
       <div class="dlg-tabs">${modes.map(([id, n]) => `<button data-mode="${id}" class="${this.mode === id ? "active" : ""}">${n}</button>`).join("")}</div>
       <div class="dlg-body">${body}</div>
-      <div class="dlg-foot"><p>Applies to the next world you create.</p><button class="btn primary" id="save-strategy">Save behaviour</button></div>`;
+      <div class="dlg-foot"><p>${this.groupBuilder ? "Return to your group submission to publish." : "Applies to the next world you create."}</p><button class="btn primary" id="save-strategy">${this.groupBuilder ? "Use this behaviour" : "Save behaviour"}</button></div>`;
     dlg.querySelector("[data-close]").onclick = () => dlg.close();
     dlg.querySelectorAll("[data-mode]").forEach(
       (el) =>
@@ -739,6 +757,11 @@ export class Setup {
   }
   async saveStrategy() {
     if (!this.capture()) return;
+    if (this.groupBuilder) {
+      this.groupBuilder.apply(copy(this.strategy));
+      $("strategy-dialog").close();
+      return;
+    }
     const team = this.draft.teams[this.team];
     const button = $("save-strategy");
     button.disabled = true;

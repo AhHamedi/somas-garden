@@ -1,14 +1,17 @@
 // End-to-end check of the observer interface against the real simulation
 // service. Set SOCIETY_ORIGIN to test an already running server instead.
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+import { checkGroupLibrary } from "./support/group-library-check.mjs";
 
 const temp = await mkdtemp(join(tmpdir(), "amoeboids-browser-"));
+const groupKeySeed = randomBytes(32).toString("hex");
 const evidence = resolve(".local/verification/browser");
 await mkdir(evidence, { recursive: true });
 let server = null,
@@ -25,6 +28,7 @@ if (!origin) {
       DEV_SESSION_FILE: sessionFile,
       LOCAL_DATA_DIR: join(temp, "data"),
       SOCIETY_DATA_DIR: join(temp, "data", "society"),
+      SELFORG_GROUP_KEY_SEED: groupKeySeed,
       DEV_CONTROL_STDIN: "1",
     },
     stdio: ["pipe", "pipe", "pipe"],
@@ -53,6 +57,8 @@ const state = (page) =>
 try {
   assert.ok(origin, "server started");
   browser = await chromium.launch({ headless: true });
+  // This check publishes fixtures into the disposable local server's six group slots.
+  if (server) await checkGroupLibrary(browser, origin, groupKeySeed);
   // Hosted checks can reuse a dedicated test workspace across staged releases.
   const storageState = process.env.SOCIETY_BROWSER_STATE || undefined;
   const page = await browser.newPage({

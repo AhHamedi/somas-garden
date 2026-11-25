@@ -10,6 +10,20 @@ Every phase commits an observer replay and a private checkpoint before publishin
 
 The browser cookie is the workspace key: different browsers get separate worlds. Clearing it loses access to that workspace. Run URLs are not cross-browser sharing links; use the game's exports to share results. A new workspace is not created for each new world. Hosted allocation is currently capped at 30 new workspaces per environment/day and 4 per connection/day; returning workspaces are admitted without counting again. Idle runtimes stop after their timeout, renewed by activity. Under storage pressure, the proxy moves a stopped, inactive workspace to the private `selforg-society-archives` bucket. It reads the uploaded archive back and verifies its SHA-256 checksum before releasing the Drive. The same browser restores its files, including replay history, checkpoints and compiled Go strategies, before the engine starts. Active workspaces still need a Drive and an available Sandbox. The archive registry and short database leases coordinate requests across server instances.
 
+### Shared coursework groups
+
+The group library at `/?groups` serves six slots from Supabase. The public list shows names, behaviour types and revision numbers. A group’s private link unlocks its editor from any browser. Anyone can import and inspect a published behaviour. Publishing a revision validates it in a disposable sandbox. A match keeps its own copy of the selected revision.
+
+To provision a new set of group links, apply the two `society_group` migrations and run the following command in a private directory. Use separate directories and scopes for preview and production.
+
+```sh
+node scripts/group-edit-codes.mjs --scope production --provision .local/coursework-groups/production
+```
+
+As database owner, insert the six records from `group-edit-hashes.json` into `public.selforg_society_group_keys`, preserving existing rows when provisioning again. The service reads these hashes to check edit codes. Keep the seed and the six handouts with the organiser. Send each group its own `group-N.txt`. Reusing the same directory and scope produces the same links.
+
+For a local game, use `--scope local --origin http://127.0.0.1:8787 --provision .local/data/society-groups`. If you set `LOCAL_DATA_DIR`, use its `society-groups` subdirectory.
+
 ### Release the current game
 
 Use Node 20.18.1+ and Go 1.23+, with this checkout linked to the existing `mooni-selforg` Vercel project. The project needs the existing `SELFORG_ENGINE_SECRET`, `SELFORG_GO_SNAPSHOT`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings. The Go snapshot supplies `/vercel/go/bin/go` and writable Go caches. Vercel's OIDC credentials authorize the proxy's Sandbox and Drive calls; keep them out of the browser and engine.

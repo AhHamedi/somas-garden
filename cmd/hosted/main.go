@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,6 +18,19 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "--validate-group" {
+		input, err := os.Open(os.Args[2])
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = handler.ImportGroupBehaviour(input)
+		_ = input.Close()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--config" {
 		if err := json.NewEncoder(os.Stdout).Encode(handler.SocietyConfig()); err != nil {
 			log.Fatal(err)

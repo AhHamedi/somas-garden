@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { createSocietyProxy } from "../api/society-hosted.mjs";
+import { validateHostedGroup } from "../lib/society-hosted-sandbox.mjs";
 import { sessionIdentity, SESSION_COOKIE } from "../lib/society-hosted-session.mjs";
 
 const secret = "test-only-hosted-session-signing-secret";
@@ -23,7 +24,15 @@ async function listen(t, handler) {
 
 async function fixture(
   t,
-  { claim, upstream, sandboxError, missingWorkspace, scope = "production" } = {},
+  {
+    claim,
+    upstream,
+    sandboxError,
+    missingWorkspace,
+    getGroupStore,
+    validateGroup,
+    scope = "production",
+  } = {},
 ) {
   const requests = [],
     identities = [],
@@ -42,6 +51,8 @@ async function fixture(
     res.end(JSON.stringify({ ok: true }));
   });
   const handler = createSocietyProxy({
+    getGroupStore,
+    validateGroup,
     env: {
       SELFORG_ENGINE_SECRET: secret,
       VERCEL_ENV: scope,
@@ -67,6 +78,80 @@ async function fixture(
   };
 }
 
+test("publishing and importing a builder work with no private workspace capacity", async (t) => {
+  let slot = null;
+  const validated = [];
+  const f = await fixture(t, {
+    claim: assert.fail,
+    validateGroup: async (behaviour) => {
+      validated.push(behaviour);
+    },
+    getGroupStore: () => ({
+      verifyKey: async (_, key) => key === "test-code",
+      get: async () => slot,
+      insert: async (record) => (slot = record),
+    }),
+  });
+  const post = (suffix, data) =>
+    fetch(f.origin + "/api/society/groups/1" + suffix, {
+      method: "POST",
+      headers: { origin: publicOrigin },
+      body: JSON.stringify(data),
+    });
+  const behaviour = { name: "FRED", builder: { harvest: 3 }, policy: "builder" };
+  const upload = { ...behaviour, key: "test-code", expectedRevision: 0 };
+  assert.equal((await post("", { ...upload, key: "wrong" })).status, 403);
+  assert.deepEqual(validated, []);
+  assert.equal((await post("", upload)).status, 200);
+  assert.equal((await post("", { ...upload, name: "STALE" })).status, 409);
+  assert.deepEqual(validated, [behaviour]);
+  const imported = await post("/use", { revision: 1 });
+  assert.deepEqual(await imported.json(), behaviour);
+  assert.deepEqual(f.allocations, []);
+  assert.deepEqual(f.identities, []);
+});
+
+test("disposable group validation closes the sandbox on success and compiler rejection", async () => {
+  for (const exitCode of [0, 2]) {
+    let stopped = 0;
+    const behaviour = { name: "FRED", source: "package main" };
+    const validate = () =>
+      validateHostedGroup(behaviour, {
+        snapshotId: "test-snapshot",
+        getEngine: async () => ({ bytes: Buffer.from("engine"), files: [] }),
+        create: async (opts) => {
+          assert.equal(opts.persistent, false);
+          assert.equal(opts.networkPolicy, "deny-all");
+          assert.equal(opts.mounts, undefined);
+          assert.equal(opts.ports, undefined);
+          return {
+            async writeFiles(files) {
+              assert.deepEqual(
+                JSON.parse(files.find((f) => f.path.endsWith("/behaviour.json")).content),
+                behaviour,
+              );
+            },
+            async runCommand(cmd) {
+              assert.deepEqual(cmd.args, ["--validate-group", "behaviour.json"]);
+              assert.equal(cmd.env.GOPROXY, "off");
+              return { exitCode, stderr: async () => "invalid Go" };
+            },
+            async stop() {
+              stopped++;
+            },
+          };
+        },
+      });
+    if (exitCode === 0) await validate();
+    else
+      await assert.rejects(
+        validate,
+        (e) => e.status === 400 && /invalid Go/.test(e.message),
+      );
+    assert.equal(stopped, 1);
+  }
+});
+
 test("hosted sessions persist with signed cookies and isolate browsers and environments", async (t) => {
   const f = await fixture(t);
   const first = await fetch(`${f.origin}/api/society/runs`);
@@ -90,6 +175,56 @@ test("hosted sessions persist with signed cookies and isolate browsers and envir
   assert.equal(preview.fresh, true, "production cookies cannot select preview sessions");
   assert.notEqual(preview.id, f.identities[0].id);
   assert.notEqual(preview.token, f.identities[0].token);
+});
+
+test("the shared library resolves a revision before starting the importing browser's sandbox", async (t) => {
+  const group = 4;
+  const record = {
+    group,
+    kind: "go",
+    name: "Gardeners",
+    revision: 2,
+    payload: { source: "example source" },
+  };
+  const f = await fixture(t, {
+    getGroupStore(scope) {
+      assert.equal(scope, "production");
+      return {
+        async list() {
+          return [record];
+        },
+        async get(n, v) {
+          return n === group && v === record.revision ? record : null;
+        },
+      };
+    },
+    upstream(_req, res) {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ id: run, name: record.name }));
+    },
+  });
+  const list = await fetch(f.origin + "/api/society/groups");
+  assert.equal((await list.json()).groups[3].revision, 2);
+  const cookie = cookieValue(list);
+  const post = (path, data) =>
+    fetch(f.origin + "/api/society/" + path, {
+      method: "POST",
+      headers: { cookie, origin: publicOrigin, "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  assert.equal((await post("groups/4/use", { revision: 3 })).status, 404);
+  assert.equal((await post("strategies/import", { source: "untrusted" })).status, 404);
+  assert.equal(f.allocations.length, 0);
+  const imported = await post("groups/4/use", { revision: 2, source: "untrusted" });
+  assert.equal(imported.status, 200);
+  assert.equal((await imported.json()).id, run);
+  assert.equal(f.allocations.length, 1);
+  assert.equal(f.requests[0].url, "/api/society/strategies/import");
+  assert.deepEqual(JSON.parse(f.requests[0].body), {
+    name: record.name,
+    ...record.payload,
+  });
+  assert.equal(f.requests[0].headers.authorization, "Bearer " + f.identities[0].token);
 });
 
 test("a tampered session cookie cannot select another browser's engine", async (t) => {

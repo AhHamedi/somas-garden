@@ -107,7 +107,8 @@ func (s Settings) rosterSize(teams []Team) (int, error) {
 	return total, s.validatePopulation(len(teams), total)
 }
 
-func (s Settings) validateTeam(t Team) error {
+// ValidateBehaviour checks a team's preset or builder against the world's limits.
+func (s Settings) ValidateBehaviour(t Team) error {
 	b := t.Builder
 	if t.Policy == "builder" && b == nil {
 		return fmt.Errorf("builder behaviour requires a builder configuration")

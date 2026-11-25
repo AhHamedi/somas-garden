@@ -18,6 +18,7 @@ import { renderChronicle, showMonthCard } from "/game/pages.js";
 import { renderResults } from "/game/results.js";
 import { renderRulebook } from "/game/rulebook.js";
 import { Setup } from "/game/setup.js";
+import { takeGroupLink } from "/game/group-library.js";
 import { $, icon, toast } from "/game/dom.js";
 
 async function api(path, body, method = body === undefined ? "GET" : "POST") {
@@ -424,6 +425,7 @@ async function openRunData(id, response) {
   storage.set("amoeboids.society.active", id);
   try {
     const url = new URL(location.href);
+    url.searchParams.delete("groups");
     url.searchParams.set("run", id);
     history.replaceState(null, "", url);
   } catch {}
@@ -623,6 +625,7 @@ function bind() {
         const a = b.dataset.action;
         if (a === "new-world") setup.open("world");
         if (a === "behaviours") setup.open("teams");
+        if (a === "groups") setup.open("groups");
         if (a === "saved") setup.openSaved();
         if (a === "guide") setup.openGuide();
         if (a === "export" && pb.id) location.href = `/api/society/runs/${pb.id}/export`;
@@ -688,6 +691,9 @@ function bind() {
 }
 
 async function init() {
+  const groupLink = takeGroupLink(location.href, (url) =>
+    history.replaceState(history.state, "", url),
+  );
   bind();
   requestAnimationFrame(loop);
   try {
@@ -698,7 +704,7 @@ async function init() {
         new URLSearchParams(location.search).get("run") ||
         storage.get("amoeboids.society.active");
     } catch {}
-    if (id && id !== "null") {
+    if (!groupLink && id && id !== "null") {
       try {
         await openRunData(id);
         return;
@@ -710,7 +716,7 @@ async function init() {
     $("loading").innerHTML =
       `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><p>Create a world to begin.</p><button class="btn primary" id="start-world">New world</button>`;
     $("start-world").onclick = () => setup.open("world");
-    setup.open("world");
+    setup.open(groupLink ? "groups" : "world", groupLink);
   } catch (error) {
     $("loading").innerHTML =
       `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><p>The world could not start: ${esc(error.message)}</p><button class="btn" id="retry">Try again</button>`;

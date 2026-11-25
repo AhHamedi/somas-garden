@@ -124,6 +124,68 @@ func TestStrategySourceCannotShareMutableStateOrUseIO(t *testing.T) {
 	}
 }
 
+func TestSharedBehavioursRunPinnedWorkspaceCopies(t *testing.T) {
+	t.Setenv("SELFORG_ENGINE_SECRET", "test-society-secret")
+	t.Setenv("SOCIETY_DATA_DIR", t.TempDir())
+	goName := "go"
+	if runtime.GOOS == "windows" {
+		goName += ".exe"
+	}
+	t.Setenv("GO_BINARY", filepath.Join(runtime.GOROOT(), "bin", goName))
+	importGo := func(n int) string {
+		t.Helper()
+		source := fmt.Sprintf("package main\nfunc Decide(v View) Action { return Action{Harvest:%d} }", n)
+		body, _ := json.Marshal(map[string]string{"name": "FRED", "source": source})
+		code, result := societyRequest(t, "POST", "strategies/import", string(body))
+		var id string
+		if code != 200 || json.Unmarshal(result["id"], &id) != nil || !validRunID(id) {
+			t.Fatalf("could not import Go: %d %s", code, result)
+		}
+		return id
+	}
+	first := importGo(2)
+	if second := importGo(2); second != first {
+		t.Fatal("repeated imports should reuse the workspace copy")
+	}
+	code, visual := societyRequest(t, "POST", "strategies/import", `{"name":"Visual","builder":{"harvest":3}}`)
+	if code != 200 || string(visual["policy"]) != `"builder"` {
+		t.Fatalf("could not import builder: %d %s", code, visual)
+	}
+	body, _ := json.Marshal(map[string]any{
+		"settings": map[string]int{"plots": 1, "copies": 1},
+		"teams":    []any{map[string]string{"name": "FRED", "strategyId": first}, visual},
+	})
+	code, run := societyRequest(t, "POST", "runs", string(body))
+	var id string
+	if code != 201 || json.Unmarshal(run["id"], &id) != nil {
+		t.Fatalf("could not create shared game: %d %s", code, run)
+	}
+	defer forgetSocietyRun(id)
+	if next := importGo(1); next == first {
+		t.Fatal("replacing a shared behaviour must create a new workspace copy")
+	}
+	forgetSocietyRun(id) // Reattach from saved behaviour and private checkpoint.
+	code, run = societyRequest(t, "POST", "runs/"+id+"/step", `{"count":3}`)
+	var snap society.Snapshot
+	if code != 200 || json.Unmarshal(run["snapshot"], &snap) != nil || snap.Phase != "harvest" {
+		t.Fatalf("saved group game did not run: %d %s", code, run)
+	}
+	for _, a := range snap.Agents {
+		if a.Error != "" || a.Harvested != []int{2, 3}[a.Team] {
+			t.Fatalf("incorrect group behaviour for team %d: harvested %d, error %s", a.Team, a.Harvested, a.Error)
+		}
+	}
+	for _, invalid := range []string{
+		`{"name":"bad","source":"not Go"}`,
+		`{"name":"bad","builder":{"vote":"invalid"}}`,
+		`{"name":"bad","builder":{},"source":"package main"}`,
+	} {
+		if code, _ := societyRequest(t, "POST", "strategies/import", invalid); code != 400 {
+			t.Fatalf("invalid behaviour accepted (%d)", code)
+		}
+	}
+}
+
 func TestCompiledStrategyMemoryIsolationAndTimeout(t *testing.T) {
 	t.Setenv("SOCIETY_DATA_DIR", t.TempDir())
 	goName := "go"

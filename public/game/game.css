@@ -5069,3 +5069,141 @@ body.resizing .inspector {
   align-items: center;
   gap: 6px;
 }
+
+/* Shared course group submissions */
+.group-heading,
+.group-match,
+.group-label,
+.group-card-actions,
+.group-file-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.group-heading,
+.group-match {
+  justify-content: space-between;
+}
+.group-heading {
+  align-items: start;
+}
+.group-heading h3 {
+  margin: 0;
+  font: 650 22px var(--display);
+}
+.group-heading p,
+.group-match p,
+.group-card p {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+.group-match {
+  margin: 18px 0 14px;
+  padding: 14px;
+  background: var(--raised-2);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+.group-match strong {
+  font: 650 16px var(--display);
+}
+.group-grid {
+  padding: 0;
+  margin: 0;
+  display: grid;
+  list-style: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.group-card {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--raised);
+}
+.group-label {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+.group-label .avatar {
+  width: 12px;
+  height: 12px;
+}
+.group-card h4 {
+  margin: 10px 0 0;
+  font: 650 17px var(--display);
+  overflow-wrap: anywhere;
+}
+.group-card-actions {
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 12px;
+}
+.group-editor {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+#group-form,
+#group-unlock {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#group-form .dlg-foot span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.group-load {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr));
+  gap: 12px;
+}
+.group-file-line {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.group-file-line input {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13px;
+}
+.group-editor textarea {
+  width: 100%;
+  min-height: 180px;
+}
+.group-editor p.note {
+  margin: 0;
+  font-size: 13px;
+}
+.group-status {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.group-error {
+  color: var(--bad, #e79a8a);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.group-error:empty,
+.group-status:empty {
+  display: none;
+}
+@media (max-width: 560px) {
+  .group-grid {
+    grid-template-columns: 1fr;
+  }
+  .group-heading h3 {
+    font-size: 20px;
+  }
+  .group-card-actions {
+    gap: 6px;
+  }
+}

@@ -6,8 +6,14 @@ import {
   requestAllowed,
   clientIdentity,
 } from "../lib/society-hosted-session.mjs";
-import { hostedSandbox } from "../lib/society-hosted-sandbox.mjs";
+import { hostedSandbox, validateHostedGroup } from "../lib/society-hosted-sandbox.mjs";
 import { claimSocietySession } from "../lib/society-hosted-limits.mjs";
+import { createCloudGroupStore, createGroupService } from "../lib/society-groups.mjs";
+import {
+  groupRoute,
+  importGroupBehaviour,
+  publicEngineRoute,
+} from "../lib/society-group-runtime.mjs";
 
 // Configuration is a build asset: health checks and empty visits must not
 // reserve a Drive or a whole server snapshot. Retry a failed asset read.
@@ -51,6 +57,8 @@ export function createSocietyProxy({
   getSandbox = hostedSandbox,
   claim = claimSocietySession,
   getConfig = hostedConfig,
+  getGroupStore = createCloudGroupStore,
+  validateGroup = validateHostedGroup,
   env = process.env,
 } = {}) {
   return async function societyProxy(req, res) {
@@ -75,11 +83,7 @@ export function createSocietyProxy({
         url.searchParams.get("path") ??
         req.query?.path ??
         url.pathname.replace(/^\/api\/society\/?/, "");
-      if (
-        !/^(config|strategies(?:\/[a-f0-9]{32})?|runs(?:\/[a-f0-9]{32}(?:\/(?:history|study|events|export|step|run|pause|frames\/\d+|agents\/\d+))?)?)$/.test(
-          path,
-        )
-      )
+      if (!publicEngineRoute.test(path) && !groupRoute.test(path))
         throw Object.assign(new Error("Game endpoint not found."), { status: 404 });
       const scope = env.VERCEL_ENV === "production" ? "production" : "preview";
       const body = req.method === "POST" ? await readBody(req) : undefined;
@@ -96,22 +100,40 @@ export function createSocietyProxy({
         res.end(JSON.stringify(config));
         return;
       }
-      const quota = await claim({
-        sessionId: identity.id,
-        clientKey: clientIdentity(req, env.SELFORG_ENGINE_SECRET),
-        environment: scope,
-      });
-      if (!quota.allowed) {
-        if (quota.retryAfter) res.setHeader("Retry-After", String(quota.retryAfter));
-        throw Object.assign(
-          new Error(
-            quota.message || "New game sessions are busy. Please try again later.",
-          ),
-          { status: 429 },
-        );
+      async function openWorkspace(allowCreate) {
+        const quota = await claim({
+          sessionId: identity.id,
+          clientKey: clientIdentity(req, env.SELFORG_ENGINE_SECRET),
+          environment: scope,
+        });
+        if (!quota.allowed) {
+          if (quota.retryAfter) res.setHeader("Retry-After", String(quota.retryAfter));
+          throw Object.assign(
+            new Error(
+              quota.message || "New game sessions are busy. Please try again later.",
+            ),
+            { status: 429 },
+          );
+        }
+        return getSandbox(identity, { allowCreate });
+      }
+      if (groupRoute.test(path)) {
+        // Only importing a published Go behaviour needs a persistent workspace.
+        const groups = createGroupService({
+          store: getGroupStore(scope),
+          scope,
+          validate: validateGroup,
+          compile: async (behaviour) =>
+            importGroupBehaviour(await openWorkspace(true), behaviour),
+        });
+        const result = await groups({ method: req.method, path, body });
+        res.setHeader("Content-Type", "application/json");
+        res.statusCode = 200;
+        res.end(JSON.stringify(result));
+        return;
       }
       const mayCreate = req.method === "POST" && ["runs", "strategies"].includes(path);
-      const host = await getSandbox(identity, { allowCreate: mayCreate });
+      const host = await openWorkspace(mayCreate);
       if (!host) {
         if (req.method === "GET" && ["runs", "strategies"].includes(path)) {
           res.setHeader("Content-Type", "application/json");

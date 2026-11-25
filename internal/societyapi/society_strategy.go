@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,6 +185,9 @@ type strategyRecord struct {
 
 var strategyBuildMu sync.Mutex
 
+// On restart each used strategy is checked against the running engine again.
+var builtStrategies = map[string][32]byte{}
+
 func strategyDir(id string) string { return filepath.Join(societyData(), "strategies", id) }
 func strategyExecutable(dir string) string {
 	name := "strategy"
@@ -198,9 +202,23 @@ func buildSocietyStrategy(rec strategyRecord) error {
 	}
 	strategyBuildMu.Lock()
 	defer strategyBuildMu.Unlock()
+	return compileStrategy(rec)
+}
+
+// Call with strategyBuildMu held so concurrent imports and resumed games
+// cannot write the same workspace executable at the same time.
+func compileStrategy(rec strategyRecord) error {
 	dir, e := filepath.Abs(strategyDir(rec.ID))
 	if e != nil {
 		return e
+	}
+	digest := sha256.Sum256([]byte(rec.Name + "\x00" + rec.Source))
+	if builtStrategies[dir] == digest {
+		_, binaryErr := os.Stat(strategyExecutable(dir))
+		_, metadataErr := os.Stat(filepath.Join(dir, "strategy.json"))
+		if binaryErr == nil && metadataErr == nil {
+			return nil
+		}
 	}
 	if e = os.MkdirAll(dir, 0700); e != nil {
 		return e
@@ -227,9 +245,106 @@ func buildSocietyStrategy(rec strategyRecord) error {
 		return fmt.Errorf("strategy could not compile: %s", strings.ReplaceAll(string(output), dir+string(filepath.Separator), ""))
 	}
 	b, _ := json.Marshal(rec)
-	return os.WriteFile(filepath.Join(dir, "strategy.json"), b, 0600)
+	metadata := filepath.Join(dir, "strategy.json")
+	existing, err := os.ReadFile(metadata)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if !bytes.Equal(b, existing) {
+		// Observers and other world setups may be reading the saved source.
+		if err := os.WriteFile(metadata+".tmp", b, 0600); err != nil {
+			return err
+		}
+		if err := os.Rename(metadata+".tmp", metadata); err != nil {
+			return err
+		}
+	}
+	builtStrategies[dir] = digest
+	return nil
 }
+
+// Imports are immutable workspace copies. Loading the same group revision twice
+// reuses its private strategy, while a later upload cannot affect an existing run.
+func importGroupStrategy(name, source string) (string, error) {
+	if err := validateSocietySource(source); err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256([]byte(name + "\x00" + source))
+	rec := strategyRecord{fmt.Sprintf("%x", digest[:16]), name, source}
+	strategyBuildMu.Lock()
+	defer strategyBuildMu.Unlock()
+	dir := strategyDir(rec.ID)
+	b, err := os.ReadFile(filepath.Join(dir, "strategy.json"))
+	if err == nil {
+		var existing strategyRecord
+		if json.Unmarshal(b, &existing) != nil || existing != rec {
+			return "", errors.New("saved group behaviour could not be verified")
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	if err := compileStrategy(rec); err != nil {
+		// Leave an existing record available for the next compile attempt.
+		if b == nil {
+			_ = os.RemoveAll(dir)
+		}
+		return "", err
+	}
+	return rec.ID, nil
+}
+
+// Used only by the group library's server after it authorises a submission or
+// resolves a published revision. No caller-supplied workspace ID is accepted.
+func ImportGroupBehaviour(input io.Reader) (any, error) {
+	var in struct {
+		Name    string           `json:"name"`
+		Source  *string          `json:"source"`
+		Policy  string           `json:"policy"`
+		Builder *society.Builder `json:"builder"`
+	}
+	if err := decodeSocietyJSON(input, &in); err != nil {
+		return nil, err
+	}
+	if len(strings.TrimSpace(in.Name)) == 0 || len(in.Name) > 80 {
+		return nil, errors.New("give the behaviour a name of 1–80 bytes")
+	}
+	if in.Source != nil {
+		if in.Builder != nil || in.Policy != "" {
+			return nil, errors.New("choose one behaviour format")
+		}
+		id, err := importGroupStrategy(in.Name, *in.Source)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"name": in.Name, "id": id}, nil
+	}
+	if in.Builder == nil {
+		return nil, errors.New("choose a Go file or a builder behaviour")
+	}
+	if in.Policy == "" {
+		in.Policy = "builder"
+	}
+	team := society.Team{Name: in.Name, Policy: in.Policy, Builder: in.Builder}
+	// Shared behaviours can target any legal world. New validates the selected
+	// world's actual plot count and memory allowance again when a game starts.
+	settings := society.DefaultSettings()
+	settings.Plots, settings.MemoryBytes = 48, 16<<20
+	if err := settings.ValidateBehaviour(team); err != nil {
+		return nil, err
+	}
+	return team, nil
+}
+
 func strategyAPI(w http.ResponseWriter, r *http.Request, parts []string) {
+	if len(parts) == 2 && parts[1] == "import" && r.Method == "POST" {
+		behaviour, err := ImportGroupBehaviour(http.MaxBytesReader(w, r.Body, 2<<20))
+		if err != nil {
+			apiError(w, 400, err)
+			return
+		}
+		jsonReply(w, 200, behaviour)
+		return
+	}
 	if len(parts) == 2 && r.Method == "GET" {
 		if !validRunID(parts[1]) {
 			apiError(w, 404, errors.New("strategy not found"))

@@ -1,4 +1,4 @@
-import { esc, teamColor } from "/game/model.js";
+import { esc, teamColor } from "./model.js";
 
 export const $ = (id) => document.getElementById(id);
 export const icon = (name, cls = "") =>
