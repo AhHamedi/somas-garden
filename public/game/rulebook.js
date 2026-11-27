@@ -2,7 +2,7 @@
 // can vote on, with each option, its parameters, how it is decided, where it
 // is in force now and what happened to it in this run.
 import { $, icon, setHTML } from "/game/dom.js";
-import { esc, fmt, plural, PHASES } from "/game/model.js";
+import { esc, fmt, plural, PHASES, foundingCostRule } from "/game/model.js";
 import {
   STATUTES,
   DECISIONS,
@@ -60,6 +60,7 @@ function matches(e, q, s) {
     ...(e.st?.points?.earn || []).map((r) => r[0]),
     ...(st?.options || []).map((o) => `${o.label} ${o.short || ""}`),
     e.d?.short || "",
+    e.d?.kind === "found" ? foundingCostRule(s) : "",
   ]
     .join(" ")
     .toLowerCase();
@@ -142,10 +143,7 @@ function constitution(app) {
             ? "More Yes tokens than No tokens are required. A tie fails."
             : "More than half of eligible residents must support the decision. Each cast vote costs one token.",
         ],
-        [
-          "Founding cost",
-          "The plot must also cover {governmentCost} mind in founding pledges.",
-        ],
+        ["Founding cost", foundingCostRule(s)],
         [
           "Timing",
           "A decision that passes takes effect the next morning. Tied rival options preserve the current rule.",
@@ -284,7 +282,7 @@ function decisionPage(app, e) {
           ? "More Yes tokens than No tokens"
           : "More than half of eligible residents",
     ],
-    ...(d.kind === "found" ? [["Founding cost", "{governmentCost} pledged mind"]] : []),
+    ...(d.kind === "found" ? [["Founding cost", foundingCostRule(s)]] : []),
     ["Takes effect", "The following dawn"],
   ];
   const data = app.study?.data;

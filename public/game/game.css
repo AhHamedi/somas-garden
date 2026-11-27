@@ -2068,6 +2068,30 @@ body.inspecting .ticker {
   border: 1px solid var(--line);
   overflow: hidden;
 }
+.motion-outcome {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--line-2);
+  background: var(--raised);
+  border-radius: 0 8px 8px 0;
+}
+.motion-outcome strong {
+  font-size: 14px;
+}
+.motion-outcome p,
+.motion-reason {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.motion-outcome strong + p {
+  margin-top: 3px;
+}
+.motion-reason {
+  display: block;
+  margin-top: 6px;
+}
 .chamber-title {
   display: flex;
   justify-content: space-between;

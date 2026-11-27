@@ -144,7 +144,7 @@ export const DECISIONS = [
     name: "Found a government",
     icon: "hall",
     requires: "noGovernment",
-    short: "Residents vote to form a local assembly and pledge its founding cost.",
+    short: "Residents vote to form a local assembly.",
   },
   {
     kind: "dissolve",

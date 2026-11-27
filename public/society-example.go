@@ -1,6 +1,6 @@
 //go:build agent
 
-// somas:api=8
+// somas:api=9
 // Import through Team behaviours. Each individual keeps its own memory.
 package main
 
@@ -31,6 +31,7 @@ func Decide(v View) Action {
 	case "harvest":
 		a.Harvest = max(0, 2*v.Settings.DailyFood-v.Self.Food)
 	case "pledges":
+		// A founding Yes already contributes its voting cost. Reserve extra mind for any shortfall.
 		if !v.Plots[v.Self.Plot].Government {
 			a.Pledge = map[string]float64{"local": min(2, max(0, v.Self.Mind-v.Settings.ProposalCost-v.Settings.VoteCost))}
 		}

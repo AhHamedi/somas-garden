@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { checkGroupLibrary } from "./support/group-library-check.mjs";
+import { checkFoundingVote } from "./support/founding-vote-check.mjs";
 
 const temp = await mkdtemp(join(tmpdir(), "amoeboids-browser-"));
 const groupKeySeed = randomBytes(32).toString("hex");
@@ -58,7 +59,10 @@ try {
   assert.ok(origin, "server started");
   browser = await chromium.launch({ headless: true });
   // This check publishes fixtures into the disposable local server's six group slots.
-  if (server) await checkGroupLibrary(browser, origin, groupKeySeed);
+  if (server) {
+    await checkGroupLibrary(browser, origin, groupKeySeed);
+    await checkFoundingVote(browser, origin);
+  }
   // Hosted checks can reuse a dedicated test workspace across staged releases.
   const storageState = process.env.SOCIETY_BROWSER_STATE || undefined;
   const page = await browser.newPage({

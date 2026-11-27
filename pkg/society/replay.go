@@ -2,7 +2,7 @@ package society
 
 import "encoding/json"
 
-const ReplayVersion = 8
+const ReplayVersion = 9
 
 func (w *World) Snapshot() Snapshot {
 	w.updateResidents()

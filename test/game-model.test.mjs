@@ -4,6 +4,9 @@ import {
   indexSnapshot,
   lawValue,
   motionTally,
+  foundingCostRule,
+  foundingRequirement,
+  motionOutcome,
   motionTitle,
   cropStatus,
   phaseStory,
@@ -127,6 +130,73 @@ test("replays keep the recorded numbers and units when voting rules change", () 
     ["voting weight", "Two thirds", 2],
   );
 });
+test("founding describes the voting fees and pledge rules of the displayed world", () => {
+  const settings = { governmentCost: 10, voteCost: 0.5 };
+  assert.match(
+    foundingRequirement({ version: 9, settings }, 6),
+    /more Yes tokens.*10 mind.*0.5 mind once.*Pledges can cover/s,
+  );
+  assert.match(
+    foundingRequirement({ version: 8, settings }, 6),
+    /more Yes tokens.*10 mind in founding pledges/,
+  );
+  assert.match(
+    foundingRequirement({ version: 7, settings }, 6),
+    /4 of 6 residents.*10 mind in founding pledges/,
+  );
+  assert.match(
+    foundingCostRule({ version: 9, settings: { ...settings, voteCost: 0 } }),
+    /pledges must cover the 10 mind/,
+  );
+  assert.equal(
+    foundingCostRule({ version: 9, settings: { ...settings, governmentCost: 0 } }),
+    "This world has no founding cost.",
+  );
+});
+
+test("the Council funding verdict uses mind recorded on that ballot, independently of tokens", () => {
+  const q = {
+    input: { kind: "found" },
+    yes: 14,
+    no: 0,
+    status: "failed",
+    reason: "Insufficient founding mind",
+    foundingFunding: { required: 10, voteMind: 2, pledged: 1.5, fromPledges: 0 },
+  };
+  assert.deepEqual(motionOutcome(q), {
+    headline: "Vote passed. Founding was 6.5 mind short.",
+    funding:
+      "2 mind from Yes ballots + 1.5 pledged = 3.5 available. Founding requires 10 mind.",
+  });
+  const funded = motionOutcome({
+    ...q,
+    status: "scheduled",
+    reason: "",
+    foundingFunding: { required: 10, voteMind: 9.5, pledged: 5, fromPledges: 0.5 },
+  });
+  assert.equal(funded.headline, "Founding cost covered");
+  assert.match(
+    funded.funding,
+    /9.5 mind from Yes ballots.*5 pledged.*14.5 available.*10 mind.*0.5 mind collected/,
+  );
+  const lost = motionOutcome({ ...q, yes: 2, no: 3, reason: "Insufficient support" });
+  assert.equal(lost.headline, "Insufficient support");
+  assert.match(lost.funding, /3.5 available/);
+  assert.deepEqual(
+    motionOutcome({
+      ...q,
+      reason: "Insufficient founding pledges",
+      foundingFunding: undefined,
+    }),
+    { headline: "Insufficient founding pledges", funding: "" },
+  );
+  const precise = motionOutcome({
+    ...q,
+    foundingFunding: { required: 10, voteMind: 9.999999, pledged: 0, fromPledges: 0 },
+  });
+  assert.match(precise.headline, /0.000001 mind short/);
+});
+
 test("ranking, crop events and relief have an observer readout", () => {
   assert.equal(PHASES[1].id, "harvest_order");
   assert.match(

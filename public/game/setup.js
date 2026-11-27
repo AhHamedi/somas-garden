@@ -391,7 +391,7 @@ export class Setup {
         </div>`;
       case "politics":
         return `<div class="cfg-grid">
-          ${card("Mind costs", ["proposalCost", "voteCost", "justiceCost", "governmentCost"].map((k) => this.num(k)).join(""))}
+          ${card("Mind costs", `${["proposalCost", "voteCost", "justiceCost", "governmentCost"].map((k) => this.num(k)).join("")}<p class="cfg-key">Mind spent on each Yes ballot counts once toward founding, however many tokens the voter spends. Pledges can cover the rest.</p>`)}
           ${card("Voting weight", `${this.ctl("votingTokens")}<p class="cfg-key">Residents can vote to change how their plot allocates its daily tokens.</p>`)}
           ${card("Rule ballots", `${this.ctl("ruleFraction")}<p class="cfg-key">Only tokens cast for Yes or No count. Rule changes need more than the chosen share of Yes tokens, or all tokens at 100%. Founding, dissolution and role decisions need more Yes tokens than No tokens.</p>`)}
         </div>`;
@@ -629,7 +629,14 @@ export class Setup {
           1,
           "Tokens to spend on each Yes or No vote.",
         ],
-        ["pledge", "Mind to pledge", 0, 100, 0.1, "Funds shared costs such as founding."],
+        [
+          "pledge",
+          "Mind to pledge",
+          0,
+          100,
+          0.1,
+          "Extra mind to cover the founding cost if Yes ballots leave a shortfall.",
+        ],
       ]
         .map(
           ([k, label, min, max, step, help]) =>

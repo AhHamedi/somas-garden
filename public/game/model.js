@@ -95,11 +95,20 @@ export const absoluteToday = (s) => s.absoluteDay;
 // Laws
 
 export const roleName = (kind) => (kind === "trade" ? "Trade representative" : "Justice");
+export function foundingCostRule(s) {
+  const cost = fmt(s.settings.governmentCost, 6);
+  if (s.version > 0 && s.version < 9)
+    return `The plot must cover ${cost} mind in founding pledges.`;
+  if (s.settings.governmentCost === 0) return "This world has no founding cost.";
+  if (s.settings.voteCost === 0)
+    return `Yes ballots cost no mind here, so pledges must cover the ${cost} mind founding cost.`;
+  return `Founding costs ${cost} mind. Each Yes voter contributes the ballot fee of ${fmt(s.settings.voteCost, 6)} mind once, however many tokens they spend. Pledges can cover the rest.`;
+}
 export function foundingRequirement(s, residents) {
   const support = hasTokenOnlyVoting(s)
     ? "more Yes tokens than No tokens"
     : `${fmt(Math.floor(residents / 2) + 1)} of ${plural(residents, "resident")}`;
-  return `Founding requires ${support} and ${fmt(s.settings.governmentCost, 2)} pledged mind.`;
+  return `Founding requires ${support}. ${foundingCostRule(s)}`;
 }
 export function cropStatus(p) {
   return (
@@ -256,6 +265,26 @@ export function motionTally(p, s) {
     no: p.no || 0,
     abstain: p.abstain ?? Math.max(0, t.total - (p.yes || 0) - (p.no || 0)),
   };
+}
+
+// Only a receipt recorded with the decision can establish its original funding.
+export function motionOutcome(q) {
+  const f = q.foundingFunding;
+  let headline = q.reason || "";
+  if (
+    !f ||
+    q.input?.kind !== "found" ||
+    ![f.required, f.voteMind, f.pledged, f.fromPledges].every(Number.isFinite)
+  )
+    return { headline, funding: "" };
+  const available = f.voteMind + f.pledged;
+  if (q.status === "failed" && q.reason === "Insufficient founding mind")
+    headline = `Vote passed. Founding was ${fmt(f.required - available, 6)} mind short.`;
+  else if (!headline && passedStatus(q)) headline = "Founding cost covered";
+  const collected =
+    f.fromPledges > 0 ? ` ${fmt(f.fromPledges, 6)} mind collected from pledges.` : "";
+  const funding = `${fmt(f.voteMind, 6)} mind from Yes ballots + ${fmt(f.pledged, 6)} pledged = ${fmt(available, 6)} available. Founding requires ${fmt(f.required, 6)} mind.${collected}`;
+  return { headline, funding };
 }
 
 /** Motions relevant to a plot on a given absolute day (tabled or decided). */

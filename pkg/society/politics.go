@@ -400,6 +400,7 @@ func (w *World) castVote(a *Agent, p *Proposal, c VoteChoice) {
 		w.event("vote_rejected", a.ID, a.Plot, "Invalid token spend on "+p.ID, 0)
 		return
 	}
+	mindBefore := a.Mind
 	if !spend(a, w.Settings.VoteCost) {
 		w.event("vote_rejected", a.ID, a.Plot, "Insufficient unpledged mind for "+p.ID, 0)
 		return
@@ -407,6 +408,10 @@ func (w *World) castVote(a *Agent, p *Proposal, c VoteChoice) {
 	a.VotingTokens -= tokens
 	p.Votes[a.ID] = choice
 	p.TokenSpends[a.ID] = tokens
+	if funding := p.FoundingFunding; funding != nil && choice == "yes" {
+		// Credit the actual debit, including the ledger's rounding at six decimals.
+		funding.VoteMind = roundMind(funding.VoteMind + (roundMind(mindBefore) - a.Mind))
+	}
 }
 
 func tally(p *Proposal) bool {
@@ -443,14 +448,22 @@ func conflictKey(p *Proposal) string {
 func (w *World) votingPhase(decisions map[int]Decision) {
 	w.freezeBallots()
 	open := map[string]*Proposal{}
+	pledgedMillionths := map[int]int64{}
 	for _, p := range w.Proposals {
 		if p.Status == "open" && p.Closes == w.AbsoluteDay {
 			open[p.ID] = p
+			if p.Input.Kind == "found" {
+				p.FoundingFunding = &FoundingFunding{Required: roundMind(w.Settings.GovernmentCost)}
+				pledgedMillionths[p.Plot] = 0
+			}
 		}
 	}
 	for _, a := range w.Agents {
 		if !a.Alive {
 			continue
+		}
+		if _, founding := pledgedMillionths[a.Plot]; founding {
+			pledgedMillionths[a.Plot] += int64(math.Round(a.Pledges["local"] * 1e6))
 		}
 		choices := voteChoices(decisions[a.ID])
 		counts := make(map[string]int, len(choices))
@@ -465,7 +478,6 @@ func (w *World) votingPhase(decisions map[int]Decision) {
 	}
 	groups := map[string][]*Proposal{}
 	var groupOrder []string
-	foundingPlots := map[int]bool{}
 	for _, p := range w.Proposals {
 		if open[p.ID] == nil {
 			continue
@@ -477,8 +489,8 @@ func (w *World) votingPhase(decisions map[int]Decision) {
 			}
 			w.politicalState().VoteCredits[id]++
 		}
-		if p.Input.Kind == "found" {
-			foundingPlots[p.Plot] = true
+		if p.FoundingFunding != nil {
+			p.FoundingFunding.Pledged = float64(pledgedMillionths[p.Plot]) / 1e6
 		}
 		if passed {
 			p.Status = "passed"
@@ -495,7 +507,7 @@ func (w *World) votingPhase(decisions map[int]Decision) {
 	for _, key := range groupOrder {
 		w.resolveBallots(groups[key])
 	}
-	for id := range foundingPlots {
+	for id := range pledgedMillionths {
 		w.releaseFoundingPledges(id)
 	}
 }
@@ -522,9 +534,13 @@ func (w *World) resolveBallots(group []*Proposal) {
 	if tied {
 		return
 	}
-	if winner.Input.Kind == "found" && !w.chargeFoundingPledges(winner.Plot, w.Settings.GovernmentCost) {
-		winner.Status, winner.Reason = "failed", "Insufficient founding pledges"
-		return
+	if funding := winner.FoundingFunding; funding != nil {
+		shortfall := max(0, roundMind(funding.Required-funding.VoteMind))
+		if !w.chargeFoundingPledges(winner.Plot, shortfall) {
+			winner.Status, winner.Reason = "failed", "Insufficient founding mind"
+			return
+		}
+		funding.FromPledges = shortfall
 	}
 	winner.Status, winner.Activate = "scheduled", w.AbsoluteDay+1
 	w.Pending = append(w.Pending, Pending{ID: winner.ID, At: winner.Activate, Actor: winner.Author, Plot: winner.Plot, Input: winner.Input})

@@ -30,6 +30,8 @@ Open **http://127.0.0.1:8787** and press **Play**. Use **World** to inspect a pl
 | Who handles a breach?              | Justice reviews a public record of the breach and can issue a sanction. Residents can revoke either department holder.                                                                |
 | What happens at a crop shock?      | The Extra carrots event adds carrots. A blighted plot must receive enough outside aid by the end of transfers or all its residents are excluded.                                      |
 
+To found a government, a plot needs more Yes tokens than No tokens and 10 mind by default. Each resident who casts an accepted Yes vote puts their usual voting cost toward founding, however many tokens they spend. Residents can pledge extra mind to cover the rest.
+
 The [MVP specification](docs/AMOEBOIDS_SPECIFICATION.md) gives the daily sequence, parameters and worked examples for harvest ranking, voting and relief.
 
 ## Design an agent

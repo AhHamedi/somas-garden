@@ -1,6 +1,6 @@
 # Amoeboids agent API
 
-In API version 8, each Amoeboid runs its team’s function with its own observations and private memory. Import the [working Go example](../public/society-example.go) in **Team behaviours**, or use a visual strategy for fixed choices and conditional actions.
+In API version 9, each Amoeboid runs its team’s function with its own observations and private memory. Import the [working Go example](../public/society-example.go) in **Team behaviours**, or use a visual strategy for fixed choices and conditional actions.
 
 ## What the agent sees
 
@@ -17,7 +17,7 @@ Agents see public actions across plots in `Actions`. This slice covers the curre
 | `placement`               | Choose in a fresh random order each month. `v.Plots[i].Residents` lists the IDs already settled there. Return `PlotChoice: &id`. The placement is immediately visible to the next agent.                                    |
 | `harvest_order`           | For ranked harvesting, return `HarvestRanking` with each active local resident exactly once, including yourself. An empty list abstains. The resolved queue is available in `Plots[Self.Plot].HarvestOrder` before harvest. |
 | `harvest`                 | Request a whole number of carrots in `Harvest`. Field stock and personal storage determine what fits.                                                                                                                       |
-| `pledges`                 | Offer mind toward founding a local government with `Pledge["local"]`.                                                                                                                                                       |
+| `pledges`                 | Reserve extra mind for any founding shortfall with `Pledge["local"]`.                                                                                                                                                       |
 | `records`, `record_pages` | Read public action history with `Read`.                                                                                                                                                                                     |
 | `proposals`               | Submit one or more `Proposals` for the local assembly. Equivalent submissions on the same plot and day share one ballot ID. Its `Sponsors` lists the submitting residents.                                                  |
 | `voting`                  | Submit `OrderedVotes` to spend available mind and tokens on open local ballots.                                                                                                                                             |
@@ -48,7 +48,9 @@ a.OrderedVotes = []VoteChoice{{Proposal: ballot.ID, Choice: "yes", Tokens: 2}}
 
 The engine processes ordered choices in sequence. Each accepted Yes or No spends the specified tokens and costs `v.Settings.VoteCost` in unpledged mind once per ballot. An omitted token quantity on a Yes or No spends one token. An unaffordable choice spends neither resource. To abstain, omit the proposal from your response or return `Choice: "abstain"` with zero tokens. Both contribute zero to the tally and cost nothing.
 
-Every political ballot counts tokens. `Total` is the sum of Yes and No tokens spent. Founding or dissolving a government, electing a representative and revoking an appointment require more Yes tokens than No tokens. Founding also requires sufficient pledged mind. Rule changes use the plot’s current support fraction, which defaults to 0.5. For example, propose `Key: "threshold"` with `Rule{Mode: "tokens", Amount: 0.75}` to require more than 75% Yes tokens on subsequent rule changes. At 1.0, every token cast must be Yes. A ballot with zero tokens cast fails.
+Every political ballot counts tokens. `Total` is the sum of Yes and No tokens spent. Founding or dissolving a government, electing a representative and revoking an appointment require more Yes tokens than No tokens. Rule changes use the plot’s current support fraction, which defaults to 0.5. For example, propose `Key: "threshold"` with `Rule{Mode: "tokens", Amount: 0.75}` to require more than 75% Yes tokens on subsequent rule changes. At 1.0, every token cast must be Yes. A ballot with zero tokens cast fails.
+
+On a founding ballot, each accepted Yes vote puts the mind already spent on that choice toward `v.Settings.GovernmentCost`. The amount is `v.Settings.VoteCost` once per Yes voter, regardless of token spend. If that covers the cost, no separate pledge is needed. Otherwise, the engine draws the balance from residents’ local pledges if those pledges cover it. If funding falls short, the government does not form.
 
 ## Trade and Justice
 

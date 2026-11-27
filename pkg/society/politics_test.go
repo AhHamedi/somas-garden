@@ -67,15 +67,124 @@ func TestFoundingHasNoPoliciesAndDuplicatesChargeOnce(t *testing.T) {
 	if len(w.Pending) != 1 {
 		t.Fatalf("duplicate founding scheduled %d times", len(w.Pending))
 	}
+	if got := w.Proposals[0].FoundingFunding; got == nil || *got != (FoundingFunding{Required: 10, VoteMind: 10, Pledged: 10}) {
+		t.Fatalf("ten paid Yes votes should fully fund the government: %+v", got)
+	}
 	for _, a := range w.Agents {
-		if a.Pledges["local"] != 0 {
-			t.Fatal("founding cost not drawn once")
+		if a.Pledges["local"] != 0 || a.Mind != 12-a.PoliticalMind {
+			t.Fatal("founding left a pledge reserved or an unaccounted charge")
+		}
+		if a.ID != 0 && a.Mind != 11 {
+			t.Fatal("a voter was charged again through their pledge")
 		}
 	}
 	tomorrow(w)
 	p := w.Plots[0]
 	if !p.Government || len(p.Rules) != 0 || len(p.Roles) != 0 {
 		t.Fatalf("founding enabled powers: %+v", p)
+	}
+}
+
+func TestFoundingFourteenYesTokensCanRepresentDifferentMind(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		voters, perVoter int
+		pledge           float64
+		status           string
+		fromPledges      float64
+	}{
+		{"fourteen residents", 14, 1, 0, "scheduled", 0},
+		{"one resident", 1, 14, 8, "failed", 0},
+		{"one resident with enough pledged", 1, 14, 10, "scheduled", 9},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			w := politicalWorld(t, 15, 1)
+			w.governancePhase(map[int]Decision{14: {Proposals: []ProposalInput{{Kind: "found"}}}})
+			p := w.Proposals[0]
+			w.Agents[14].Pledges["local"] = test.pledge
+			patronMind := w.Agents[14].Mind
+			votes := map[int]Decision{}
+			for id := 0; id < test.voters; id++ {
+				w.Agents[id].VotingTokens = test.perVoter
+				votes[id] = Decision{OrderedVotes: []VoteChoice{{p.ID, "yes", test.perVoter}}}
+			}
+			w.votingPhase(votes)
+			want := FoundingFunding{Required: 10, VoteMind: float64(test.voters), Pledged: test.pledge, FromPledges: test.fromPledges}
+			if p.Yes != 14 || p.No != 0 || p.Status != test.status || p.FoundingFunding == nil || *p.FoundingFunding != want {
+				t.Fatalf("14–0 ballot %s, funding %+v; wanted %s, %+v", p.Status, p.FoundingFunding, test.status, want)
+			}
+			if test.status == "failed" && p.Reason != "Insufficient founding mind" {
+				t.Fatalf("wrong failure reason: %s", p.Reason)
+			}
+			if a := w.Agents[14]; a.Mind != patronMind-test.fromPledges || a.Pledges["local"] != 0 {
+				t.Fatalf("wrong founding pledge debit or release: %+v", a)
+			}
+		})
+	}
+}
+
+func TestFoundingChargesOnlyTheShortfallAcrossPledges(t *testing.T) {
+	w := politicalWorld(t, 8, 2)
+	w.Settings.VoteCost = .3333337
+	w.Settings.GovernmentCost = 2
+	w.governancePhase(map[int]Decision{5: {Proposals: []ProposalInput{{Kind: "found"}}}})
+	p := w.Proposals[0]
+	w.Agents[3].Pledges["local"] = 1
+	w.Agents[4].Mind, w.Agents[4].Pledges["local"] = 2, 2
+	w.Agents[6].Plot, w.Agents[6].Pledges["local"] = 1, 10
+	w.Agents[7].Alive, w.Agents[7].Pledges["local"] = false, 10
+	w.votingPhase(map[int]Decision{
+		0: {OrderedVotes: []VoteChoice{{p.ID, "yes", 2}}},
+		1: {Votes: map[string]string{p.ID: "no"}},
+		2: {Votes: map[string]string{p.ID: "abstain"}},
+		3: {OrderedVotes: []VoteChoice{{p.ID, "yes", 7}}}, // Over token budget.
+		4: {Votes: map[string]string{p.ID: "yes"}},        // All mind reserved.
+		5: {Votes: map[string]string{p.ID: "yes"}},
+	})
+	want := FoundingFunding{Required: 2, VoteMind: .666668, Pledged: 3, FromPledges: 1.333332}
+	if p.Status != "scheduled" || p.Yes != 3 || p.No != 1 || p.FoundingFunding == nil || *p.FoundingFunding != want {
+		t.Fatalf("founding result %s, %d–%d, funding %+v", p.Status, p.Yes, p.No, p.FoundingFunding)
+	}
+	// The two pledges cover the shortfall in a 1:2 ratio. The No vote pays its usual fee.
+	for id, wantMind := range []float64{11.666666, 11.666666, 12, 11.555556, 1.111112, 10.666666, 12, 12} {
+		if a := w.Agents[id]; a.Mind != wantMind {
+			t.Errorf("resident %d has %f mind; want %f", id, a.Mind, wantMind)
+		}
+	}
+}
+
+func TestFoundingStillNeedsBothSupportAndFunding(t *testing.T) {
+	for _, test := range []struct {
+		name                       string
+		voteCost, required, pledge float64
+		no                         bool
+		status, reason             string
+		want                       FoundingFunding
+	}{
+		{"tie with ample funding", 1, 1, 3, true, "failed", "Insufficient support", FoundingFunding{Required: 1, VoteMind: 1, Pledged: 3}},
+		{"free vote needs pledge", 0, .5, 0, false, "failed", "Insufficient founding mind", FoundingFunding{Required: .5}},
+		{"free vote with pledge", 0, .5, .5, false, "scheduled", "", FoundingFunding{Required: .5, Pledged: .5, FromPledges: .5}},
+		{"sub-micro vote rounds to zero", .0000004, .000001, 0, false, "failed", "Insufficient founding mind", FoundingFunding{Required: .000001}},
+		{"free founding", 0, 0, 0, false, "scheduled", "", FoundingFunding{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			w := politicalWorld(t, 3, 1)
+			w.Settings.VoteCost, w.Settings.GovernmentCost = test.voteCost, test.required
+			w.Agents[2].Pledges["local"] = test.pledge
+			w.governancePhase(map[int]Decision{0: {Proposals: []ProposalInput{{Kind: "found"}}}})
+			p := w.Proposals[0]
+			votes := map[int]Decision{0: {Votes: map[string]string{p.ID: "yes"}}}
+			if test.no {
+				votes[1] = Decision{Votes: map[string]string{p.ID: "no"}}
+			}
+			w.votingPhase(votes)
+			if p.Status != test.status || p.Reason != test.reason || p.FoundingFunding == nil || *p.FoundingFunding != test.want {
+				t.Fatalf("founding result %s (%s) funding %+v; want %s (%s) %+v", p.Status, p.Reason, p.FoundingFunding, test.status, test.reason, test.want)
+			}
+			if w.Agents[2].Mind != 12-test.want.FromPledges {
+				t.Fatalf("wrong pledge debit: %f mind remains", w.Agents[2].Mind)
+			}
+		})
 	}
 }
 

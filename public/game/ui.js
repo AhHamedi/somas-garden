@@ -18,6 +18,7 @@ import {
   plotLaws,
   foundingRequirement,
   motionTitle,
+  motionOutcome,
   motionTally,
   statusOf,
   passedStatus,
@@ -556,6 +557,7 @@ export function motionCard(app, q) {
   return `<button class="motion" data-motion="${esc(q.id)}" title="Tabled by ${esc((q.sponsors || [q.author]).map((id) => agentName(ix, id)).join(", "))}">
     <div class="motion-top"><span class="motion-title">${esc(motionTitle(ix, q))}</span>${chip(st.label, st.tone)}</div>
     ${open ? "" : `<span class="tally"><i class="y" style="width:${yesPct}%"></i><i class="n" style="width:${noPct}%"></i><span class="mark" style="left:${mark}%"></span></span><span class="tally-legend"><span><b>${fmt(t.yes)}</b>–<b>${fmt(t.no)}</b></span><span>${t.unit === "tokens cast" && !t.total ? "No tokens cast" : `${fmt(t.need)} needed`}</span></span>`}
+    ${q.status === "failed" && q.reason ? `<span class="motion-reason">${esc(motionOutcome(q).headline)}</span>` : ""}
   </button>`;
 }
 

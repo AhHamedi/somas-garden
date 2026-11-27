@@ -13,6 +13,8 @@ import {
   motionTitle,
   motionChange,
   motionTally,
+  motionOutcome,
+  foundingCostRule,
   statusOf,
   passedStatus,
   dayLabel,
@@ -178,16 +180,20 @@ export class Council {
     const verdictTone =
       q.status === "open" ? "open" : passed ? "yes" : st.tone === "no" ? "no" : "neutral";
     const law = statuteOfMotion(q);
+    const outcome = motionOutcome(q);
+    const funding =
+      q.status === "open" && q.input?.kind === "found"
+        ? foundingCostRule(s)
+        : outcome.funding;
     const when =
       q.status === "scheduled"
         ? `Takes effect ${dayLabel(s, q.activate)}`
         : q.status === "activated"
           ? `In force since ${dayLabel(s, q.activate)}`
-          : q.reason
-            ? q.reason
-            : "";
+          : "";
     return `<div class="chamber-stage">
         <div class="chamber-title"><div><h2>${esc(motionTitle(ix, q))}</h2><p>${esc(`${plotName(ix, q.plot)} assembly`)}</p></div><span class="verdict ${verdictTone}">${icon(q.status === "open" ? "scroll" : passed ? "ballot" : "close")}${esc(st.label)}</span></div>
+        ${outcome.headline || funding ? `<div class="motion-outcome" data-motion-outcome>${outcome.headline ? `<strong>${esc(outcome.headline)}</strong>` : ""}${funding ? `<p data-founding-funding>${esc(funding)}</p>` : ""}</div>` : ""}
         <svg class="hemicycle" viewBox="-22 -22 ${W + 44} ${H + 44}" role="img" aria-label="${esc(`${vs.length || ghosts} eligible residents. ${t.yes} yes and ${t.no} no, counted in ${t.unit}.`)}">${empty}${circles}${centre}</svg>
         <div class="vote-bar">
           <div class="vote-nums"><span class="side yes"><b>${fmt(t.yes)}</b><small>yes</small></span><span class="need">${requirement}</span><span class="side no"><b>${fmt(t.no)}</b><small>no</small></span></div>

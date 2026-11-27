@@ -59,6 +59,16 @@ type Proposal struct {
 	Votes               map[int]string `json:"votes,omitempty"`
 	PlotVotes           map[int]string `json:"plotVotes,omitempty"`
 	RepresentativePlots map[int]int    `json:"representativePlots,omitempty"`
+
+	FoundingFunding *FoundingFunding `json:"foundingFunding,omitempty"`
+}
+
+// FoundingFunding records the resources available when a founding ballot closed.
+type FoundingFunding struct {
+	Required    float64 `json:"required"`
+	VoteMind    float64 `json:"voteMind"`
+	Pledged     float64 `json:"pledged"`
+	FromPledges float64 `json:"fromPledges"`
 }
 
 // Order is a Justice decision tied to a public quota-breach receipt.
