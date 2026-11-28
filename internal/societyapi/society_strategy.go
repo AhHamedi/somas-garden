@@ -263,8 +263,8 @@ func compileStrategy(rec strategyRecord) error {
 	return nil
 }
 
-// Imports are immutable workspace copies. Loading the same group revision twice
-// reuses its private strategy, while a later upload cannot affect an existing run.
+// Imports are immutable workspace copies. Loading the same name and source
+// reuses its strategy, so a later repository change cannot affect an existing run.
 func importGroupStrategy(name, source string) (string, error) {
 	if err := validateSocietySource(source); err != nil {
 		return "", err
@@ -293,8 +293,8 @@ func importGroupStrategy(name, source string) (string, error) {
 	return rec.ID, nil
 }
 
-// Used only by the group library's server after it authorises a submission or
-// resolves a published revision. No caller-supplied workspace ID is accepted.
+// ImportGroupBehaviour validates a selected repository behaviour. The caller
+// supplies its contents and the engine assigns the workspace strategy ID.
 func ImportGroupBehaviour(input io.Reader) (any, error) {
 	var in struct {
 		Name    string           `json:"name"`

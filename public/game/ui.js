@@ -2,6 +2,7 @@
 // event ticker and the selection inspector. Each renderer reads the current
 // indexed snapshot and writes only when its markup changes.
 
+import { courseworkSource } from "/game/group-library.js";
 import {
   PHASES,
   WEATHER,
@@ -724,7 +725,7 @@ function renderAgent(app, el) {
     ? set.representativeCapacity
     : set.personalCapacity;
   const backTo = app.backPlot ?? (a.plot >= 0 || a.plot === -1 ? a.plot : null);
-  const head = `<div class="insp-head" style="grid-template-columns:1fr auto"><div>${backTo !== null && backTo !== undefined ? `<button class="back" data-back>${icon("back")}${backTo === -1 ? "Excluded residents" : esc(plotName(ix, backTo))}</button>` : ""}<div class="agent-head">${avatar(a, roles, "lg")}<div><h2>${esc(a.name)}</h2><p>${esc(s.teams[a.team]?.name || "")} team, ${esc(where)}</p>${roleChips ? `<div class="chips">${roleChips}</div>` : ""}</div></div></div>${closeButton(app)}</div>`;
+  const head = `<div class="insp-head" style="grid-template-columns:1fr auto"><div>${backTo !== null && backTo !== undefined ? `<button class="back" data-back>${icon("back")}${backTo === -1 ? "Excluded residents" : esc(plotName(ix, backTo))}</button>` : ""}<div class="agent-head">${avatar(a, roles, "lg")}<div><h2>${esc(a.name)}</h2><p>${esc(s.teams[a.team]?.name || "")} team, ${esc(where)}</p>${s.teams[a.team]?.coursework ? `<p class="coursework-origin">Group ${esc(s.teams[a.team].coursework.group)} · ${courseworkSource(s.teams[a.team].coursework)}</p>` : ""}${roleChips ? `<div class="chips">${roleChips}</div>` : ""}</div></div></div>${closeButton(app)}</div>`;
   const today = agentDay(
     (app.dayFrames || []).flatMap((f) => f.events || []),
     a.id,

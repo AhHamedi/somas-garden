@@ -5098,8 +5098,7 @@ body.resizing .inspector {
 .group-heading,
 .group-match,
 .group-label,
-.group-card-actions,
-.group-file-line {
+.group-card-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5170,42 +5169,10 @@ body.resizing .inspector {
   margin-top: auto;
   padding-top: 12px;
 }
-.group-editor {
-  display: grid;
-  gap: 16px;
-  min-width: 0;
-}
-#group-form,
-#group-unlock {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-#group-form .dlg-foot span {
-  font-size: 13px;
-  color: var(--ink-2);
-}
-.group-load {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr));
-  gap: 12px;
-}
-.group-file-line {
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-.group-file-line input {
-  min-width: 0;
-  max-width: 100%;
-  font-size: 13px;
-}
-.group-editor textarea {
-  width: 100%;
-  min-height: 180px;
-}
-.group-editor p.note {
-  margin: 0;
-  font-size: 13px;
+.group-card code,
+.coursework-origin {
+  overflow-wrap: anywhere;
+  font-size: 12px;
 }
 .group-status {
   color: var(--ink-2);

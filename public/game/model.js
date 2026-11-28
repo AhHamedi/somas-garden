@@ -786,6 +786,8 @@ export function migrateTeams(teams, defaults) {
     );
   if (untouched) return structuredClone(defaults);
   return teams.map((t) => {
+    // Repository imports must use the exact builder that was validated and pinned.
+    if (t.coursework) return t;
     if (t.builder) {
       const builder = structuredClone(t.builder);
       delete builder.migrate;

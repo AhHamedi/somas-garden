@@ -55,14 +55,24 @@ type Rule struct {
 	Evidence    int      `json:"evidence,omitempty"`
 }
 type Team struct {
-	Copies     int      `json:"copies,omitempty"`
-	StrategyID string   `json:"strategyId,omitempty"`
-	Name       string   `json:"name"`
-	Policy     string   `json:"policy"`
-	Color      string   `json:"color,omitempty"`
-	Builder    *Builder `json:"builder,omitempty"`
-	Endpoint   string   `json:"endpoint,omitempty"`
-	Token      string   `json:"-"`
+	Copies     int               `json:"copies,omitempty"`
+	StrategyID string            `json:"strategyId,omitempty"`
+	Coursework *CourseworkSource `json:"coursework,omitempty"`
+	Name       string            `json:"name"`
+	Policy     string            `json:"policy"`
+	Color      string            `json:"color,omitempty"`
+	Builder    *Builder          `json:"builder,omitempty"`
+	Endpoint   string            `json:"endpoint,omitempty"`
+	Token      string            `json:"-"`
+}
+
+// CourseworkSource identifies the repository submission selected for this run.
+type CourseworkSource struct {
+	Group      int    `json:"group"`
+	Path       string `json:"path"`
+	Revision   string `json:"revision"`
+	Commit     string `json:"commit,omitempty"`
+	Repository string `json:"repository,omitempty"`
 }
 type BehaviorRule struct {
 	Phase  string   `json:"phase"`

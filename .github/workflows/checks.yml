@@ -5,6 +5,26 @@ on:
 permissions:
   contents: read
 jobs:
+  group-submission-scope:
+    name: Group submission scope
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check changed paths against the shared base
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head"
+          git diff --no-ext-diff --no-renames --name-only -z "${BASE_SHA}...${HEAD_SHA}" -- | node scripts/check-group-pr.mjs
   unit:
     strategy:
       fail-fast: false

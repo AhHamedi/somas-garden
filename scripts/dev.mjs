@@ -9,12 +9,8 @@ import { createHandler } from "../api/controller.mjs";
 import { createLocalStore } from "../lib/storage-local.mjs";
 import { createCloudStore } from "../lib/storage-cloud.mjs";
 import { goBinary } from "./go.mjs";
-import {
-  createCloudGroupStore,
-  createLocalGroupStore,
-  createGroupService,
-  localGroupSecret,
-} from "../lib/society-groups.mjs";
+import { createGroupService, readGroupCatalog } from "../lib/society-groups.mjs";
+import { verifyCourseworkRun } from "../lib/society-coursework-run.mjs";
 import {
   groupRoute,
   importGroupBehaviour,
@@ -165,18 +161,10 @@ try {
   if (built.status !== 0)
     throw new Error("The simulation server could not compile. See the Go error above.");
   const engineOrigin = await startEngine(binary, enginePort);
-  const groupDirectory = resolve(
-    process.env.LOCAL_DATA_DIR || ".local/data",
-    "society-groups",
-  );
+  const groupDirectory = resolve(process.env.SOCIETY_TEAMS_DIR || "teams");
+  const getCatalog = () => readGroupCatalog(groupDirectory);
   const groups = createGroupService({
-    scope: hosted ? "preview" : "local",
-    secret: hosted
-      ? undefined
-      : process.env.SELFORG_GROUP_KEY_SEED || (await localGroupSecret(groupDirectory)),
-    store: hosted
-      ? createCloudGroupStore("preview")
-      : createLocalGroupStore(groupDirectory),
+    getCatalog,
     compile: (behaviour) =>
       importGroupBehaviour({ origin: engineOrigin, token: engineSecret }, behaviour),
   });
@@ -224,12 +212,13 @@ try {
           }
           parts.push(chunk);
         }
+        const body = Buffer.concat(parts);
         if (groupRoute.test(path)) {
           try {
             const reply = await groups({
               method: req.method,
               path,
-              body: Buffer.concat(parts),
+              body,
             });
             res.writeHead(200, {
               "Content-Type": "application/json",
@@ -251,13 +240,15 @@ try {
           }
           return;
         }
+        if (path === "runs" && req.method === "POST")
+          await verifyCourseworkRun(body, getCatalog);
         const upstream = await fetch(engineOrigin + url.pathname + url.search, {
           method: req.method,
           headers: {
             Authorization: `Bearer ${engineSecret}`,
             "Content-Type": "application/json",
           },
-          ...(req.method === "GET" ? {} : { body: Buffer.concat(parts) }),
+          ...(req.method === "GET" ? {} : { body }),
           signal: AbortSignal.timeout(120000),
         });
         res.writeHead(upstream.status, {
@@ -303,12 +294,14 @@ try {
       res.setHeader("Cache-Control", "no-store");
       res.end(contents);
     } catch (error) {
-      res.writeHead(error.code === "ENOENT" || error.code === "EISDIR" ? 404 : 500);
-      res.end(
-        error.code === "ENOENT" || error.code === "EISDIR"
-          ? "Not found"
-          : "The request could not finish.",
-      );
+      if (error.status >= 400 && error.status < 500) {
+        res.writeHead(error.status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: error.message }));
+      } else {
+        const missing = error.code === "ENOENT" || error.code === "EISDIR";
+        res.writeHead(missing ? 404 : 500);
+        res.end(missing ? "Not found" : "The request could not finish.");
+      }
     }
   });
   await new Promise((done, fail) => {

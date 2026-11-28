@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { createSocietyProxy } from "../api/society-hosted.mjs";
-import { validateHostedGroup } from "../lib/society-hosted-sandbox.mjs";
 import { sessionIdentity, SESSION_COOKIE } from "../lib/society-hosted-session.mjs";
 
 const secret = "test-only-hosted-session-signing-secret";
@@ -29,8 +28,7 @@ async function fixture(
     upstream,
     sandboxError,
     missingWorkspace,
-    getGroupStore,
-    validateGroup,
+    getCatalog,
     scope = "production",
   } = {},
 ) {
@@ -51,8 +49,7 @@ async function fixture(
     res.end(JSON.stringify({ ok: true }));
   });
   const handler = createSocietyProxy({
-    getGroupStore,
-    validateGroup,
+    getCatalog,
     env: {
       SELFORG_ENGINE_SECRET: secret,
       VERCEL_ENV: scope,
@@ -78,78 +75,41 @@ async function fixture(
   };
 }
 
-test("publishing and importing a builder work with no private workspace capacity", async (t) => {
-  let slot = null;
-  const validated = [];
-  const f = await fixture(t, {
-    claim: assert.fail,
-    validateGroup: async (behaviour) => {
-      validated.push(behaviour);
-    },
-    getGroupStore: () => ({
-      verifyKey: async (_, key) => key === "test-code",
-      get: async () => slot,
-      insert: async (record) => (slot = record),
-    }),
-  });
+test("repository builder imports and retired publication routes require no workspace", async (t) => {
+  const entry = {
+    group: 1,
+    name: "Gardeners",
+    path: "teams/group-1/builder.json",
+    kind: "builder",
+    revision: "b".repeat(64),
+    payload: { builder: { harvest: 3 }, policy: "builder" },
+  };
+  const f = await fixture(t, { claim: assert.fail, getCatalog: async () => [entry] });
   const post = (suffix, data) =>
     fetch(f.origin + "/api/society/groups/1" + suffix, {
       method: "POST",
       headers: { origin: publicOrigin },
       body: JSON.stringify(data),
     });
-  const behaviour = { name: "FRED", builder: { harvest: 3 }, policy: "builder" };
-  const upload = { ...behaviour, key: "test-code", expectedRevision: 0 };
-  assert.equal((await post("", { ...upload, key: "wrong" })).status, 403);
-  assert.deepEqual(validated, []);
-  assert.equal((await post("", upload)).status, 200);
-  assert.equal((await post("", { ...upload, name: "STALE" })).status, 409);
-  assert.deepEqual(validated, [behaviour]);
-  const imported = await post("/use", { revision: 1 });
-  assert.deepEqual(await imported.json(), behaviour);
+  for (const suffix of ["", "/edit"])
+    assert.equal((await post(suffix, { key: "retired" })).status, 404);
+  const imported = await post("/use", { revision: entry.revision });
+  const team = await imported.json();
+  assert.deepEqual(team, {
+    name: entry.name,
+    ...entry.payload,
+    coursework: { group: 1, revision: entry.revision, path: entry.path },
+  });
+  const changedTeam = await fetch(f.origin + "/api/society/runs", {
+    method: "POST",
+    headers: { origin: publicOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ teams: [{ ...team, builder: { harvest: 9 } }] }),
+  });
+  assert.equal(changedTeam.status, 400);
+  assert.match((await changedTeam.json()).error, /differs from its registered behaviour/);
   assert.deepEqual(f.allocations, []);
   assert.deepEqual(f.identities, []);
-});
-
-test("disposable group validation closes the sandbox on success and compiler rejection", async () => {
-  for (const exitCode of [0, 2]) {
-    let stopped = 0;
-    const behaviour = { name: "FRED", source: "package main" };
-    const validate = () =>
-      validateHostedGroup(behaviour, {
-        snapshotId: "test-snapshot",
-        getEngine: async () => ({ bytes: Buffer.from("engine"), files: [] }),
-        create: async (opts) => {
-          assert.equal(opts.persistent, false);
-          assert.equal(opts.networkPolicy, "deny-all");
-          assert.equal(opts.mounts, undefined);
-          assert.equal(opts.ports, undefined);
-          return {
-            async writeFiles(files) {
-              assert.deepEqual(
-                JSON.parse(files.find((f) => f.path.endsWith("/behaviour.json")).content),
-                behaviour,
-              );
-            },
-            async runCommand(cmd) {
-              assert.deepEqual(cmd.args, ["--validate-group", "behaviour.json"]);
-              assert.equal(cmd.env.GOPROXY, "off");
-              return { exitCode, stderr: async () => "invalid Go" };
-            },
-            async stop() {
-              stopped++;
-            },
-          };
-        },
-      });
-    if (exitCode === 0) await validate();
-    else
-      await assert.rejects(
-        validate,
-        (e) => e.status === 400 && /invalid Go/.test(e.message),
-      );
-    assert.equal(stopped, 1);
-  }
+  assert.deepEqual(f.requests, []);
 });
 
 test("hosted sessions persist with signed cookies and isolate browsers and environments", async (t) => {
@@ -183,28 +143,30 @@ test("the shared library resolves a revision before starting the importing brows
     group,
     kind: "go",
     name: "Gardeners",
-    revision: 2,
+    revision: "a".repeat(64),
+    path: "teams/group-4/agent.go",
     payload: { source: "example source" },
   };
   const f = await fixture(t, {
-    getGroupStore(scope) {
-      assert.equal(scope, "production");
-      return {
-        async list() {
-          return [record];
-        },
-        async get(n, v) {
-          return n === group && v === record.revision ? record : null;
-        },
-      };
-    },
+    getCatalog: async () =>
+      Array.from({ length: 6 }, (_, i) =>
+        i + 1 === group
+          ? record
+          : {
+              group: i + 1,
+              name: "Empty",
+              kind: null,
+              path: `teams/group-${i + 1}`,
+              revision: null,
+            },
+      ),
     upstream(_req, res) {
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ id: run, name: record.name }));
     },
   });
   const list = await fetch(f.origin + "/api/society/groups");
-  assert.equal((await list.json()).groups[3].revision, 2);
+  assert.equal((await list.json()).groups[3].revision, record.revision);
   const cookie = cookieValue(list);
   const post = (path, data) =>
     fetch(f.origin + "/api/society/" + path, {
@@ -212,10 +174,13 @@ test("the shared library resolves a revision before starting the importing brows
       headers: { cookie, origin: publicOrigin, "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-  assert.equal((await post("groups/4/use", { revision: 3 })).status, 404);
+  assert.equal((await post("groups/4/use", { revision: "b".repeat(64) })).status, 409);
   assert.equal((await post("strategies/import", { source: "untrusted" })).status, 404);
   assert.equal(f.allocations.length, 0);
-  const imported = await post("groups/4/use", { revision: 2, source: "untrusted" });
+  const imported = await post("groups/4/use", {
+    revision: record.revision,
+    source: "untrusted",
+  });
   assert.equal(imported.status, 200);
   assert.equal((await imported.json()).id, run);
   assert.equal(f.allocations.length, 1);

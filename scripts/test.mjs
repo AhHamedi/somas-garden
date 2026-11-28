@@ -16,7 +16,21 @@ function run(command, args, options = {}) {
   });
 }
 const group = process.argv[2] || "all";
-if (!["all", "js", "go"].includes(group)) throw new Error("Choose js, go, or all.");
+if (!["all", "js", "go", "agents"].includes(group))
+  throw new Error("Choose js, go, agents, or all.");
+if (group === "agents") {
+  const { readGroupCatalog } = await import("../lib/society-groups.mjs");
+  await readGroupCatalog(resolve("teams"));
+  await run(goBinary(), [
+    "test",
+    "-count=1",
+    "-v",
+    "-run",
+    "^TestCourseworkAgents$",
+    "./internal/societyapi",
+  ]);
+  process.exit(0);
+}
 if (group !== "go") {
   const files = (await readdir("test"))
     .filter((file) => file.endsWith(".test.mjs"))
