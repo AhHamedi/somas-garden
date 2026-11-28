@@ -3,7 +3,7 @@
 import { esc, fmt, plural, teamColor, PHASES, migrateTeams } from "/game/model.js";
 import { hasTokenOnlyVoting, usesLegacyRules } from "/game/statutes.js";
 import { $, icon, toast } from "/game/dom.js";
-import { GroupLibrary } from "/game/group-library.js";
+import { GroupLibrary, courseworkSource, teamGuide } from "/game/group-library.js";
 
 const copy = (v) => structuredClone(v);
 const defaultBuilder = () => ({
@@ -61,7 +61,7 @@ const CTL = {
 const SECTIONS = [
   ["world", "World", "world"],
   ["teams", "Amoeboids", "people"],
-  ["groups", "Group library", "book"],
+  ["groups", "Coursework teams", "book"],
   ["food", "Food", "carrot"],
   ["mind", "Mind and weather", "sun"],
   ["politics", "Politics", "hall"],
@@ -207,7 +207,7 @@ export class Setup {
     if (b === undefined) this.draft.settings[a] = value;
     else this.draft.settings[a][Number(b)] = value;
   }
-  open(tab = "world", groupLink = null) {
+  open(tab = "world") {
     const s = this.app.ix?.s;
     let saved = null;
     try {
@@ -253,7 +253,7 @@ export class Setup {
       });
     }
     this.observer?.observe($("cfg-body"));
-    if (tab === "groups") this.groups.load(groupLink);
+    if (tab === "groups") this.groups.load();
   }
   population() {
     return this.draft.teams.reduce(
@@ -321,6 +321,7 @@ export class Setup {
         <label class="field"><span>Team name</span><input data-team-name="${i}" value="${esc(team.name)}" maxlength="40" aria-label="Team ${i + 1} name"/></label>
         <label class="field roster-size"><span>Size</span><input type="number" data-team-size="${i}" min="1" max="500" step="1" value="${team.copies || ""}" placeholder="${this.draft.settings.copies}" aria-label="Team ${i + 1} size"/></label></div>
         <p><strong data-team-behaviour="${i}">${esc(behaviour)}</strong> · ${esc(summary)}</p>
+        ${team.coursework ? `<p class="coursework-origin">Group ${esc(team.coursework.group)} · ${courseworkSource(team.coursework)}</p>` : ""}
         <div class="roster-actions"><button type="button" class="btn" data-swap-team="${i}">Swap preset</button><button type="button" class="btn" data-edit-team="${i}">Edit behaviour</button>
         <button type="button" class="icon-button" data-remove-team="${i}" aria-label="Remove team ${i + 1}" title="Remove team" ${teams.length === 1 ? "disabled" : ""}>${icon("close")}</button></div></li>`;
       })
@@ -481,13 +482,17 @@ export class Setup {
       this.draft.seed = undefined;
       this.drawBody();
     });
-    dlg
-      .querySelectorAll("[data-team-name]")
-      .forEach(
-        (el) =>
-          (el.oninput = () =>
-            (this.draft.teams[Number(el.dataset.teamName)].name = el.value)),
-      );
+    dlg.querySelectorAll("[data-team-name]").forEach(
+      (el) =>
+        (el.oninput = () => {
+          const team = this.draft.teams[Number(el.dataset.teamName)];
+          if (el.value !== team.name) {
+            delete team.coursework;
+            el.closest(".roster-row").querySelector(".coursework-origin")?.remove();
+            team.name = el.value;
+          }
+        }),
+    );
     dlg.querySelector("[data-open-roster]")?.addEventListener("click", () => {
       const tab = dlg.querySelector('[data-stab="teams"]');
       tab.click();
@@ -564,18 +569,7 @@ export class Setup {
   }
 
   // ---------------------------------------------------------------- behaviours
-  openGroupBuilder(name, builder, apply) {
-    this.groupBuilder = { name, apply };
-    this.strategy = copy(builder || defaultBuilder());
-    this.mode = "simple";
-    this.renderStrategy();
-    $("strategy-dialog").showModal();
-    $("strategy-dialog").onclose = () => {
-      if (!$("strategy-dialog").open) this.groupBuilder = null;
-    };
-  }
   async openStrategy(team) {
-    this.groupBuilder = null;
     this.team = team;
     const t = this.draft.teams[team];
     this.strategy = copy(t.builder || defaultBuilder());
@@ -594,11 +588,11 @@ export class Setup {
   renderStrategy() {
     const dlg = $("strategy-dialog");
     const b = this.strategy;
-    const t = this.groupBuilder || this.draft.teams[this.team];
+    const t = this.draft.teams[this.team];
     const modes = [
       ["simple", "Everyday choices"],
       ["rules", "Phase rules"],
-      ...(this.groupBuilder ? [] : [["go", "Go code"]]),
+      ["go", "Go code"],
     ];
     let body = "";
     if (this.mode === "simple")
@@ -677,11 +671,11 @@ export class Setup {
         )}</div><button type="button" class="btn" id="add-rule">${icon("plus")}Add a rule</button>
         <label class="field wide" style="margin-top:18px"><span>Standing proposals</span><textarea class="code" id="standing" style="min-height:110px" spellcheck="false">${esc(JSON.stringify(b.proposals || [], null, 2))}</textarea><small>Proposal inputs submitted in the Motions phase, using the policy catalogue's keys.</small></label>`;
     if (this.mode === "go")
-      body = `<p class="note" style="margin-bottom:12px">Import your team’s Go file into this workspace. For a shared match, publish the file through the Group library. Each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
+      body = `<p class="note" style="margin-bottom:12px">Import your team’s Go file into this workspace. For a shared match, follow the <a class="link" href="${teamGuide}" target="_blank" rel="noopener noreferrer">GitHub submission guide</a>. Each of the ${fmt(t.copies || this.draft.settings.copies)} copies keeps independent memory.</p><div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><label class="btn">Choose a .go file<input type="file" id="go-file" accept=".go,text/plain" class="visually-hidden"/></label><a class="link" style="color:var(--focus)" href="/society-example.go" download>Download the example</a></div><textarea class="code" id="go-source" spellcheck="false" placeholder="Paste Go source here">${esc(b._source || "")}</textarea><p class="note" id="go-status" style="margin-top:8px">Used only once it compiles.</p>`;
     dlg.innerHTML = `<div class="dlg-head"><h2 id="strategy-title">${esc(t.name)}</h2><button class="icon-button" data-close aria-label="Close">${icon("close")}</button></div>
       <div class="dlg-tabs">${modes.map(([id, n]) => `<button data-mode="${id}" class="${this.mode === id ? "active" : ""}">${n}</button>`).join("")}</div>
       <div class="dlg-body">${body}</div>
-      <div class="dlg-foot"><p>${this.groupBuilder ? "Return to your group submission to publish." : "Applies to the next world you create."}</p><button class="btn primary" id="save-strategy">${this.groupBuilder ? "Use this behaviour" : "Save behaviour"}</button></div>`;
+      <div class="dlg-foot"><p>${t.coursework ? "Saving makes a personal copy of this group’s behaviour." : "Applies to the next world you create."}</p><button class="btn primary" id="save-strategy">Save behaviour</button></div>`;
     dlg.querySelector("[data-close]").onclick = () => dlg.close();
     dlg.querySelectorAll("[data-mode]").forEach(
       (el) =>
@@ -764,11 +758,6 @@ export class Setup {
   }
   async saveStrategy() {
     if (!this.capture()) return;
-    if (this.groupBuilder) {
-      this.groupBuilder.apply(copy(this.strategy));
-      $("strategy-dialog").close();
-      return;
-    }
     const team = this.draft.teams[this.team];
     const button = $("save-strategy");
     button.disabled = true;
@@ -788,6 +777,7 @@ export class Setup {
         delete team.strategyId;
         team.policy = "builder";
       }
+      delete team.coursework;
       $("strategy-dialog").close();
       this.drawBody();
     } catch (error) {

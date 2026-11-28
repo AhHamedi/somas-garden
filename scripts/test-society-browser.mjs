@@ -1,18 +1,17 @@
 // End-to-end check of the observer interface against the real simulation
 // service. Set SOCIETY_ORIGIN to test an already running server instead.
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-import { checkGroupLibrary } from "./support/group-library-check.mjs";
+import { checkGroupLibrary, seedTestTeams } from "./support/group-library-check.mjs";
 import { checkFoundingVote } from "./support/founding-vote-check.mjs";
 
 const temp = await mkdtemp(join(tmpdir(), "amoeboids-browser-"));
-const groupKeySeed = randomBytes(32).toString("hex");
+const teamsDir = join(temp, "teams");
 const evidence = resolve(".local/verification/browser");
 await mkdir(evidence, { recursive: true });
 let server = null,
@@ -20,6 +19,7 @@ let server = null,
   output = "";
 let origin = process.env.SOCIETY_ORIGIN;
 if (!origin) {
+  await seedTestTeams(teamsDir);
   const sessionFile = join(temp, "dev.json");
   server = spawn(process.execPath, ["scripts/dev.mjs"], {
     env: {
@@ -29,7 +29,7 @@ if (!origin) {
       DEV_SESSION_FILE: sessionFile,
       LOCAL_DATA_DIR: join(temp, "data"),
       SOCIETY_DATA_DIR: join(temp, "data", "society"),
-      SELFORG_GROUP_KEY_SEED: groupKeySeed,
+      SOCIETY_TEAMS_DIR: teamsDir,
       DEV_CONTROL_STDIN: "1",
     },
     stdio: ["pipe", "pipe", "pipe"],
@@ -58,9 +58,8 @@ const state = (page) =>
 try {
   assert.ok(origin, "server started");
   browser = await chromium.launch({ headless: true });
-  // This check publishes fixtures into the disposable local server's six group slots.
   if (server) {
-    await checkGroupLibrary(browser, origin, groupKeySeed);
+    await checkGroupLibrary(browser, origin, teamsDir);
     await checkFoundingVote(browser, origin);
   }
   // Hosted checks can reuse a dedicated test workspace across staged releases.

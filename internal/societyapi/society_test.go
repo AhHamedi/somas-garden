@@ -151,9 +151,14 @@ func TestSharedBehavioursRunPinnedWorkspaceCopies(t *testing.T) {
 	if code != 200 || string(visual["policy"]) != `"builder"` {
 		t.Fatalf("could not import builder: %d %s", code, visual)
 	}
+	origins := []society.CourseworkSource{
+		{Group: 1, Path: "teams/group-1/agent.go", Revision: strings.Repeat("a", 64), Commit: strings.Repeat("c", 40), Repository: "example/coursework"},
+		{Group: 2, Path: "teams/group-2/builder.json", Revision: strings.Repeat("b", 64)},
+	}
+	visual["coursework"], _ = json.Marshal(origins[1])
 	body, _ := json.Marshal(map[string]any{
 		"settings": map[string]int{"plots": 1, "copies": 1},
-		"teams":    []any{map[string]string{"name": "FRED", "strategyId": first}, visual},
+		"teams":    []any{society.Team{Name: "FRED", StrategyID: first, Coursework: &origins[0]}, visual},
 	})
 	code, run := societyRequest(t, "POST", "runs", string(body))
 	var id string
@@ -173,6 +178,19 @@ func TestSharedBehavioursRunPinnedWorkspaceCopies(t *testing.T) {
 	for _, a := range snap.Agents {
 		if a.Error != "" || a.Harvested != []int{2, 3}[a.Team] {
 			t.Fatalf("incorrect group behaviour for team %d: harvested %d, error %s", a.Team, a.Harvested, a.Error)
+		}
+	}
+	// Export streams both the original and the resumed frames from disk.
+	code, export := societyRequest(t, "GET", "runs/"+id+"/export", "")
+	var frames []society.Snapshot
+	if code != 200 || json.Unmarshal(export["frames"], &frames) != nil || len(frames) != 4 {
+		t.Fatalf("could not export the four saved frames: %d", code)
+	}
+	for _, frame := range frames {
+		for group, team := range frame.Teams {
+			if team.Coursework == nil || *team.Coursework != origins[group] {
+				t.Fatalf("lost coursework source in phase %s: %+v", frame.Phase, team)
+			}
 		}
 	}
 	for _, invalid := range []string{

@@ -6,9 +6,10 @@ import {
   requestAllowed,
   clientIdentity,
 } from "../lib/society-hosted-session.mjs";
-import { hostedSandbox, validateHostedGroup } from "../lib/society-hosted-sandbox.mjs";
+import { hostedSandbox } from "../lib/society-hosted-sandbox.mjs";
 import { claimSocietySession } from "../lib/society-hosted-limits.mjs";
-import { createCloudGroupStore, createGroupService } from "../lib/society-groups.mjs";
+import { createGroupService } from "../lib/society-groups.mjs";
+import { verifyCourseworkRun } from "../lib/society-coursework-run.mjs";
 import {
   groupRoute,
   importGroupBehaviour,
@@ -17,20 +18,18 @@ import {
 
 // Configuration is a build asset: health checks and empty visits must not
 // reserve a Drive or a whole server snapshot. Retry a failed asset read.
-let configAsset;
-async function hostedConfig() {
-  if (!configAsset)
-    configAsset = readFile(
-      new URL("../runner/society-config.json", import.meta.url),
-      "utf8",
-    )
+function jsonAsset(url) {
+  let cached;
+  return () =>
+    (cached ||= readFile(url, "utf8")
       .then(JSON.parse)
       .catch((error) => {
-        configAsset = null;
+        cached = undefined;
         throw error;
-      });
-  return configAsset;
+      }));
 }
+const hostedConfig = jsonAsset(new URL("../runner/society-config.json", import.meta.url));
+const hostedGroups = jsonAsset(new URL("../runner/society-groups.json", import.meta.url));
 
 const MAX_BODY = 2 * 1024 * 1024;
 async function readBody(req) {
@@ -57,8 +56,7 @@ export function createSocietyProxy({
   getSandbox = hostedSandbox,
   claim = claimSocietySession,
   getConfig = hostedConfig,
-  getGroupStore = createCloudGroupStore,
-  validateGroup = validateHostedGroup,
+  getCatalog = hostedGroups,
   env = process.env,
 } = {}) {
   return async function societyProxy(req, res) {
@@ -120,9 +118,7 @@ export function createSocietyProxy({
       if (groupRoute.test(path)) {
         // Only importing a published Go behaviour needs a persistent workspace.
         const groups = createGroupService({
-          store: getGroupStore(scope),
-          scope,
-          validate: validateGroup,
+          getCatalog,
           compile: async (behaviour) =>
             importGroupBehaviour(await openWorkspace(true), behaviour),
         });
@@ -132,6 +128,8 @@ export function createSocietyProxy({
         res.end(JSON.stringify(result));
         return;
       }
+      if (path === "runs" && req.method === "POST")
+        await verifyCourseworkRun(body, getCatalog);
       const mayCreate = req.method === "POST" && ["runs", "strategies"].includes(path);
       const host = await openWorkspace(mayCreate);
       if (!host) {

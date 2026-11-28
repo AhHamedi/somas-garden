@@ -716,7 +716,7 @@ async function init() {
     $("loading").innerHTML =
       `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><p>Create a world to begin.</p><button class="btn primary" id="start-world">New world</button>`;
     $("start-world").onclick = () => setup.open("world");
-    setup.open(groupLink ? "groups" : "world", groupLink);
+    setup.open(groupLink ? "groups" : "world");
   } catch (error) {
     $("loading").innerHTML =
       `<span class="brand-mark big" aria-hidden="true"><i></i><i></i></span><p>The world could not start: ${esc(error.message)}</p><button class="btn" id="retry">Try again</button>`;

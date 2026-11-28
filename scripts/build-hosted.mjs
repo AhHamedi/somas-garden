@@ -3,6 +3,11 @@ import { spawnSync } from "node:child_process";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { goBinary } from "./go.mjs";
 
+import { deploymentProvenance, readGroupCatalog } from "../lib/society-groups.mjs";
+
+const catalogue = await readGroupCatalog("teams", deploymentProvenance(process.env));
+await writeFile("runner/society-groups.json", JSON.stringify(catalogue));
+
 const result = spawnSync(
   goBinary(),
   ["build", "-trimpath", "-ldflags=-s -w", "-o", "runner/society-engine", "./cmd/hosted"],

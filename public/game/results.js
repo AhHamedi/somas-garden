@@ -6,6 +6,7 @@ import { esc, fmt, teamColor } from "/game/model.js";
 import { STATUTES } from "/game/statutes.js";
 import { figure, drawFigures, bindCharts, hideTip, compact, pct } from "/game/charts.js";
 import * as S from "/game/study.js";
+import { courseworkSource } from "/game/group-library.js";
 
 const SECTIONS = [
   ["outcomes", "Outcomes"],
@@ -896,6 +897,18 @@ export function renderResults(app) {
       <button data-export="replay">Full replay<small>JSON</small></button>
     </div></details>`;
   const tabs = `<div class="rtabs" role="tablist">${SECTIONS.map(([id, n]) => `<button role="tab" data-rsec="${id}" aria-selected="${app.resultsSection === id}">${n}</button>`).join("")}</div>`;
+  let sources = "";
+  if (app.resultsSection === "behaviour") {
+    const rows = teams
+      .filter((i) => s.teams[i].coursework)
+      .map(
+        (i) =>
+          `<tr><th scope="row">${esc(teamName(app, i))}</th><td>${courseworkSource(s.teams[i].coursework)}</td></tr>`,
+      )
+      .join("");
+    if (rows)
+      sources = `<section class="rcard"><header><h3>Group agents used in this run</h3></header><div class="rtable-wrap"><table class="table rtable"><thead><tr><th>Team</th><th>Source revision</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  }
   const body = !sc.days.length
     ? `<p class="note">The first night has not fallen yet.</p>`
     : app.resultsSection === "behaviour"
@@ -908,7 +921,7 @@ export function renderResults(app) {
   const html = `<div class="page-head rhead"><div><h1>Results</h1></div>${exportMenu}</div>
     <div class="rbar">${tabs}<div class="rfilters">${scopeCtl}</div></div>
     ${app.resultsSection === "commons" ? "" : teamCtl}
-    <div class="rbody">${body}</div>`;
+    <div class="rbody">${sources}${body}</div>`;
   setHTML(el, html);
   drawFigures(el, app.resultsTables);
 }

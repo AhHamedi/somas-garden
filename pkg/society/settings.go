@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
+	"strings"
 )
 
 func DefaultSettings() Settings {
@@ -107,8 +109,38 @@ func (s Settings) rosterSize(teams []Team) (int, error) {
 	return total, s.validatePopulation(len(teams), total)
 }
 
+var (
+	courseworkDigest     = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	courseworkCommit     = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
+	courseworkRepository = regexp.MustCompile(`^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$`)
+)
+
+func (origin CourseworkSource) validate(t Team) error {
+	file := "agent.go"
+	if t.Builder != nil && t.StrategyID == "" && t.Policy == "builder" {
+		file = "builder.json"
+	} else if t.Builder != nil || t.StrategyID == "" {
+		return fmt.Errorf("coursework provenance requires a repository Go or builder behaviour")
+	}
+	if origin.Group < 1 || origin.Group > 6 || origin.Path != fmt.Sprintf("teams/group-%d/%s", origin.Group, file) {
+		return fmt.Errorf("coursework source must identify the selected group's behaviour file")
+	}
+	if !courseworkDigest.MatchString(origin.Revision) || (origin.Commit != "" && !courseworkCommit.MatchString(origin.Commit)) {
+		return fmt.Errorf("coursework source has an invalid revision or commit")
+	}
+	if origin.Repository != "" && (!courseworkRepository.MatchString(origin.Repository) || strings.HasSuffix(origin.Repository, "/.") || strings.HasSuffix(origin.Repository, "/..")) {
+		return fmt.Errorf("coursework repository must be a GitHub owner/name")
+	}
+	return nil
+}
+
 // ValidateBehaviour checks a team's preset or builder against the world's limits.
 func (s Settings) ValidateBehaviour(t Team) error {
+	if t.Coursework != nil {
+		if err := t.Coursework.validate(t); err != nil {
+			return err
+		}
+	}
 	b := t.Builder
 	if t.Policy == "builder" && b == nil {
 		return fmt.Errorf("builder behaviour requires a builder configuration")
