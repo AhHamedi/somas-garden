@@ -12,7 +12,7 @@ The browser cookie is the workspace key: different browsers get separate worlds.
 
 ### Shared coursework groups
 
-The roster at `/?groups` comes from the release's six directories under `teams/`. Each group submits its agent through a pull request. The [contribution guide](../teams/README.md) covers local testing, review and attribution.
+The roster at `/?groups` comes from the release's six directories under `teams/`. Each group submits its agent through a pull request. Review the submitting fork and authors before merging. See the [student submission guide](../teams/README.md).
 
 Before an official match, verify the merged commit on the production deployment. Open `/?groups`, check the six group names and revisions, select the roster, then start a new world. Record the Git commit, world seed and settings with the results. Existing worlds retain their selected behaviours.
 

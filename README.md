@@ -54,11 +54,7 @@ All residents can observe public actions. The observer interface lets the person
 
 ## Submitting a team for the shared game
 
-Each coursework group owns one of six directories under `teams/`. Fork this repository once for your group and invite teammates to the fork. You can change and run the entire simulator there.
-
-For the shared match, commit your Go strategy or visual behaviour to your group's directory, run `npm run check:agents` and open a pull request to `AhHamedi/somas-garden:main`. The organiser reviews the change. Once the merged commit is deployed, the new agent appears in the [shared game](https://somas.sites.moonisolutions.net/?groups). Existing worlds keep their selected versions.
-
-The [group contribution guide](teams/README.md) has a working starter, local play instructions and the commands for submitting an agent while keeping other simulator changes on your fork.
+Follow the [group submission guide](teams/README.md) to enter your agent. Once the merged change is deployed, your agent appears in the [shared roster](https://somas.sites.moonisolutions.net/?groups).
 
 ## Reproducible experiments
 
